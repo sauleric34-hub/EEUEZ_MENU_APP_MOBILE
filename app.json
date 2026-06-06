@@ -3,6 +3,7 @@
     "name": "eeuez-expo-ui",
     "slug": "eeuez-expo-ui",
     "version": "1.0.0",
+    "scheme": "eeuez-expo-ui",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
