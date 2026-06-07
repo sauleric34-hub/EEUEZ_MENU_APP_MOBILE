@@ -93,8 +93,8 @@ export default function WelcomeScreen() {
           <View style={[s.magicLine, { width: 25, backgroundColor: '#1B5E20', opacity: 0.15, transform: [{ rotate: '-30deg' }] }]} />
         </Animated.View>
 
-        {/* Spacer vertical */}
-        <View style={{ height: height * 0.37 }} />
+        {/* Spacer abaissé à 45% pour un dégagement parfait sous le logo */}
+        <View style={{ height: height * 0.45 }} />
 
         <Animated.View style={[s.content, { opacity: contentAnim, transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
           <View style={s.textWrapper}>
