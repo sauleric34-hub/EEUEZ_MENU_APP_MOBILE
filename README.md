@@ -1,16 +1,24 @@
-# eeuez_menu
+# EEUEZ Menu App Mobile
 
-A new Flutter project.
+Projet de commande et de livraison pour restaurants (React Native Expo + Java Spring Boot).
 
-## Getting Started
+## Architecture
 
-This project is a starting point for a Flutter application.
+* **`eeuez-expo-ui/`** : Application mobile développée avec **React Native** et **Expo Router**. Contient les interfaces pour les clients, restaurateurs et livreurs.
+* **`backend/`** : API Backend développée avec **Java Spring Boot**.
 
-A few resources to get you started if this is your first Flutter project:
+## Lancement du Front-end (Application Mobile)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+cd eeuez-expo-ui
+npm install
+npm run start
+```
+*(Scannez le QR Code avec Expo Go sur votre téléphone pour tester).*
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Lancement du Back-end (API Spring Boot)
+
+```bash
+cd backend
+./mvnw spring-boot:run
+```
