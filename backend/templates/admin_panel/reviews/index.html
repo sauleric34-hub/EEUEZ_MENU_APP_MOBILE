@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Avis & Notes — Menu Admin{% endblock %}
+{% block topbar_title %}Avis & Notes{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Avis & Notes</h1>
+    <p class="page-subtitle">Modération des évaluations clients · Note moyenne globale :
+      <strong style="color:var(--accent-amber);">{{ note_avg }}/5</strong>
+    </p>
+  </div>
+</div>
+
+<!-- Distribution des notes -->
+<div class="charts-grid charts-grid-2" style="margin-bottom:24px;gap:20px;">
+  <div class="chart-card">
+    <div class="chart-card-header"><div class="chart-title">Distribution des Notes</div></div>
+    <div class="chart-container" style="height:200px;"><canvas id="notesBar"></canvas></div>
+  </div>
+  <div class="glass-card" style="padding:24px;">
+    <div class="section-title">Résumé</div>
+    {% for i in "54321" %}
+    {% with star=forloop.revcounter %}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <span style="color:var(--accent-amber);min-width:20px;font-weight:700;">{{ forloop.counter }}</span>
+      <span style="color:var(--accent-amber);">★</span>
+      <div style="flex:1;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;background:var(--accent-amber);border-radius:3px;width:0;" id="bar-star-{{ forloop.counter }}" class="bar-fill"></div>
+      </div>
+    </div>
+    {% endwith %}
+    {% endfor %}
+    <div style="margin-top:20px;text-align:center;">
+      <div style="font-size:3rem;font-weight:800;color:var(--accent-amber);">{{ note_avg }}</div>
+      <div style="color:var(--text-secondary);font-size:0.8rem;">sur 5 étoiles</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtres + Tableau -->
+<div class="table-wrapper">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1;">
+      <select name="note" class="input-select" onchange="this.form.submit()">
+        <option value="">Toutes notes</option>
+        {% for i in "12345" %}<option value="{{ forloop.counter }}" {% if note_filter == forloop.counter|stringformat:"s" %}selected{% endif %}>{{ forloop.counter }} ★</option>{% endfor %}
+      </select>
+      <select name="visible" class="input-select" onchange="this.form.submit()">
+        <option value="">Tous</option>
+        <option value="1" {% if request.GET.visible == '1' %}selected{% endif %}>Visibles</option>
+        <option value="0" {% if request.GET.visible == '0' %}selected{% endif %}>Masqués</option>
+      </select>
+      {% if note_filter or request.GET.visible %}<a href="{% url 'core:reviews' %}" class="btn btn-secondary btn-sm">Reset</a>{% endif %}
+    </form>
+  </div>
+
+  {% if page_obj %}
+  <table>
+    <thead><tr><th>Note</th><th>Client</th><th>Restaurant</th><th>Commentaire</th><th>Date</th><th>Visible</th><th></th></tr></thead>
+    <tbody>
+      {% for avis in page_obj %}
+      <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
+        <td>
+          <span style="color:var(--accent-amber);font-size:1rem;letter-spacing:2px;">
+            {% for i in "12345" %}{% if forloop.counter <= avis.note %}★{% else %}☆{% endif %}{% endfor %}
+          </span>
+        </td>
+        <td>{{ avis.client.get_full_name|default:avis.client.username|default:"—" }}</td>
+        <td>{{ avis.restaurant.nom|default:"—" }}</td>
+        <td style="max-width:300px;">
+          <p style="font-size:0.8rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ avis.commentaire|default:"—" }}</p>
+        </td>
+        <td style="font-size:0.75rem;">{{ avis.created_at|date:"d/m/Y" }}</td>
+        <td>
+          {% if avis.is_visible %}<span class="badge badge-green">Visible</span>
+          {% else %}<span class="badge badge-gray">Masqué</span>{% endif %}
+        </td>
+        <td>
+          <form method="post" action="{% url 'core:review_toggle' avis.pk %}">{% csrf_token %}
+            <button class="btn {% if avis.is_visible %}btn-danger{% else %}btn-amber{% endif %} btn-sm">{% if avis.is_visible %}Masquer{% else %}Afficher{% endif %}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&note={{ note_filter }}" class="page-link">‹</a>{% endif %}
+    {% for num in page_obj.paginator.page_range %}{% if page_obj.number == num %}<span class="page-link active">{{ num }}</span>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<a href="?page={{ num }}&note={{ note_filter }}" class="page-link">{{ num }}</a>{% endif %}{% endfor %}
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&note={{ note_filter }}" class="page-link">›</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><p>Aucun avis</p></div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const distrib = {{ distrib|safe }};
+document.addEventListener('DOMContentLoaded', () => {
+  MENU.createBarChart('notesBar',
+    ['1 ★','2 ★','3 ★','4 ★','5 ★'],
+    [{ label: 'Avis', data: distrib, color: '#F5A623' }]
+  );
+});
+</script>
+{% endblock %}
