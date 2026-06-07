@@ -7,78 +7,83 @@ import { StyleSheet, Dimensions } from 'react-native';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// ─── PALETTE DE COULEURS ────────────────────────────────────
-export const Colors = {
-  // Fonds
-  bg: {
-    app:        '#070B14',   // Bleu nuit quasi noir — fond global
-    screen:     '#0C1322',   // Fond des écrans
-    surface:    '#141E33',   // Cards
-    elevated:   '#1A2845',   // Cards surélévées
+// ─── PALETTE DE COULEURS (DUAL THEME) ─────────────────────────
+export const COLORS = {
+  light: {
+    primary: '#FF6B00', // Orange vibrant
+    primaryBg: '#FFF0E6',
+    accent: '#FFD600',  // Jaune éclatant
+    success: '#4CAF50', // Vert frais
+    successBg: '#E8F5E9',
+    warning: '#FFC107',
+    warningBg: '#FFF8E1',
+    info: '#2196F3',
+    infoBg: '#E3F2FD',
+    danger: '#F44336',
+    dangerBg: '#FFEBEE',
+    bg: {
+      app: '#FDFDFD',
+      surface: '#FFFFFF',
+      elevated: '#F9F9F9',
+    },
+    text: {
+      primary: '#1A1A1A',
+      secondary: '#4A4A4A',
+      muted: '#8E8E93',
+      inverse: '#FFFFFF',
+    },
+    border: {
+      default: '#E5E5EA',
+      subtle: '#F2F2F7',
+    },
   },
-  // Glass
-  glass: {
-    bg:         'rgba(255,255,255,0.05)',
-    bgStrong:   'rgba(255,255,255,0.09)',
-    border:     'rgba(255,255,255,0.08)',
-    borderStrong: 'rgba(255,255,255,0.15)',
-  },
-  // Client — Bleu Saphir
-  client: {
-    primary:    '#4F8EF7',
-    light:      '#7BB3FF',
-    dark:       '#2A5DC7',
-    glow:       'rgba(79, 142, 247, 0.35)',
-    bg:         'rgba(79, 142, 247, 0.12)',
-  },
-  // Restaurant — Vert Émeraude
-  restaurant: {
-    primary:    '#00D68F',
-    light:      '#4DFFC4',
-    dark:       '#00A870',
-    glow:       'rgba(0, 214, 143, 0.35)',
-    bg:         'rgba(0, 214, 143, 0.12)',
-  },
-  // Livreur — Ambre Or
-  livreur: {
-    primary:    '#FFB224',
-    light:      '#FFD47A',
-    dark:       '#E09000',
-    glow:       'rgba(255, 178, 36, 0.35)',
-    bg:         'rgba(255, 178, 36, 0.12)',
-  },
-  // Texte
-  text: {
-    primary:    '#F0F4FF',
-    secondary:  '#8899BB',
-    muted:      '#475980',
-    inverse:    '#070B14',
-  },
-  // États
-  danger:       '#FF4757',
-  dangerBg:     'rgba(255, 71, 87, 0.15)',
-  success:      '#00D68F',
-  successBg:    'rgba(0, 214, 143, 0.12)',
-  warning:      '#FFB224',
-  warningBg:    'rgba(255, 178, 36, 0.12)',
-  // Bordures
-  border: {
-    default:    'rgba(255,255,255,0.07)',
-    subtle:     'rgba(255,255,255,0.04)',
+  dark: {
+    primary: '#FF6B00',
+    primaryBg: '#331600',
+    accent: '#FFD600',
+    success: '#4CAF50',
+    successBg: '#091A0B',
+    warning: '#FFC107',
+    warningBg: '#1D1600',
+    info: '#2196F3',
+    infoBg: '#000F1A',
+    danger: '#FF453A',
+    dangerBg: '#210808',
+    bg: {
+      app: '#0A0A0A',
+      surface: '#121212',
+      elevated: '#1C1C1E',
+    },
+    text: {
+      primary: '#FFFFFF',
+      secondary: '#AEAEB2',
+      muted: '#636366',
+      inverse: '#1A1A1A',
+    },
+    border: {
+      default: '#2C2C2E',
+      subtle: '#1C1C1E',
+    },
   },
 };
 
+export const DarkColors = COLORS.dark;
+export const LightColors = COLORS.light;
+
+// Par défaut, nous utilisons une constante Colors, mais on peut changer ici pour tester
+export const Colors = COLORS.light; // SWITCH ICI POUR TESTER LE MODE CLAIR
+
 // ─── TYPOGRAPHIE ─────────────────────────────────────────────
 export const Typography = {
-  display: { fontSize: 36, fontWeight: '900' as const, letterSpacing: -1, color: Colors.text.primary },
-  h1:      { fontSize: 28, fontWeight: '900' as const, letterSpacing: -0.5, color: Colors.text.primary },
-  h2:      { fontSize: 22, fontWeight: '800' as const, color: Colors.text.primary },
-  h3:      { fontSize: 18, fontWeight: '700' as const, color: Colors.text.primary },
-  body:    { fontSize: 15, fontWeight: '400' as const, lineHeight: 22, color: Colors.text.primary },
-  bodyBold:{ fontSize: 15, fontWeight: '700' as const, color: Colors.text.primary },
-  small:   { fontSize: 13, fontWeight: '400' as const, color: Colors.text.secondary },
-  caption: { fontSize: 11, fontWeight: '600' as const, color: Colors.text.muted, letterSpacing: 0.5 },
-  label:   { fontSize: 12, fontWeight: '700' as const, letterSpacing: 1, textTransform: 'uppercase' as const, color: Colors.text.muted },
+  display: { fontSize: 36, fontWeight: '900' as const, letterSpacing: -1 },
+  h1: { fontSize: 28, fontWeight: '900' as const, letterSpacing: -0.5 },
+  h2: { fontSize: 22, fontWeight: '800' as const },
+  h3: { fontSize: 18, fontWeight: '700' as const },
+  body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
+  bodyBold: { fontSize: 15, fontWeight: '700' as const },
+  small: { fontSize: 13, fontWeight: '400' as const },
+  caption: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '700' as const, letterSpacing: 1, textTransform: 'uppercase' as const },
 };
 
 // ─── ESPACEMENT & GÉOMÉTRIE ──────────────────────────────────
@@ -87,51 +92,16 @@ export const Spacing = {
 };
 
 export const Radius = {
-  sm: 8, md: 14, lg: 20, xl: 26, full: 999,
+  sm: 8, md: 14, lg: 20, xl: 26, xxl: 32, full: 999,
 };
 
 export const Screen = { W, H };
 
 // ─── STYLES RÉUTILISABLES ────────────────────────────────────
 export const CommonStyles = StyleSheet.create({
-  // Surfaces Glass
-  glassCard: {
-    backgroundColor: Colors.glass.bg,
-    borderWidth: 1,
-    borderColor: Colors.glass.border,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-  },
-  glassCardStrong: {
-    backgroundColor: Colors.glass.bgStrong,
-    borderWidth: 1,
-    borderColor: Colors.glass.borderStrong,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-  },
-  // Surface standard
-  surface: {
-    backgroundColor: Colors.bg.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-  },
-  // Row utilitaires
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  // Textes
-  textPrimary:   { ...Typography.body, color: Colors.text.primary },
-  textSecondary: { ...Typography.body, color: Colors.text.secondary },
-  // Boutons
-  btnPrimary: {
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    borderRadius: Radius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
   // Status Pill
   pill: {
     paddingHorizontal: 10,
@@ -166,15 +136,17 @@ export const glowSubtle = (color: string) => ({
 });
 
 // ─── STATUT COMMANDE ─────────────────────────────────────────
-export const StatutConfig: Record<string, { label: string; color: string; bg: string; emoji: string }> = {
-  en_attente:      { label: 'En attente',     color: Colors.warning,    bg: Colors.warningBg,   emoji: '⏳' },
-  acceptee:        { label: 'Acceptée',       color: Colors.client.primary, bg: Colors.client.bg, emoji: '✅' },
-  en_preparation:  { label: 'En préparation', color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '👨‍🍳' },
-  prete:           { label: 'Prête',          color: Colors.success,    bg: Colors.successBg,   emoji: '🍽️' },
-  livreur_assigne: { label: 'Livreur assigné',color: Colors.client.primary, bg: Colors.client.bg, emoji: '🛵' },
-  en_collecte:     { label: 'En collecte',    color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '📦' },
-  en_livraison:    { label: 'En livraison',   color: Colors.restaurant.primary, bg: Colors.restaurant.bg, emoji: '🛵' },
-  livree:          { label: 'Livrée ✓',       color: Colors.success,    bg: Colors.successBg,   emoji: '🎉' },
-  refusee:         { label: 'Refusée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '❌' },
-  annulee:         { label: 'Annulée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '🚫' },
-};
+export const getStatutConfig = (colors: any) => ({
+  en_attente: { label: 'En attente', color: colors.text.secondary, bg: colors.bg.elevated, icon: 'Clock' },
+  acceptee: { label: 'Acceptée', color: colors.primary, bg: colors.bg.elevated, icon: 'CheckCircle' },
+  en_preparation: { label: 'Préparation', color: colors.accent, bg: colors.bg.elevated, icon: 'Flame' },
+  prete: { label: 'Prête', color: colors.success, bg: colors.successBg, icon: 'Utensils' },
+  livreur_assigne: { label: 'Collecte', color: colors.secondary, bg: colors.bg.elevated, icon: 'Bike' },
+  en_collecte: { label: 'En collecte', color: colors.secondary, bg: colors.bg.elevated, icon: 'Package' },
+  en_livraison: { label: 'En chemin', color: colors.success, bg: colors.successBg, icon: 'Navigation' },
+  livree: { label: 'Livrée ✓', color: colors.success, bg: colors.successBg, icon: 'CheckCircle' },
+  refusee: { label: 'Refusée', color: colors.danger, bg: colors.dangerBg, icon: 'XCircle' },
+  annulee: { label: 'Annulée', color: colors.danger, bg: colors.dangerBg, icon: 'Slash' },
+  ouvert: { label: 'Ouvert', color: colors.success, bg: colors.successBg, icon: 'CheckCircle' },
+  ferme: { label: 'Fermé', color: colors.danger, bg: colors.dangerBg, icon: 'XCircle' },
+});

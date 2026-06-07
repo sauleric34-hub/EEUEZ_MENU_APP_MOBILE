@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, glowSubtle } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import { Sun, Moon } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.80;
@@ -14,7 +16,7 @@ const OPEN_DURATION = 290;
 export interface DrawerItem {
   key: string;
   label: string;
-  icon: string;
+  icon: any;        // Remplacer string par any pour supporter les composants Lucide
   badge?: number;
   section?: string;
   danger?: boolean;
@@ -28,15 +30,16 @@ interface DrawerProps {
   onNavigate: (key: string) => void;
   headerTitle: string;
   headerSubtitle: string;
-  headerEmoji: string;
+  headerIcon: any;   // Remplacer headerEmoji par headerIcon
   accentColor: string;
   accentBg: string;
 }
 
 export default function DrawerMenu({
   isOpen, onClose, items, activeKey, onNavigate,
-  headerTitle, headerSubtitle, headerEmoji, accentColor, accentBg
+  headerTitle, headerSubtitle, headerIcon: HeaderIcon, accentColor, accentBg
 }: DrawerProps) {
+  const { theme, toggleTheme, colors } = useTheme();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   // isVisible reste true pendant l'animation de fermeture pour capturer les touches
@@ -74,15 +77,16 @@ export default function DrawerMenu({
   if (!isVisible) return null;
 
   const renderItems = () => {
-    const result: JSX.Element[] = [];
+    const result: any[] = [];
     let currentSection = '';
     items.forEach((item, idx) => {
       if (item.section && item.section !== currentSection) {
         currentSection = item.section;
-        if (idx > 0) result.push(<View key={`div-${idx}`} style={styles.divider} />);
-        result.push(<Text key={`sec-${idx}`} style={styles.sectionLabel}>{item.section}</Text>);
+        if (idx > 0) result.push(<View key={`div-${idx}`} style={[styles.divider, { backgroundColor: colors.border.subtle }]} />);
+        result.push(<Text key={`sec-${idx}`} style={[styles.sectionLabel, { color: colors.text.muted }]}>{item.section}</Text>);
       }
       const isActive = item.key === activeKey;
+      const Icon = item.icon;
       result.push(
         <TouchableOpacity
           key={item.key}
@@ -90,11 +94,14 @@ export default function DrawerMenu({
           onPress={() => handleNavigate(item.key)}
           activeOpacity={0.7}
         >
-          <Text style={styles.itemIcon}>{item.icon}</Text>
+          <View style={styles.itemIconContainer}>
+            <Icon size={20} color={isActive ? accentColor : item.danger ? colors.danger : colors.text.secondary} />
+          </View>
           <Text style={[
             styles.itemLabel,
+            { color: colors.text.primary },
             isActive && { color: accentColor, fontWeight: '700' },
-            item.danger && { color: Colors.danger },
+            item.danger && { color: colors.danger },
           ]}>
             {item.label}
           </Text>
@@ -128,22 +135,45 @@ export default function DrawerMenu({
       </TouchableOpacity>
 
       {/* ─── PANNEAU DRAWER ───────────────────────────────────────────── */}
-      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
+      <Animated.View style={[styles.drawer, { transform: [{ translateX }], backgroundColor: colors.bg.app, borderRightColor: colors.border.default }]}>
+        <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg.app} />
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* En-tête */}
           <View style={[styles.drawerHeader, { borderBottomColor: accentColor + '25' }]}>
-            <View style={[styles.avatarCircle, { backgroundColor: accentBg }, glowSubtle(accentColor)]}>
-              <Text style={styles.avatarEmoji}>{headerEmoji}</Text>
+            <View style={[styles.avatarCircle, { backgroundColor: accentBg, borderColor: colors.border.default }]}>
+              <HeaderIcon size={24} color={accentColor} />
             </View>
             <View style={{ marginLeft: 14, flex: 1 }}>
-              <Text style={styles.headerName} numberOfLines={1}>{headerTitle}</Text>
-              <Text style={styles.headerRole}>{headerSubtitle}</Text>
+              <Text style={[styles.headerName, { color: colors.text.primary }]} numberOfLines={1}>{headerTitle}</Text>
+              <Text style={[styles.headerRole, { color: accentColor }]}>{headerSubtitle}</Text>
             </View>
             {/* Bouton fermeture */}
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-              <Text style={styles.closeBtnText}>✕</Text>
+            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: colors.bg.surface }]} activeOpacity={0.7}>
+              <Text style={[styles.closeBtnText, { color: colors.text.primary }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sélecteur de Thème */}
+          <View style={styles.themeToggleSection}>
+            <Text style={[styles.sectionLabel, { paddingTop: 0 }]}>Apparence</Text>
+            <TouchableOpacity
+              style={[styles.themeBtn, { backgroundColor: colors.bg.surface, borderColor: colors.border.default }]}
+              onPress={toggleTheme}
+              activeOpacity={0.8}
+            >
+              <View style={styles.row}>
+                {theme === 'dark' ? <Moon size={18} color={colors.primary} /> : <Sun size={18} color={colors.primary} />}
+                <Text style={[styles.themeBtnText, { color: colors.text.primary }]}>
+                  {theme === 'dark' ? 'Mode Luxe Sombre' : 'Mode Luxe Clair'}
+                </Text>
+              </View>
+              <View style={[styles.toggleSwitch, { backgroundColor: colors.bg.elevated }]}>
+                <View style={[styles.toggleDot, {
+                  backgroundColor: colors.primary,
+                  alignSelf: theme === 'dark' ? 'flex-end' : 'flex-start'
+                }]} />
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -153,9 +183,9 @@ export default function DrawerMenu({
           </ScrollView>
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: colors.border.subtle }]}>
             <Text style={[styles.footerLogo, { color: accentColor }]}>EEUEZ</Text>
-            <Text style={styles.footerTag}>Menu · v1.0 Bêta</Text>
+            <Text style={[styles.footerTag, { color: colors.text.muted }]}>Menu · v1.0 Bêta</Text>
           </View>
         </SafeAreaView>
       </Animated.View>
@@ -177,60 +207,62 @@ const styles = StyleSheet.create({
     left: 0,
     width: DRAWER_WIDTH,
     height: '100%',
-    backgroundColor: Colors.bg.app,
     borderRightWidth: 1,
-    borderRightColor: Colors.glass.border,
-    // Ombre portée côté droit
-    shadowColor: '#000',
-    shadowOffset: { width: 12, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 28,
+    shadowOffset: { width: 10, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
     elevation: 30,
   },
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     borderBottomWidth: 1,
-    marginBottom: 4,
   },
-  avatarCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  avatarEmoji: { fontSize: 22 },
-  headerName: { ...Typography.bodyBold, fontSize: 15, color: Colors.text.primary },
-  headerRole: { ...Typography.caption, color: Colors.text.secondary, marginTop: 2, fontSize: 11 },
+  avatarCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  headerName: { ...Typography.h3, fontSize: 17 },
+  headerRole: { ...Typography.caption, marginTop: 2, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   closeBtn: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.glass.bg,
     justifyContent: 'center', alignItems: 'center',
   },
-  closeBtnText: { color: Colors.text.secondary, fontSize: 14, fontWeight: '700' },
-  // ─── ITEMS ────────────────────────────────────────────────────────────────
+  closeBtnText: { fontSize: 14, fontWeight: '700' },
   sectionLabel: {
-    ...Typography.label,
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8,
+    ...Typography.caption,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
+    letterSpacing: 1.5, fontWeight: '800',
   },
-  divider: { height: 1, backgroundColor: Colors.border.subtle, marginHorizontal: 20, marginVertical: 4 },
+  divider: { height: 1, marginHorizontal: 20, marginVertical: 6, opacity: 0.5 },
   item: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 18, paddingVertical: 13,
-    marginHorizontal: 8, borderRadius: Radius.md, marginBottom: 2,
+    paddingHorizontal: 16, paddingVertical: 14,
+    marginHorizontal: 12, borderRadius: Radius.lg, marginBottom: 4,
     position: 'relative',
   },
-  itemIcon: { fontSize: 18, width: 28 },
-  itemLabel: { ...Typography.body, color: Colors.text.secondary, marginLeft: 12, flex: 1 },
+  itemIconContainer: { width: 28, alignItems: 'center' },
+  itemLabel: { ...Typography.body, marginLeft: 12, flex: 1 },
+  // Thème Toggle
+  themeToggleSection: { paddingHorizontal: 20, paddingVertical: 10, gap: 8 },
+  themeBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 12, borderRadius: Radius.lg, borderWidth: 1,
+  },
+  themeBtnText: { ...Typography.bodyBold, fontSize: 14, marginLeft: 10 },
+  toggleSwitch: { width: 40, height: 22, borderRadius: 11, padding: 2, justifyContent: 'center' },
+  toggleDot: { width: 18, height: 18, borderRadius: 9 },
+  row: { flexDirection: 'row', alignItems: 'center' },
   badge: {
     minWidth: 20, height: 20, borderRadius: 10,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
   },
   badgeText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
-  activeBar: { position: 'absolute', right: 0, top: '20%', width: 3, height: '60%', borderRadius: 2 },
-  // ─── FOOTER ───────────────────────────────────────────────────────────────
+  activeBar: { position: 'absolute', left: 0, top: '25%', width: 3, height: '50%', borderRadius: 2 },
   footer: {
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderTopWidth: 1, borderTopColor: Colors.border.default,
-    alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 24,
+    borderTopWidth: 1,
+    alignItems: 'center', gap: 4,
   },
-  footerLogo: { fontSize: 18, fontWeight: '900', letterSpacing: 4 },
-  footerTag: { ...Typography.caption, marginTop: 3 },
+  footerLogo: { fontSize: 20, fontWeight: '900', letterSpacing: 4 },
+  footerTag: { ...Typography.caption, fontSize: 10, letterSpacing: 1 },
 });

@@ -21,7 +21,7 @@ import {
 interface PressableScaleProps {
   onPress?: () => void;
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: any;
   scaleDown?: number;   // ex: 0.90
   disabled?: boolean;
 }
@@ -68,8 +68,8 @@ interface EmojiPopProps {
 
 export function EmojiPop({ emoji, visible, onDone, size = 40 }: EmojiPopProps) {
   const translateY = useRef(new Animated.Value(0)).current;
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const scale      = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
@@ -84,8 +84,8 @@ export function EmojiPop({ emoji, visible, onDone, size = 40 }: EmojiPopProps) {
       // Remonte
       Animated.parallel([
         Animated.timing(translateY, { toValue: -80, duration: 600, useNativeDriver: true }),
-        Animated.timing(opacity,    { toValue: 0,   duration: 500, useNativeDriver: true }),
-        Animated.spring(scale,      { toValue: 0.8, tension: 80, friction: 8, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 0.8, tension: 80, friction: 8, useNativeDriver: true }),
       ]),
     ]).start(() => onDone?.());
   }, [visible]);
@@ -109,7 +109,7 @@ export function EmojiPop({ emoji, visible, onDone, size = 40 }: EmojiPopProps) {
 // 3. ConfettiBurst — Explosion de 24 particules colorées
 // ─────────────────────────────────────────────────────────────
 const CONFETTI_COLORS = ['#FFB224', '#4F8EF7', '#00D68F', '#FF4757', '#8B5CF6', '#FF6B9D', '#00D4FF'];
-const PARTICLE_COUNT  = 24;
+const PARTICLE_COUNT = 24;
 
 interface ConfettiParticleProps {
   color: string;
@@ -144,8 +144,8 @@ function ConfettiParticle({ color, angle, speed, delay, shape }: ConfettiParticl
         transform: [
           { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, tx] }) },
           { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, ty] }) },
-          { scale:      anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1.4, 0.5] }) },
-          { rotate:     anim.interpolate({ inputRange: [0, 1],      outputRange: ['0deg', `${360 * (Math.random() > 0.5 ? 1 : -1)}deg`] }) },
+          { scale: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1.4, 0.5] }) },
+          { rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${360 * (Math.random() > 0.5 ? 1 : -1)}deg`] }) },
         ],
       }}
     />
@@ -196,8 +196,8 @@ interface FloatingReactionProps {
 export function FloatingReaction({ emoji, visible, onDone }: FloatingReactionProps) {
   const translateY = useRef(new Animated.Value(0)).current;
   const translateX = useRef(new Animated.Value(0)).current;
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const scale      = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
@@ -248,11 +248,11 @@ export function ShakeAnimation({ children, style }: { children: React.ReactNode;
   const shake = () => {
     Animated.sequence([
       Animated.timing(shakeX, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeX, { toValue: 10,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeX, { toValue: -8,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeX, { toValue: 8,   duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeX, { toValue: -4,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeX, { toValue: 0,   duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: -4, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   };
 
@@ -276,19 +276,19 @@ interface PulseRingProps {
 export function PulseRing({ color, size = 50, children }: PulseRingProps) {
   const ring1 = useRef(new Animated.Value(1)).current;
   const ring2 = useRef(new Animated.Value(1)).current;
-  const op1   = useRef(new Animated.Value(0.7)).current;
-  const op2   = useRef(new Animated.Value(0.5)).current;
+  const op1 = useRef(new Animated.Value(0.7)).current;
+  const op2 = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.parallel([
           Animated.timing(ring1, { toValue: 1.6, duration: 1000, useNativeDriver: true }),
-          Animated.timing(op1,   { toValue: 0,   duration: 1000, useNativeDriver: true }),
+          Animated.timing(op1, { toValue: 0, duration: 1000, useNativeDriver: true }),
         ]),
         Animated.parallel([
           Animated.timing(ring1, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(op1,   { toValue: 0.7, duration: 0, useNativeDriver: true }),
+          Animated.timing(op1, { toValue: 0.7, duration: 0, useNativeDriver: true }),
         ]),
       ])
     ).start();
@@ -298,11 +298,11 @@ export function PulseRing({ color, size = 50, children }: PulseRingProps) {
         Animated.sequence([
           Animated.parallel([
             Animated.timing(ring2, { toValue: 1.8, duration: 1200, useNativeDriver: true }),
-            Animated.timing(op2,   { toValue: 0,   duration: 1200, useNativeDriver: true }),
+            Animated.timing(op2, { toValue: 0, duration: 1200, useNativeDriver: true }),
           ]),
           Animated.parallel([
             Animated.timing(ring2, { toValue: 1, duration: 0, useNativeDriver: true }),
-            Animated.timing(op2,   { toValue: 0.5, duration: 0, useNativeDriver: true }),
+            Animated.timing(op2, { toValue: 0.5, duration: 0, useNativeDriver: true }),
           ]),
         ])
       ).start();
@@ -329,8 +329,8 @@ export function PulseRing({ color, size = 50, children }: PulseRingProps) {
 // ─────────────────────────────────────────────────────────────
 export function useButtonPress() {
   const [confettiVisible, setConfettiVisible] = useState(false);
-  const [emojiVisible,    setEmojiVisible]    = useState(false);
-  const [emoji,           setEmoji]           = useState('✅');
+  const [emojiVisible, setEmojiVisible] = useState(false);
+  const [emoji, setEmoji] = useState('✅');
 
   const triggerSuccess = useCallback((e = '✅') => {
     setEmoji(e);
