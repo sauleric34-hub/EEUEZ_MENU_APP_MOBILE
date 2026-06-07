@@ -8,7 +8,8 @@ import { Radius } from '../../constants/theme';
 function CustomTabBar({ state, descriptors, navigation, colors }: any) {
   const insets = useSafeAreaInsets();
 
-  const visibleRoutes = state.routes.filter((route: any) => route.name !== 'map');
+  const ALLOWED_ROUTES = ['index', 'cart', 'explore', 'favorites', 'profile'];
+  const visibleRoutes = state.routes.filter((route: any) => ALLOWED_ROUTES.includes(route.name));
 
   return (
     <View style={[
@@ -38,9 +39,11 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
 
         let Icon = Home;
         if (route.name === 'cart') Icon = ShoppingBag;
-        if (route.name === 'explore') Icon = ChefHat;
-        if (route.name === 'favorites') Icon = Heart;
-        if (route.name === 'profile') Icon = User;
+        else if (route.name === 'explore') Icon = ChefHat;
+        else if (route.name === 'favorites') Icon = Heart;
+        else if (route.name === 'profile') Icon = User;
+        else if (route.name === 'index') Icon = Home;
+        else return null; // Sécurité supplémentaire
 
         return (
           <TouchableOpacity
