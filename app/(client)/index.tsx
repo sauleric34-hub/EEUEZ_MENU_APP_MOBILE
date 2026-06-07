@@ -25,14 +25,14 @@ const CATEGORIES = [
 
 const MOMENT_RECIPES = [
   {
-    id: '1',
+    id: 'p1',
     nom: 'Pain au poulet pané AQ',
     desc: '08 Ingrédients',
     temps: '30m',
     image: 'https://images.unsplash.com/photo-1509722747041-619f3883a627?auto=format&fit=crop&w=400&q=80',
   },
   {
-    id: '2',
+    id: 'p2',
     nom: 'Noodle crevettes et épices',
     desc: '08 Ingrédients',
     temps: '20m',
@@ -134,9 +134,13 @@ export default function ClientAccueil() {
 
 function RecipeCard({ recipe, colors, t }: any) {
   const { addItem } = useCart();
+  const router = useRouter();
 
   return (
-    <PressableScale style={[s.card, { backgroundColor: colors.bg.surface }, glowSubtle(colors.text.muted)]}>
+    <PressableScale
+      onPress={() => router.push(`/(client)/product/${recipe.id}`)}
+      style={[s.card, { backgroundColor: colors.bg.surface }, glowSubtle(colors.text.muted)]}
+    >
       <View style={s.imageWrapper}>
         <Image source={{ uri: recipe.image }} style={s.cardImage} />
         <View style={[s.timeBadge, { backgroundColor: colors.primary }]}>
