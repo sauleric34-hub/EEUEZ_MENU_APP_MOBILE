@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Menu Admin — Connexion</title>
 {% load static %}
+<script>(function(){var t=localStorage.getItem('menu-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
@@ -36,9 +37,10 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
   width: 100%;
   max-width: 400px;
   padding: 48px 40px;
-  background: rgba(17, 17, 24, 0.9);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 24px;
+  box-shadow: var(--card-shadow), 0 24px 48px rgba(0,0,0,0.18);
   backdrop-filter: blur(20px);
   position: relative;
   z-index: 1;
@@ -67,8 +69,8 @@ body { display: flex; align-items: center; justify-content: center; min-height: 
 .input-icon-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; stroke: var(--text-muted); }
 .input-icon-wrap input {
   width: 100%;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
+  background: var(--input-bg, var(--bg-tertiary));
+  border: 1px solid var(--input-border, var(--border));
   border-radius: 10px;
   padding: 11px 14px 11px 40px;
   color: var(--text-primary);
