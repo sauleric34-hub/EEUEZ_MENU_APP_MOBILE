@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "axios": "^1.17.0",
+    "expo-secure-store": "^56.0.4"
+  }
+}
