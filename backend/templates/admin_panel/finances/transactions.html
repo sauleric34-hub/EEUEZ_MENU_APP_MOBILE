@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Transactions — Menu Admin{% endblock %}
+{% block topbar_title %}Transactions{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:finances' %}">Finances</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Transactions</span>
+</div>
+<div class="page-header anim-fade-up">
+  <h1 class="page-title">Historique des Transactions</h1>
+</div>
+
+<div class="table-wrapper">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1;">
+      <select name="type" class="input-select" onchange="this.form.submit()">
+        <option value="">Tous types</option>
+        <option value="paiement_client" {% if type_filter == 'paiement_client' %}selected{% endif %}>Paiement Client</option>
+        <option value="commission_eeuez" {% if type_filter == 'commission_eeuez' %}selected{% endif %}>Commission Menu</option>
+        <option value="reversement_restaurant" {% if type_filter == 'reversement_restaurant' %}selected{% endif %}>Reversement Restaurant</option>
+      </select>
+      <select name="statut" class="input-select" onchange="this.form.submit()">
+        <option value="">Tous statuts</option>
+        <option value="complete" {% if statut_filter == 'complete' %}selected{% endif %}>Complétée</option>
+        <option value="en_attente" {% if statut_filter == 'en_attente' %}selected{% endif %}>En attente</option>
+        <option value="echouee" {% if statut_filter == 'echouee' %}selected{% endif %}>Échouée</option>
+      </select>
+      {% if type_filter or statut_filter %}<a href="{% url 'core:transaction_list' %}" class="btn btn-secondary btn-sm">Reset</a>{% endif %}
+    </form>
+  </div>
+
+  {% if page_obj %}
+  <table>
+    <thead><tr><th>Référence</th><th>Type</th><th>Commande</th><th>Montant</th><th>Mode</th><th>Statut</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for tx in page_obj %}
+      <tr>
+        <td style="font-size:0.75rem;color:var(--text-muted);">{{ tx.reference|default:"—" }}</td>
+        <td>
+          {% if tx.type == 'paiement_client' %}<span class="badge badge-blue">Paiement</span>
+          {% elif tx.type == 'commission_eeuez' %}<span class="badge badge-blue" style="--accent-blue:var(--accent-purple);">Commission</span>
+          {% else %}<span class="badge badge-green">Reversement</span>{% endif %}
+        </td>
+        <td>#{{ tx.commande_id }}</td>
+        <td style="color:var(--accent-green);font-weight:700;">{{ tx.montant|floatformat:0 }} F</td>
+        <td style="font-size:0.8rem;">{{ tx.get_mode_paiement_display }}</td>
+        <td>
+          {% if tx.statut == 'complete' %}<span class="badge badge-green">Complétée</span>
+          {% elif tx.statut == 'en_attente' %}<span class="badge badge-amber"><span class="badge-dot"></span>En attente</span>
+          {% elif tx.statut == 'echouee' %}<span class="badge badge-red">Échouée</span>
+          {% else %}<span class="badge badge-gray">{{ tx.get_statut_display }}</span>{% endif %}
+        </td>
+        <td style="font-size:0.75rem;">{{ tx.created_at|date:"d/m/Y H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&type={{ type_filter }}&statut={{ statut_filter }}" class="page-link">‹</a>{% endif %}
+    {% for num in page_obj.paginator.page_range %}{% if page_obj.number == num %}<span class="page-link active">{{ num }}</span>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<a href="?page={{ num }}&type={{ type_filter }}&statut={{ statut_filter }}" class="page-link">{{ num }}</a>{% endif %}{% endfor %}
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&type={{ type_filter }}&statut={{ statut_filter }}" class="page-link">›</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-state"><p>Aucune transaction</p></div>
+  {% endif %}
+</div>
+{% endblock %}

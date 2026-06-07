@@ -1,0 +1,12 @@
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+frontend/
+*.md
+.git/
+.gitignore

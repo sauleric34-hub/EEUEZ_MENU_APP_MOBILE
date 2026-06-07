@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Plats — Menu Admin{% endblock %}
+{% block topbar_title %}Plats{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Plats</h1>
+    <p class="page-subtitle">{{ page_obj.paginator.count }} plat{{ page_obj.paginator.count|pluralize }} dans le catalogue</p>
+  </div>
+</div>
+
+<div class="table-wrapper">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1;">
+      <div class="input-search-wrapper">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" name="q" value="{{ q }}" placeholder="Nom du plat, restaurant…" class="input-search">
+      </div>
+      <select name="categorie" class="input-select" onchange="this.form.submit()">
+        <option value="">Toutes catégories</option>
+        {% for cat in categories %}<option value="{{ cat.pk }}">{{ cat.nom }}</option>{% endfor %}
+      </select>
+      <select name="dispo" class="input-select" onchange="this.form.submit()">
+        <option value="">Disponibilité</option>
+        <option value="1">Disponible</option>
+        <option value="0">Indisponible</option>
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm">Filtrer</button>
+    </form>
+  </div>
+
+  {% if page_obj %}
+  <table>
+    <thead><tr><th>Plat</th><th>Restaurant</th><th>Catégorie</th><th>Prix</th><th>Dispo</th><th>Visible</th><th></th></tr></thead>
+    <tbody>
+      {% for plat in page_obj %}
+      <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            {% if plat.image %}<img src="{{ plat.image.url }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;">
+            {% else %}<div style="width:40px;height:40px;border-radius:8px;background:var(--accent-amber-dim);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🍽️</div>{% endif %}
+            <div>
+              <div style="color:var(--text-primary);font-weight:500;">{{ plat.nom }}</div>
+              {% if plat.is_popular %}<span class="badge badge-amber" style="font-size:0.6rem;">Populaire</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td>{{ plat.restaurant.nom }}</td>
+        <td>{{ plat.categorie.nom|default:"—" }}</td>
+        <td style="color:var(--accent-green);font-weight:600;">{{ plat.prix|floatformat:0 }} F</td>
+        <td>{% if plat.is_available %}<span class="badge badge-green">Oui</span>{% else %}<span class="badge badge-red">Non</span>{% endif %}</td>
+        <td>{% if plat.is_visible %}<span class="badge badge-blue">Visible</span>{% else %}<span class="badge badge-gray">Masqué</span>{% endif %}</td>
+        <td style="display:flex;gap:6px;">
+          <a href="{% url 'core:dish_detail' plat.pk %}" class="btn btn-secondary btn-sm">Voir</a>
+          <form method="post" action="{% url 'core:dish_toggle' plat.pk %}">{% csrf_token %}
+            <button class="btn {% if plat.is_visible %}btn-danger{% else %}btn-amber{% endif %} btn-sm">{% if plat.is_visible %}Masquer{% else %}Afficher{% endif %}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&q={{ q }}" class="page-link">‹</a>{% endif %}
+    {% for num in page_obj.paginator.page_range %}{% if page_obj.number == num %}<span class="page-link active">{{ num }}</span>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<a href="?page={{ num }}&q={{ q }}" class="page-link">{{ num }}</a>{% endif %}{% endfor %}
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&q={{ q }}" class="page-link">›</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg><p>Aucun plat trouvé</p></div>
+  {% endif %}
+</div>
+{% endblock %}
