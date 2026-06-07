@@ -135,6 +135,30 @@ export const glowSubtle = (color: string) => ({
   elevation: 4,
 });
 
+export const shadow = {
+  small: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  large: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+};
+
 // ─── STATUT COMMANDE ─────────────────────────────────────────
 export const getStatutConfig = (colors: any) => ({
   en_attente: { label: 'En attente', color: colors.text.secondary, bg: colors.bg.elevated, icon: 'Clock' },

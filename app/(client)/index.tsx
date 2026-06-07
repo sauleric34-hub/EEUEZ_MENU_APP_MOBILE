@@ -138,7 +138,7 @@ function RecipeCard({ recipe, colors, t }: any) {
 
   return (
     <PressableScale
-      onPress={() => router.push(`/(client)/product/${recipe.id}`)}
+      onPress={() => router.push(`/product/${recipe.id}`)}
       style={[s.card, { backgroundColor: colors.bg.surface }, glowSubtle(colors.text.muted)]}
     >
       <View style={s.imageWrapper}>

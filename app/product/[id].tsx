@@ -12,7 +12,7 @@ import { PressableScale } from '../../components/Animations';
 const { width, height } = Dimensions.get('window');
 
 // Données par défaut si le produit n'est pas trouvé (Mode Dégradé)
-const DEFAULT_PRODUCT = {
+const DEFAULT_PRODUCT: any = {
     id: 'default',
     nom: 'Repas Spécial MENU',
     prix: 3500,
@@ -23,25 +23,29 @@ const DEFAULT_PRODUCT = {
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams();
     const { colors } = useTheme();
-    const { addToCart, items } = useCart();
+    const { addItem, items } = useCart();
     const router = useRouter();
     const [quantity, setQuantity] = useState(1);
 
     // Trouver le produit ou utiliser le fallback
     const allPlats = MOCK_RESTAURANT_USER.menu.flatMap(cat => cat.plats);
-    const plat = allPlats.find(p => p.id === id) || DEFAULT_PRODUCT;
+    const plat: any = allPlats.find(p => p.id === id) || DEFAULT_PRODUCT;
 
     const handleAddToCart = () => {
         // Si c'est un produit réel du mockData, il a le bon type. Sinon on simule.
-        const itemToAdd = plat.id === 'default' ? { ...plat, description: 'Délicieux repas par défaut' } : plat;
+        const itemToAdd = {
+            ...plat,
+            description: plat.description || 'Délicieux repas par défaut',
+            image: plat.image || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80'
+        };
+
         for (let i = 0; i < quantity; i++) {
-            // @ts-ignore
-            addToCart(itemToAdd);
+            addItem(itemToAdd);
         }
         router.back();
     };
 
-    const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalCartQuantity = items.reduce((sum, item) => sum + (item.quantity as number || 0), 0);
 
     return (
         <View style={[s.container, { backgroundColor: '#FCF9F2' }]}>
@@ -58,9 +62,9 @@ export default function ProductDetailScreen() {
 
                     <TouchableOpacity onPress={() => router.push('/(client)/cart')} style={s.cartBtn}>
                         <ShoppingBag size={24} color="#000" />
-                        {cartCount > 0 && (
+                        {totalCartQuantity > 0 && (
                             <View style={[s.badge, { backgroundColor: colors.primary }]}>
-                                <Text style={s.badgeText}>{cartCount}</Text>
+                                <Text style={s.badgeText}>{totalCartQuantity}</Text>
                             </View>
                         )}
                     </TouchableOpacity>
