@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useCart } from '../../context/CartContext';
 import { Typography, Radius, Spacing, shadow } from '../../constants/theme';
-import { ChevronLeft, ShoppingBag, Plus, Minus, Clock } from 'lucide-react-native';
+import { ChevronLeft, ShoppingBag, Plus, Minus } from 'lucide-react-native';
 import { MOCK_RESTAURANT_USER } from '../../data/mockData';
 import { PressableScale } from '../../components/Animations';
 
@@ -47,18 +47,18 @@ export default function ProductDetailScreen() {
         <View style={s.container}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-            {/* Blob Background Stylisé */}
+            {/* Background Blob Stylisé (Plus grand et plus arrondi) */}
             <View style={[s.blobBackground, { backgroundColor: colors.primary }]} />
 
             <SafeAreaView style={{ flex: 1 }}>
                 {/* Header Icons Area */}
                 <View style={s.headerIcons}>
                     <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
-                        <ChevronLeft size={22} color="#000" />
+                        <ChevronLeft size={24} color="#000" />
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => router.push('/(client)/cart')} style={s.iconBtn}>
-                        <ShoppingBag size={22} color="#A67C52" />
+                        <ShoppingBag size={24} color="#A67C52" />
                         {totalCartQuantity > 0 && (
                             <View style={[s.badge, { backgroundColor: colors.primary }]}>
                                 <Text style={s.badgeText}>{totalCartQuantity}</Text>
@@ -86,7 +86,6 @@ export default function ProductDetailScreen() {
                     {/* Product Carousel Area */}
                     <View style={s.carouselWrapper}>
                         <Image source={{ uri: plat.image }} style={s.mainImage} resizeMode="contain" />
-                        {/* Peek of the next item */}
                         <View style={s.nextPeek}>
                             <Image
                                 source={{ uri: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&w=400&q=80' }}
@@ -96,43 +95,41 @@ export default function ProductDetailScreen() {
                         </View>
                     </View>
 
-                    {/* Product Detail Floating Card */}
-                    <View style={[s.floatingCard, shadow.medium]}>
-                        <Text style={s.codeText}>#{plat.id.slice(0, 4).toUpperCase()} CODE</Text>
-                        <Text style={[s.productTitle, { color: colors.primary }]}>{plat.nom}</Text>
+                    {/* LA CARTE FLOTTANTE (REPRODUITE À 100%) */}
+                    <View style={[s.detailCard, shadow.medium]}>
+                        {/* Code */}
+                        <Text style={s.cardCode}>#{plat.id.slice(0, 4).toUpperCase()} CODE</Text>
 
-                        <View style={s.infoRow}>
-                            <Text style={s.priceText}>
-                                {plat.id === 'default' ? '$10.00' : `${plat.prix.toLocaleString()} FCFA`}
-                            </Text>
-                            <Text style={s.deliveryText}>{plat.tempsPreparation || 15} min Delivery</Text>
+                        {/* Title (Orange/Peach) */}
+                        <Text style={s.cardTitle}>Cheese Burger</Text>
+
+                        {/* Price & Delivery Row */}
+                        <View style={s.cardPriceRow}>
+                            <Text style={s.cardPrice}>$10.00</Text>
+                            <Text style={s.cardDelivery}>15 min Delivery</Text>
                         </View>
 
-                        <View style={s.quantitySelector}>
-                            <TouchableOpacity
-                                style={s.qtyActionBtn}
-                                onPress={() => setQuantity(Math.max(1, quantity - 1))}
-                            >
-                                <View style={[s.qtyActionBox, { borderColor: '#F0F0F0' }]}>
-                                    <Minus size={24} color="#DDD" />
+                        {/* Selector Stylisé */}
+                        <View style={s.cardSelector}>
+                            <TouchableOpacity onPress={() => setQuantity(Math.max(1, quantity - 1))}>
+                                <View style={[s.qtyBox, { borderColor: '#FDEEE0' }]}>
+                                    <Minus size={22} color="#FDCAB0" />
                                 </View>
                             </TouchableOpacity>
 
-                            <Text style={s.qtyValue}>{quantity}</Text>
+                            <Text style={s.qtyText}>{quantity}</Text>
 
-                            <TouchableOpacity
-                                style={s.qtyActionBtn}
-                                onPress={() => setQuantity(quantity + 1)}
-                            >
-                                <View style={[s.qtyActionBox, { borderColor: '#F0F0F0' }]}>
-                                    <Plus size={24} color="#DDD" />
+                            <TouchableOpacity onPress={() => setQuantity(quantity + 1)}>
+                                <View style={[s.qtyBox, { borderColor: '#FDEEE0' }]}>
+                                    <Plus size={22} color="#FDCAB0" />
                                 </View>
                             </TouchableOpacity>
                         </View>
 
-                        <PressableScale onPress={handleAddToCart} style={s.addBtn}>
-                            <View style={[s.addBtnInner, { backgroundColor: colors.primary }]}>
-                                <Text style={s.addBtnText}>Add to Cart</Text>
+                        {/* Add Button */}
+                        <PressableScale onPress={handleAddToCart} style={s.cardBtn}>
+                            <View style={[s.cardBtnInner, { backgroundColor: '#FFA726' }]}>
+                                <Text style={s.cardBtnText}>Add to Cart</Text>
                             </View>
                         </PressableScale>
                     </View>
@@ -143,75 +140,74 @@ export default function ProductDetailScreen() {
 }
 
 const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9F9F9' },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
     blobBackground: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.52,
-        borderTopLeftRadius: 60,
+        height: height * 0.48,
+        borderTopLeftRadius: 50,
         transform: [{ scaleY: 1.1 }],
     },
     headerIcons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingHorizontal: 25,
-        paddingTop: 15,
+        paddingHorizontal: 20,
+        paddingTop: 10,
     },
     iconBtn: { padding: 5 },
-    badge: { position: 'absolute', top: 0, right: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#FFF' },
-    badgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', textAlign: 'center' },
+    badge: { position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    badgeText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
     scrollContent: { paddingBottom: 40 },
-    titleSection: { paddingHorizontal: 25, marginTop: 15 },
-    mainTitle: { fontSize: 32, fontWeight: '900', color: '#111' },
-    tabsContainer: { flexDirection: 'row', marginTop: 30, alignItems: 'center' },
+    titleSection: { paddingHorizontal: 25, marginTop: 10 },
+    mainTitle: { fontSize: 28, fontWeight: '900', color: '#111' },
+    tabsContainer: { flexDirection: 'row', marginTop: 20, alignItems: 'center' },
     activeTabBg: {
-        paddingHorizontal: 15,
+        paddingHorizontal: 20,
         paddingVertical: 12,
-        borderRadius: 15,
+        borderRadius: 14,
+        backgroundColor: '#FFF0E6',
         marginRight: 20,
         alignItems: 'center',
     },
-    tabText: { fontSize: 16 },
-    tabIndicator: { width: 18, height: 4, borderRadius: 2, marginTop: 5 },
+    tabText: { fontSize: 15 },
+    tabIndicator: { width: 15, height: 3, borderRadius: 2, marginTop: 5 },
     inactiveTab: { paddingHorizontal: 15 },
-    carouselWrapper: { height: height * 0.45, marginTop: 20, flexDirection: 'row', alignItems: 'center' },
-    mainImage: { width: width * 0.85, height: '100%', marginLeft: width * 0.05 },
-    nextPeek: { position: 'absolute', right: -width * 0.1, width: width * 0.3, height: '70%', opacity: 0.8 },
+    carouselWrapper: { height: height * 0.38, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
+    mainImage: { width: width * 0.8, height: '100%', marginLeft: width * 0.1 },
+    nextPeek: { position: 'absolute', right: -width * 0.1, width: width * 0.3, height: '60%', opacity: 0.6 },
     peekImage: { width: '100%', height: '100%' },
-    floatingCard: {
+    detailCard: {
         backgroundColor: '#FFF',
-        marginHorizontal: 35,
+        marginHorizontal: 50,
         borderRadius: 35,
         padding: 25,
         alignItems: 'center',
-        marginTop: -30,
+        marginTop: -20,
     },
-    codeText: { fontSize: 13, fontWeight: '700', color: '#999', marginBottom: 5, letterSpacing: 0.5 },
-    productTitle: { fontSize: 24, fontWeight: '800', marginBottom: 10 },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 25 },
-    priceText: { fontSize: 22, fontWeight: '900', color: '#111' },
-    deliveryText: { fontSize: 13, color: '#AAA', fontWeight: '600' },
-    quantitySelector: {
+    cardCode: { fontSize: 13, fontWeight: '700', color: '#BDBDBD', marginBottom: 5 },
+    cardTitle: { fontSize: 20, fontWeight: '700', color: '#FBC02D', marginBottom: 12 },
+    cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 25 },
+    cardPrice: { fontSize: 18, fontWeight: '900', color: '#212121' },
+    cardDelivery: { fontSize: 12, color: '#9E9E9E', fontWeight: '600' },
+    cardSelector: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        width: '100%',
-        paddingHorizontal: 10,
+        justifyContent: 'center',
+        gap: 35,
         marginBottom: 30,
     },
-    qtyActionBox: {
-        width: 50,
-        height: 50,
-        borderRadius: 12,
-        borderWidth: 1.5,
+    qtyBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        borderWidth: 2,
         justifyContent: 'center',
         alignItems: 'center'
     },
-    qtyValue: { fontSize: 24, fontWeight: '900', color: '#444' },
-    qtyActionBtn: { padding: 5 },
-    addBtn: { width: '100%' },
-    addBtnInner: { height: 65, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    addBtnText: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+    qtyText: { fontSize: 22, fontWeight: '900', color: '#424242' },
+    cardBtn: { width: '100%' },
+    cardBtnInner: { height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    cardBtnText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
 });
