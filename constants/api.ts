@@ -7,8 +7,8 @@
 import Constants from 'expo-constants';
 
 // Remplacer par l'IP de votre machine si vous testez avec l'application Expo Go sur votre téléphone.
-// Exemple: http://192.168.1.10:8088
-export const BASE_URL = 'http://localhost:8088';
+// Exemple: http://192.168.1.187:8088
+export const BASE_URL = 'http://192.168.1.187:8088';
 export const API_URL = `${BASE_URL}/api`;
 
 export const ENDPOINTS = {
