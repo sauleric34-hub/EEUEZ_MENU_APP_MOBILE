@@ -7,7 +7,7 @@ import { StyleSheet, Dimensions } from 'react-native';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// ─── PALETTE DE COULEURS (DARK MODE — intégration So's design) ─────────────
+// ─── PALETTE DE COULEURS ────────────────────────────────────
 export const Colors = {
   // Fonds
   bg: {
@@ -66,12 +66,6 @@ export const Colors = {
     default:    'rgba(255,255,255,0.07)',
     subtle:     'rgba(255,255,255,0.04)',
   },
-  // Aliases de compatibilité (utilisés par les anciens écrans)
-  primary:      '#FF6B00',
-  primaryBg:    '#331600',
-  accent:       '#FFD600',
-  info:         '#2196F3',
-  infoBg:       '#000F1A',
 };
 
 // ─── TYPOGRAPHIE ─────────────────────────────────────────────
@@ -93,7 +87,7 @@ export const Spacing = {
 };
 
 export const Radius = {
-  sm: 8, md: 14, lg: 20, xl: 26, xxl: 32, full: 999,
+  sm: 8, md: 14, lg: 20, xl: 26, full: 999,
 };
 
 export const Screen = { W, H };
@@ -128,8 +122,8 @@ export const CommonStyles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   // Textes
-  textPrimary:   { fontSize: 15, fontWeight: '400' as const, color: Colors.text.primary },
-  textSecondary: { fontSize: 15, fontWeight: '400' as const, color: Colors.text.secondary },
+  textPrimary:   { ...Typography.body, color: Colors.text.primary },
+  textSecondary: { ...Typography.body, color: Colors.text.secondary },
   // Boutons
   btnPrimary: {
     paddingVertical: 15,
@@ -171,74 +165,16 @@ export const glowSubtle = (color: string) => ({
   elevation: 4,
 });
 
-export const shadow = {
-  small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  medium: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  large: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-};
-
 // ─── STATUT COMMANDE ─────────────────────────────────────────
-// Version objet (utilisée par les écrans de So : StatutConfig[statut])
 export const StatutConfig: Record<string, { label: string; color: string; bg: string; emoji: string }> = {
-  en_attente:      { label: 'En attente',      color: Colors.warning,             bg: Colors.warningBg,             emoji: '⏳' },
-  acceptee:        { label: 'Acceptée',        color: Colors.client.primary,      bg: Colors.client.bg,             emoji: '✅' },
-  en_preparation:  { label: 'En préparation',  color: Colors.livreur.primary,     bg: Colors.livreur.bg,            emoji: '👨‍🍳' },
-  prete:           { label: 'Prête',           color: Colors.success,             bg: Colors.successBg,             emoji: '🍽️' },
-  livreur_assigne: { label: 'Livreur assigné', color: Colors.client.primary,      bg: Colors.client.bg,             emoji: '🛵' },
-  en_collecte:     { label: 'En collecte',     color: Colors.livreur.primary,     bg: Colors.livreur.bg,            emoji: '📦' },
-  en_livraison:    { label: 'En livraison',    color: Colors.restaurant.primary,  bg: Colors.restaurant.bg,         emoji: '🛵' },
-  livree:          { label: 'Livrée ✓',        color: Colors.success,             bg: Colors.successBg,             emoji: '🎉' },
-  refusee:         { label: 'Refusée',         color: Colors.danger,              bg: Colors.dangerBg,              emoji: '❌' },
-  annulee:         { label: 'Annulée',         color: Colors.danger,              bg: Colors.dangerBg,              emoji: '🚫' },
-  ouvert:          { label: 'Ouvert',          color: Colors.success,             bg: Colors.successBg,             emoji: '✅' },
-  ferme:           { label: 'Fermé',           color: Colors.danger,              bg: Colors.dangerBg,              emoji: '🔴' },
+  en_attente:      { label: 'En attente',     color: Colors.warning,    bg: Colors.warningBg,   emoji: '⏳' },
+  acceptee:        { label: 'Acceptée',       color: Colors.client.primary, bg: Colors.client.bg, emoji: '✅' },
+  en_preparation:  { label: 'En préparation', color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '👨‍🍳' },
+  prete:           { label: 'Prête',          color: Colors.success,    bg: Colors.successBg,   emoji: '🍽️' },
+  livreur_assigne: { label: 'Livreur assigné',color: Colors.client.primary, bg: Colors.client.bg, emoji: '🛵' },
+  en_collecte:     { label: 'En collecte',    color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '📦' },
+  en_livraison:    { label: 'En livraison',   color: Colors.restaurant.primary, bg: Colors.restaurant.bg, emoji: '🛵' },
+  livree:          { label: 'Livrée ✓',       color: Colors.success,    bg: Colors.successBg,   emoji: '🎉' },
+  refusee:         { label: 'Refusée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '❌' },
+  annulee:         { label: 'Annulée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '🚫' },
 };
-
-// Version fonction (compatibilité avec l'ancien code : getStatutConfig(colors))
-export const getStatutConfig = (colors: any) => ({
-  en_attente:      { label: 'En attente',      color: colors.warning ?? Colors.warning,            bg: colors.warningBg ?? Colors.warningBg,   icon: 'Clock',       emoji: '⏳' },
-  acceptee:        { label: 'Acceptée',        color: colors.primary ?? Colors.client.primary,     bg: colors.primaryBg ?? Colors.client.bg,   icon: 'CheckCircle', emoji: '✅' },
-  en_preparation:  { label: 'Préparation',     color: colors.accent  ?? Colors.livreur.primary,    bg: colors.warningBg ?? Colors.livreur.bg,  icon: 'Flame',       emoji: '👨‍🍳' },
-  prete:           { label: 'Prête',           color: colors.success ?? Colors.success,            bg: colors.successBg ?? Colors.successBg,   icon: 'Utensils',    emoji: '🍽️' },
-  livreur_assigne: { label: 'Collecte',        color: colors.info    ?? Colors.client.primary,     bg: colors.infoBg    ?? Colors.client.bg,   icon: 'Bike',        emoji: '🛵' },
-  en_collecte:     { label: 'En collecte',     color: colors.info    ?? Colors.client.primary,     bg: colors.infoBg    ?? Colors.client.bg,   icon: 'Package',     emoji: '📦' },
-  en_livraison:    { label: 'En chemin',       color: colors.success ?? Colors.success,            bg: colors.successBg ?? Colors.successBg,   icon: 'Navigation',  emoji: '🛵' },
-  livree:          { label: 'Livrée ✓',        color: colors.success ?? Colors.success,            bg: colors.successBg ?? Colors.successBg,   icon: 'CheckCircle', emoji: '🎉' },
-  refusee:         { label: 'Refusée',         color: colors.danger  ?? Colors.danger,             bg: colors.dangerBg  ?? Colors.dangerBg,    icon: 'XCircle',     emoji: '❌' },
-  annulee:         { label: 'Annulée',         color: colors.danger  ?? Colors.danger,             bg: colors.dangerBg  ?? Colors.dangerBg,    icon: 'Slash',       emoji: '🚫' },
-  ouvert:          { label: 'Ouvert',          color: colors.success ?? Colors.success,            bg: colors.successBg ?? Colors.successBg,   icon: 'CheckCircle', emoji: '✅' },
-  ferme:           { label: 'Fermé',           color: colors.danger  ?? Colors.danger,             bg: colors.dangerBg  ?? Colors.dangerBg,    icon: 'XCircle',     emoji: '🔴' },
-});
-
-// Compatibilité legacy
-export const COLORS = {
-  dark: Colors,
-  light: {
-    ...Colors,
-    bg: { app: '#FDFDFD', surface: '#FFFFFF', elevated: '#F9F9F9', screen: '#F5F5F5' },
-    text: { primary: '#1A1A1A', secondary: '#4A4A4A', muted: '#8E8E93', inverse: '#FFFFFF' },
-    border: { default: '#E5E5EA', subtle: '#F2F2F7' },
-    danger: '#F44336',
-    dangerBg: '#FFEBEE',
-  },
-};
-export const DarkColors = Colors;
-export const LightColors = COLORS.light;
