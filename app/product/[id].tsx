@@ -6,8 +6,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useCart } from '../../context/CartContext';
 import { Typography, Radius, Spacing, shadow } from '../../constants/theme';
 import { ChevronLeft, ShoppingBag, Plus, Minus } from 'lucide-react-native';
-import { MOCK_RESTAURANT_USER } from '../../data/mockData';
 import { PressableScale } from '../../components/Animations';
+import { ClientService } from '../../services/clientService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -26,8 +26,29 @@ export default function ProductDetailScreen() {
     const router = useRouter();
     const [quantity, setQuantity] = useState(2);
 
-    const allPlats = MOCK_RESTAURANT_USER.menu.flatMap(cat => cat.plats);
-    const plat: any = allPlats.find(p => p.id === id) || DEFAULT_PRODUCT;
+    // States API
+    const [plat, setPlat] = useState<any>(DEFAULT_PRODUCT);
+    const [loading, setLoading] = useState(true);
+
+    React.useEffect(() => {
+        ClientService.getNearbyRestaurants()
+            .then(restaurants => {
+                let found = null;
+                restaurants.forEach((r: any) => {
+                    if (r.menu) {
+                        r.menu.forEach((cat: any) => {
+                            if (cat.plats) {
+                                const p = cat.plats.find((p: any) => String(p.id) === String(id));
+                                if (p) found = p;
+                            }
+                        });
+                    }
+                });
+                if (found) setPlat(found);
+            })
+            .catch(e => console.error("API error get Plat", e))
+            .finally(() => setLoading(false));
+    }, [id]);
 
     const handleAddToCart = () => {
         const itemToAdd = {
@@ -41,7 +62,7 @@ export default function ProductDetailScreen() {
         router.back();
     };
 
-    const totalCartQuantity = items.reduce((sum, item) => sum + (item.quantity as number || 0), 0);
+    const totalCartQuantity = items.reduce((sum, item: any) => sum + (item.qty || 0), 0);
 
     return (
         <View style={s.container}>
@@ -85,7 +106,7 @@ export default function ProductDetailScreen() {
 
                     {/* Product Carousel Area */}
                     <View style={s.carouselWrapper}>
-                        <Image source={{ uri: plat.image }} style={s.mainImage} resizeMode="contain" />
+                        <Image source={{ uri: plat.photo || plat.image || DEFAULT_PRODUCT.image }} style={s.mainImage} resizeMode="contain" />
                         <View style={s.nextPeek}>
                             <Image
                                 source={{ uri: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&w=400&q=80' }}
@@ -98,15 +119,15 @@ export default function ProductDetailScreen() {
                     {/* LA CARTE FLOTTANTE (REPRODUITE À 100%) */}
                     <View style={[s.detailCard, shadow.medium]}>
                         {/* Code */}
-                        <Text style={s.cardCode}>#{plat.id.slice(0, 4).toUpperCase()} CODE</Text>
+                        <Text style={s.cardCode}>#{String(plat.id).slice(0, 4).toUpperCase()} CODE</Text>
 
                         {/* Title (Orange/Peach) */}
-                        <Text style={s.cardTitle}>Cheese Burger</Text>
+                        <Text style={s.cardTitle}>{plat.nom}</Text>
 
                         {/* Price & Delivery Row */}
                         <View style={s.cardPriceRow}>
-                            <Text style={s.cardPrice}>$10.00</Text>
-                            <Text style={s.cardDelivery}>15 min Delivery</Text>
+                            <Text style={s.cardPrice}>{plat.prix} F</Text>
+                            <Text style={s.cardDelivery}>{plat.tempsPreparation || 15} min Delivery</Text>
                         </View>
 
                         {/* Selector Stylisé */}

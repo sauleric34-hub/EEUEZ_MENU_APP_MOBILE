@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, Image, StatusBar, Animated,
+  TouchableOpacity, Image, StatusBar, Animated, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -14,30 +14,14 @@ import { useTranslation } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { Typography, Spacing, Radius, glowSubtle } from '../../constants/theme';
 import { PressableScale } from '../../components/Animations';
+import { ClientService } from '../../services/clientService';
 
 const CATEGORIES = [
-  { id: '1', nom: 'Sucreries', icon: '🍰', key: 'sucreries' },
-  { id: '2', nom: 'Gâteaux', icon: '🎂', key: 'gateaux' },
-  { id: '3', nom: 'Pâtes', icon: '🍝', key: 'pates' },
-  { id: '4', nom: 'Salés', icon: '🥨', key: 'sales' },
-  { id: '5', nom: 'Volailles', icon: '🍗', key: 'volailles' },
-];
-
-const MOMENT_RECIPES = [
-  {
-    id: 'p1',
-    nom: 'Pain au poulet pané AQ',
-    desc: '08 Ingrédients',
-    temps: '30m',
-    image: 'https://images.unsplash.com/photo-1509722747041-619f3883a627?auto=format&fit=crop&w=400&q=80',
-  },
-  {
-    id: 'p2',
-    nom: 'Noodle crevettes et épices',
-    desc: '08 Ingrédients',
-    temps: '20m',
-    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80',
-  },
+  { id: '1', nom: 'Sucreries', icon: '🍰', keyword: 'sucrerie' },
+  { id: '2', nom: 'Gâteaux', icon: '🎂', keyword: 'gateau' },
+  { id: '3', nom: 'Pâtes', icon: '🍝', keyword: 'pate' },
+  { id: '4', nom: 'Salés', icon: '🥨', keyword: 'sale' },
+  { id: '5', nom: 'Africain', icon: '🥘', keyword: 'africain' },
 ];
 
 export default function ClientAccueil() {
@@ -46,11 +30,73 @@ export default function ClientAccueil() {
   const { t } = useTranslation();
   const router = useRouter();
   const [search, setSearch] = useState('');
+
+  // States API
+  const [plats, setPlats] = useState<any[]>([]);
+  const [filteredPlats, setFilteredPlats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
+
+    // Appel à l'API Backend
+    ClientService.getNearbyRestaurants()
+      .then(restaurants => {
+        let allPlats: any[] = [];
+        restaurants.forEach((r: any) => {
+          if (r.menu) {
+            r.menu.forEach((cat: any) => {
+              if (cat.plats) {
+                // Ajouter le nom du resto ou la catégorie parent si besoin
+                cat.plats.forEach((p: any) => allPlats.push({ ...p, parentCategory: cat.nom }));
+              }
+            });
+          }
+        });
+
+        // Si API vide, on met un mock de secours pro
+        if (allPlats.length === 0) {
+          allPlats = [
+            { id: 'p1', nom: 'Pain au poulet pané AQ', description: 'Poulet croustillant et frites', tempsPreparation: 30, photo: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400', parentCategory: 'Salés' },
+            { id: 'p2', nom: 'Gâteau au chocolat', description: 'Gâteau fondant premium', tempsPreparation: 15, photo: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400', parentCategory: 'Sucreries' }
+          ];
+        }
+
+        setPlats(allPlats);
+        setFilteredPlats(allPlats);
+      })
+      .catch(e => {
+        console.error("Erreur chargement plats API", e);
+      })
+      .finally(() => setLoading(false));
   }, []);
+
+  // Fonction de filtrage Catégorie
+  const filterCat = (keyword: string) => {
+    if (selectedCat === keyword) {
+      setSelectedCat(null);
+      setFilteredPlats(plats);
+    } else {
+      setSelectedCat(keyword);
+      setFilteredPlats(plats.filter(p =>
+        p.nom.toLowerCase().includes(keyword.toLowerCase()) ||
+        (p.parentCategory && p.parentCategory.toLowerCase().includes(keyword.toLowerCase())) ||
+        (p.description && p.description.toLowerCase().includes(keyword.toLowerCase()))
+      ));
+    }
+  };
+
+  // Filtrage barre de recherche
+  useEffect(() => {
+    if (search === '') {
+      setFilteredPlats(selectedCat ? plats.filter(p => p.nom.toLowerCase().includes(selectedCat.toLowerCase()) || (p.parentCategory && p.parentCategory.toLowerCase().includes(selectedCat.toLowerCase()))) : plats);
+    } else {
+      setFilteredPlats(plats.filter(p => p.nom.toLowerCase().includes(search.toLowerCase())));
+    }
+  }, [search]);
 
   return (
     <View style={[s.container, { backgroundColor: colors.bg.app }]}>
@@ -97,23 +143,38 @@ export default function ClientAccueil() {
             contentContainerStyle={s.catList}
           >
             {CATEGORIES.map(cat => (
-              <View key={cat.id} style={s.catItem}>
-                <View style={[s.catCircle, { backgroundColor: colors.bg.surface }]}>
+              <TouchableOpacity key={cat.id} style={s.catItem} onPress={() => filterCat(cat.keyword)}>
+                <View style={[
+                  s.catCircle,
+                  { backgroundColor: selectedCat === cat.keyword ? colors.primary : colors.bg.surface },
+                  selectedCat === cat.keyword && glowSubtle(colors.primary)
+                ]}>
                   <Text style={{ fontSize: 24 }}>{cat.icon}</Text>
                 </View>
-                <Text style={[s.catLabel, { color: colors.text.secondary }]}>{cat.nom}</Text>
-              </View>
+                <Text style={[s.catLabel, { color: selectedCat === cat.keyword ? colors.primary : colors.text.secondary }]}>{cat.nom}</Text>
+              </TouchableOpacity>
             ))}
           </ScrollView>
 
-          {/* Receitas do momento */}
+          {/* Receitas API */}
           <View style={s.section}>
-            <Text style={[s.sectionTitle, { color: colors.primary }]}>{t('recettes_moment')}</Text>
-            <View style={s.recipeGrid}>
-              {MOMENT_RECIPES.map(recipe => (
-                <RecipeCard key={recipe.id} recipe={recipe} colors={colors} t={t} />
-              ))}
-            </View>
+            <Text style={[s.sectionTitle, { color: colors.primary }]}>
+              {selectedCat ? `Résultats pour "${selectedCat}"` : t('recettes_moment')}
+            </Text>
+
+            {loading ? (
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 30 }} />
+            ) : filteredPlats.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: colors.text.muted, marginTop: 20 }}>
+                Aucun plat trouvé.
+              </Text>
+            ) : (
+              <View style={s.recipeGrid}>
+                {filteredPlats.map(recipe => (
+                  <RecipeCard key={recipe.id} recipe={recipe} colors={colors} t={t} />
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Acabaram de chegar */}
@@ -142,9 +203,9 @@ function RecipeCard({ recipe, colors, t }: any) {
       style={[s.card, { backgroundColor: colors.bg.surface }, glowSubtle(colors.text.muted)]}
     >
       <View style={s.imageWrapper}>
-        <Image source={{ uri: recipe.image }} style={s.cardImage} />
+        <Image source={{ uri: recipe.photo || recipe.image }} style={s.cardImage} />
         <View style={[s.timeBadge, { backgroundColor: colors.primary }]}>
-          <Text style={s.timeText}>{recipe.temps}</Text>
+          <Text style={s.timeText}>{recipe.tempsPreparation ? `${recipe.tempsPreparation}m` : '15m'}</Text>
         </View>
         <TouchableOpacity style={s.favBtn}>
           <Heart size={18} color="#FFF" />
@@ -152,7 +213,7 @@ function RecipeCard({ recipe, colors, t }: any) {
       </View>
       <View style={s.cardContent}>
         <Text numberOfLines={2} style={[s.recipeName, { color: colors.primary }]}>{recipe.nom}</Text>
-        <Text style={[s.recipeDesc, { color: colors.text.muted }]}>{recipe.desc}</Text>
+        <Text style={[s.recipeDesc, { color: colors.text.muted }]}>{recipe.description || recipe.desc || 'Délicieux plat'}</Text>
         <View style={s.cardFooter}>
           <TouchableOpacity
             onPress={() => addItem(recipe)}

@@ -39,7 +39,11 @@ export default function CartScreen() {
                     </View>
                 ) : (
                     <>
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 260 }}>
+                        <ScrollView
+                            style={{ flex: 1 }}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 220 }}
+                        >
                             {items.map(item => (
                                 <View key={item.id} style={[s.cartItem, { backgroundColor: colors.bg.surface, borderColor: colors.border.subtle }]}>
                                     <Image source={{ uri: item.image }} style={s.itemImg} />
