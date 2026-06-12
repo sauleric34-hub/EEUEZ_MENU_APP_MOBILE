@@ -1,53 +1,86 @@
-# EEUEZ Menu App Mobile
+# 🛵 EEUEZ Menu - Application de Commande & Livraison
 
-Projet d'application mobile de commande et de livraison pour restaurants avec un suivi de livraison immersif en temps réel (React Native Expo + Django Backend).
+Bienvenue sur le dépôt de **EEUEZ Menu**, une plateforme complète de restauration en ligne qui inclut la prise de commande, la gestion des paniers, l'exploration des restaurants et un système avancé de **suivi de livraison GPS en temps réel**.
 
-## 🚀 Fonctionnalités Principales
-
-- **📱 Application Mobile (Expo / React Native)** : Interfaces dédiées pour les clients, les restaurateurs et les livreurs.
-- **🛵 Simulation GPS Dynamique ("Style GTA")** :
-  - Détection automatique d'écart de trajectoire du livreur.
-  - Recalcul naturel et fluide de l'itinéraire OSRM sans téléportation ni saut visuel.
-  - Animation asynchrone des livreurs sur carte (`react-native-maps`).
-- **🔗 Backend Puissant (Django REST Framework)** : Gestion des utilisateurs, des commandes, des historiques de livraison et requêtes asynchrones OSRM.
-
-## 📸 Aperçu de l'Interface
-
-| Suivi de Livraison | État d'attente (Empty State) |
-| :---: | :---: |
-| ![Suivi en cours](docs/screenshots/map_suivi.jpg) | ![Aucune commande](docs/screenshots/empty_state.jpg) |
-*L'application affiche le tracé GPS adaptatif en temps réel (à gauche) et gère élégamment les états vides avec des micro-animations (à droite).*
+L'application a été repensée pour offrir une expérience utilisateur haut de gamme, fluide et avec des animations immersives, que ce soit du point de vue du client, du restaurant ou du livreur.
 
 ---
 
-## 🛠 Architecture du Projet
+## 📸 Aperçu de l'Interface
 
-* **`eeuez-expo-ui/`** : Application mobile développée avec **React Native** et **Expo Router**. Contient les interfaces, les contextes de simulation GPS (`AppContext.tsx`), et les animations.
-* **`backend/`** : API Backend développée avec **Django** et **Django REST Framework** pour la persistance des données.
+Voici une galerie présentant l'évolution et les écrans clés de notre application :
 
-## ⚙️ Instructions de Lancement
+### 1️⃣ Interface Principale (Client)
+L'écran d'accueil permet d'explorer les plats, de filtrer par catégories et de naviguer avec une barre de recherche fluide.
 
-### Lancement du Front-end (Application Mobile)
+<div style="display:flex; flex-direction:row; gap:10px;">
+  <img src="docs/screenshots/media__1781256583406.jpg" width="200" alt="Home Screen"/>
+  <img src="docs/screenshots/media__1781257608314.jpg" width="200" alt="Menu & Filtres"/>
+  <img src="docs/screenshots/media__1781262576700.jpg" width="200" alt="Restaurant List"/>
+</div>
 
+### 2️⃣ Panier & Commande
+Le système de panier a été corrigé pour permettre un scroll fluide et une validation de commande sans encombre. L'interface affiche le total, les frais de livraison et permet de valider avec une micro-animation de confirmation.
+
+<div style="display:flex; flex-direction:row; gap:10px;">
+  <img src="docs/screenshots/media__1781257141805.jpg" width="200" alt="Panier scrollable"/>
+  <img src="docs/screenshots/media__1781257591579.jpg" width="200" alt="Validation"/>
+</div>
+
+### 3️⃣ Suivi de Livraison ("Style GTA") & Empty States
+Nous avons développé un système de carte dynamique unique. Si le client n'a pas de commande, il voit un "Empty State" élégant. Lorsqu'une commande est en cours, le livreur est suivi sur la carte.
+
+<div style="display:flex; flex-direction:row; gap:10px;">
+  <img src="docs/screenshots/empty_state.jpg" width="300" alt="Aucune Commande (Empty State)"/>
+  <img src="docs/screenshots/map_suivi.jpg" width="300" alt="Suivi en temps réel"/>
+</div>
+
+---
+
+## 🛠️ Ce que nous avons manipulé & implémenté
+
+### 1. Refonte de l'Interface Client (Expo / React Native)
+* **Glassmorphism & Micro-animations** : Refonte visuelle utilisant `react-native-reanimated` et l'API `Animated` de base pour générer des rebonds (boutons), des ondes de choc (pulse anim), et un effet de flou visuel.
+* **Scroll & Layouts** : Correction des bugs de défilement (ScrollViews bloquées, paniers inaccessibles en bas de page).
+* **Filtres Dynamiques** : Catégories interactives avec sélection visuelle et filtres animés.
+
+### 2. Algorithme de Suivi de Livraison (Simulation GPS Avancée)
+Nous avons créé un moteur de simulation complet dans `AppContext.tsx` pour l'interface de Suivi (`suivi.tsx`) et la Carte exploratoire (`explore.tsx`) :
+* **Appel OSRM (Open Source Routing Machine)** : Tracé des routes réelles sur la carte via l'API OSRM.
+* **Comportement Adaptatif (Effet GTA)** : 
+  * Le système génère parfois un "hors-piste" pour simuler une déviation inattendue du livreur (ex: travaux, trafic).
+  * La ligne de chemin bleue (GPS) reste **fixe** pendant 2.5 secondes pendant que le livreur s'en écarte (latence visuelle réaliste).
+  * Le système détecte l'écart grâce à une **formule mathématique de Haversine**.
+  * Au bout du délai, un **nouveau calcul** du plus court chemin OSRM est fait à partir de la position *actuelle* du livreur vers la destination.
+  * L'ancien chemin disparaît et la nouvelle ligne "snappe" organiquement sans aucune téléportation du livreur.
+
+### 3. Connexion Backend (Django / Spring Boot)
+* Mise en place des appels asynchrones vers le serveur.
+* Adressage IP dynamique pour permettre à l'application tournant sur un téléphone physique (via Expo Go) de communiquer avec le backend local (`192.168.1.187:8088`).
+
+---
+
+## ⚙️ Technologies Utilisées
+
+* **Front-end** : React Native, Expo Router, React Native Maps
+* **Styling** : StyleSheet (Custom design system avec effets *glow*)
+* **Back-end** : API REST (Django / Spring Boot)
+* **Routing GPS** : API OSRM (Project-OSRM)
+
+## 🚀 Comment lancer le projet ?
+
+### Front-end (Application Mobile)
+1. Assurez-vous d'avoir Node.js installé.
+2. Ouvrez un terminal :
 ```bash
 cd eeuez-expo-ui
 npm install
 npm run start
 ```
-*(Scannez le QR Code avec Expo Go sur votre téléphone pour tester en condition réelle).*
+3. Scannez le QR Code avec **Expo Go** sur votre smartphone.
 
-### Lancement du Back-end (API Django)
+### Back-end (API)
+Lancez votre serveur local sur le port 8088 pour que l'app mobile puisse interagir avec la base de données.
 
-```bash
-cd backend
-pip install -r requirements.txt
-python manage.py runserver
-```
-
-## 🧠 Simulation de Déviation GPS (Algorithme)
-
-L'application intègre un moteur de simulation de livraison avancé pour tester l'interface :
-- Séparation stricte entre le `routePath` (chemin secret du livreur) et le `displayRoute` (ligne bleue du GPS).
-- Des déviations sont programmées pour forcer le livreur à changer de rue.
-- Un check continu calcule la distance (via formule Haversine) entre la moto et la ligne bleue.
-- Si le seuil critique (50 mètres) est dépassé, une requête OSRM recalcule la route de la position *exacte* actuelle vers le client.
+---
+*Projet propulsé et structuré avec amour et du code robuste. ❤️*
