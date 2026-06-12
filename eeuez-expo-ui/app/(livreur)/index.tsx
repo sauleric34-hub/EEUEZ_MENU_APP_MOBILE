@@ -182,7 +182,7 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               { e: '✅', l: 'Livraisons', v: '7', color: Colors.restaurant.primary, bg: Colors.restaurant.bg },
               { e: '⭐', l: 'Ma Note',   v: `${MOCK_LIVREUR.noteGlobale}`, color: Colors.client.primary, bg: Colors.client.bg },
             ].map(stat => (
-              <PressableScale key={stat.l} style={[s.statCard, glowSubtle(stat.color)]} scaleDown={0.94}>
+              <PressableScale key={stat.l} style={[s.statCard, glowSubtle(stat.color)] as any} scaleDown={0.94}>
                 <Text style={{ fontSize: 24, marginBottom: 4 }}>{stat.e}</Text>
                 <Text style={[s.statVal, { color: stat.color }]}>{stat.v}</Text>
                 <Text style={s.statLbl}>{stat.l}</Text>
@@ -298,7 +298,7 @@ export default function LivreurApp() {
   const [screen, setScreen] = useState('tableau_bord');
   const open = () => setDrawerOpen(true);
 
-  const screens: Record<string, JSX.Element> = {
+  const screens: any = {
     tableau_bord: <TableauDeBord onOpenDrawer={open} />,
     mission:      <PlaceholderScreen title="Mission en Cours" emoji="📍" desc="Carte GPS + route optimisée" onOpenDrawer={open} />,
     historique:   <PlaceholderScreen title="Historique" emoji="📋" desc="Toutes vos livraisons (UC-X5)" onOpenDrawer={open} />,

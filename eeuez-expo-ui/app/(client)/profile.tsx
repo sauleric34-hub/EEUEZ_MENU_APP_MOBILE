@@ -1,123 +1,124 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, StatusBar, Animated, Switch,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import { useTranslation } from '../../context/LanguageContext';
-import { Typography, Spacing, Radius } from '../../constants/theme';
-import { User, Settings, Bell, CreditCard, Shield, LogOut, ChevronRight, AlertTriangle, Globe } from 'lucide-react-native';
+import { Colors, Typography, Spacing, Radius, glow } from '../../constants/theme';
+import { PressableScale } from '../../components/Animations';
+import { MOCK_CLIENT } from '../../data/mockData';
+
+const STATS = [
+  { label: 'Commandes', value: '42', emoji: '📦' },
+  { label: 'Avis donnés', value: '18', emoji: '⭐' },
+  { label: 'FCFA dépensés', value: '184 500', emoji: '💰' },
+];
+
+const MENU_ITEMS = [
+  { key: 'adresses',      label: 'Mes adresses',        emoji: '📌', section: 'Mon compte' },
+  { key: 'paiements',     label: 'Méthodes de paiement',emoji: '💳' },
+  { key: 'commandes',     label: 'Historique commandes', emoji: '📦', section: 'Activité' },
+  { key: 'avis',          label: 'Mes avis',             emoji: '⭐' },
+  { key: 'notifications', label: 'Notifications',        emoji: '🔔', section: 'Préférences' },
+  { key: 'langue',        label: 'Langue',               emoji: '🌍' },
+  { key: 'aide',          label: 'Aide & Support',       emoji: '💬', section: 'Support' },
+  { key: 'cgu',           label: 'CGU & Confidentialité',emoji: '📄' },
+  { key: 'deconnexion',   label: 'Se déconnecter',       emoji: '🚪', danger: true },
+];
 
 export default function ProfileScreen() {
-    const { colors } = useTheme();
-    const { user, logout } = useAuth();
-    const { language, setLanguage, t } = useTranslation();
-    const router = useRouter();
+  const router = useRouter();
+  const fadeIn   = useRef(new Animated.Value(0)).current;
+  const slideIn  = useRef(new Animated.Value(-30)).current;
+  const statsAnim = useRef([0, 0, 0].map(() => new Animated.Value(0))).current;
 
-    const handleLogout = async () => {
-        await logout();
-        router.replace('/');
-    };
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(slideIn, { toValue: 0, tension: 60, friction: 9, useNativeDriver: true }),
+      ]),
+      Animated.stagger(100, statsAnim.map(a =>
+        Animated.spring(a, { toValue: 1, tension: 70, friction: 9, useNativeDriver: true })
+      )),
+    ]).start();
+  }, []);
 
-    return (
-        <View style={[s.container, { backgroundColor: colors.bg.app }]}>
-            <StatusBar barStyle="dark-content" />
-            <SafeAreaView style={{ flex: 1 }}>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 180 }}>
-                    {/* Header */}
-                    <View style={[s.header, { marginTop: 35 }]}>
-                        <View style={[s.avatarContainer, { borderColor: colors.primary }]}>
-                            <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80' }}
-                                style={s.avatar}
-                            />
-                        </View>
-                        <Text style={[s.userName, { color: colors.text.primary }]}>{user?.nom || 'Mariana Silva'}</Text>
-                        <Text style={[s.userEmail, { color: colors.text.secondary }]}>{user?.email || 'mariana.silva@example.com'}</Text>
-                    </View>
+  let lastSection = '';
 
-                    {/* Allergy Banner */}
-                    <View style={[s.allergyBanner, { backgroundColor: colors.warningBg, borderColor: colors.warning }]}>
-                        <AlertTriangle size={20} color={colors.warning} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[s.allergyTitle, { color: colors.warning }]}>{t('allergies')}</Text>
-                            <Text style={[s.allergyText, { color: colors.text.secondary }]}>
-                                {user?.allergies || t('aucun_allergie')}
-                            </Text>
-                        </View>
-                    </View>
+  return (
+    <View style={s.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
 
-                    {/* Language Switcher */}
-                    <View style={s.section}>
-                        <Text style={[s.sectionLabel, { color: colors.text.muted }]}>{t('langue')}</Text>
-                        <View style={s.langRow}>
-                            <TouchableOpacity
-                                onPress={() => setLanguage('fr')}
-                                style={[s.langBtn, language === 'fr' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                                <Text style={[s.langText, language === 'fr' && { color: '#FFF' }]}>{t('francais')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setLanguage('en')}
-                                style={[s.langBtn, language === 'en' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                                <Text style={[s.langText, language === 'en' && { color: '#FFF' }]}>{t('anglais')}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Menu Sections */}
-                    <View style={s.section}>
-                        <Text style={[s.sectionLabel, { color: colors.text.muted }]}>{t('compte')}</Text>
-                        <ProfileItem icon={User} label={t('info_personnel')} colors={colors} />
-                        <ProfileItem icon={CreditCard} label={t('methode_paiement')} colors={colors} />
-                        <ProfileItem icon={Bell} label="Notifications" colors={colors} />
-                    </View>
-
-                    <View style={s.section}>
-                        <Text style={[s.sectionLabel, { color: colors.text.muted }]}>{t('parametres')}</Text>
-                        <ProfileItem icon={Shield} label={t('securite')} colors={colors} />
-                        <ProfileItem icon={Settings} label={t('preferences')} colors={colors} />
-                    </View>
-
-                    <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-                        <LogOut size={20} color={colors.danger} />
-                        <Text style={[s.logoutText, { color: colors.danger }]}>{t('deconnexion')}</Text>
-                    </TouchableOpacity>
-                </ScrollView>
-            </SafeAreaView>
-        </View>
-    );
-}
-
-function ProfileItem({ icon: Icon, label, colors }: any) {
-    return (
-        <TouchableOpacity style={[s.item, { borderBottomColor: colors.border.subtle }]}>
-            <View style={[s.iconBox, { backgroundColor: colors.bg.surface }]}>
-                <Icon size={20} color={colors.primary} />
+          {/* Avatar + infos */}
+          <Animated.View style={[s.hero, { opacity: fadeIn, transform: [{ translateY: slideIn }] }]}>
+            <View style={s.avatar}>
+              <Text style={{ fontSize: 40 }}>👤</Text>
             </View>
-            <Text style={[s.itemLabel, { color: colors.text.primary }]}>{label}</Text>
-            <ChevronRight size={18} color={colors.text.muted} />
-        </TouchableOpacity>
-    );
+            <Text style={s.userName}>{MOCK_CLIENT.prenom} {MOCK_CLIENT.nom}</Text>
+            <Text style={s.userEmail}>{MOCK_CLIENT.email}</Text>
+            <Text style={s.userPhone}>{MOCK_CLIENT.telephone}</Text>
+            <PressableScale onPress={() => {}}>
+              <View style={[s.editBtn, { borderColor: Colors.client.primary }]}>
+                <Text style={[s.editBtnText, { color: Colors.client.primary }]}>✏️ Modifier le profil</Text>
+              </View>
+            </PressableScale>
+          </Animated.View>
+
+          {/* Stats */}
+          <View style={s.statsRow}>
+            {STATS.map((stat, i) => (
+              <Animated.View key={stat.label} style={[s.statCard, {
+                opacity: statsAnim[i],
+                transform: [{ scale: statsAnim[i].interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }]
+              }]}>
+                <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
+                <Text style={s.statVal}>{stat.value}</Text>
+                <Text style={s.statLabel}>{stat.label}</Text>
+              </Animated.View>
+            ))}
+          </View>
+
+          {/* Menu */}
+          {MENU_ITEMS.map(item => {
+            const showSection = item.section && item.section !== lastSection;
+            if (showSection) lastSection = item.section!;
+            return (
+              <React.Fragment key={item.key}>
+                {showSection && <Text style={s.sectionTitle}>{item.section}</Text>}
+                <PressableScale onPress={() => item.key === 'deconnexion' ? router.push('/') : null}>
+                  <View style={[s.menuItem, item.danger && { borderColor: Colors.danger + '33' }]}>
+                    <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+                    <Text style={[s.menuLabel, item.danger && { color: Colors.danger }]}>{item.label}</Text>
+                    <Text style={s.menuArrow}>›</Text>
+                  </View>
+                </PressableScale>
+              </React.Fragment>
+            );
+          })}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
 }
 
 const s = StyleSheet.create({
-    container: { flex: 1 },
-    header: { alignItems: 'center', paddingVertical: Spacing.xl },
-    avatarContainer: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, padding: 4, marginBottom: 15 },
-    avatar: { width: '100%', height: '100%', borderRadius: 55 },
-    userName: { ...Typography.h2, fontSize: 24 },
-    userEmail: { ...Typography.body, marginTop: 4 },
-    allergyBanner: { flexDirection: 'row', alignItems: 'center', margin: Spacing.lg, padding: 16, borderRadius: Radius.lg, borderWidth: 1, gap: 12 },
-    allergyTitle: { fontWeight: '800', fontSize: 14, textTransform: 'uppercase' },
-    allergyText: { fontSize: 13, marginTop: 2 },
-    section: { paddingHorizontal: Spacing.lg, marginBottom: 25 },
-    sectionLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15 },
-    item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1 },
-    iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15, elevation: 2 },
-    itemLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
-    logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 30, gap: 10 },
-    logoutText: { fontSize: 16, fontWeight: '700' },
-    langRow: { flexDirection: 'row', gap: 10 },
-    langBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, borderWidth: 1, borderColor: '#EEE' },
-    langText: { fontWeight: '700' },
+  container:   { flex: 1, backgroundColor: Colors.bg.app },
+  hero:        { alignItems: 'center', paddingTop: Spacing.xl, paddingBottom: Spacing.lg, gap: 8 },
+  avatar:      { width: 90, height: 90, borderRadius: 45, backgroundColor: Colors.client.bg, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.client.primary },
+  userName:    { ...Typography.h2 },
+  userEmail:   { ...Typography.small, color: Colors.text.secondary },
+  userPhone:   { ...Typography.small },
+  editBtn:     { marginTop: 8, paddingHorizontal: 20, paddingVertical: 8, borderRadius: Radius.full, borderWidth: 1 },
+  editBtnText: { fontWeight: '700', fontSize: 14 },
+  statsRow:    { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: Spacing.md, marginBottom: Spacing.lg, gap: 10 },
+  statCard:    { flex: 1, backgroundColor: Colors.bg.surface, borderRadius: Radius.xl, padding: 14, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: Colors.border.default },
+  statVal:     { ...Typography.h3, fontSize: 17 },
+  statLabel:   { ...Typography.caption, textAlign: 'center' },
+  sectionTitle:{ ...Typography.label, paddingHorizontal: Spacing.md, marginTop: Spacing.lg, marginBottom: 8, color: Colors.text.muted },
+  menuItem:    { flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: 8, backgroundColor: Colors.bg.surface, borderRadius: Radius.lg, padding: 16, borderWidth: 1, borderColor: Colors.border.default, gap: 14 },
+  menuLabel:   { flex: 1, ...Typography.bodyBold, fontSize: 15 },
+  menuArrow:   { fontSize: 22, color: Colors.text.muted },
 });

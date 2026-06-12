@@ -1,0 +1,9 @@
+Django==5.2.2
+Pillow==11.2.1
+whitenoise==6.12.0
+gunicorn==23.0.0
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+channels
+daphne

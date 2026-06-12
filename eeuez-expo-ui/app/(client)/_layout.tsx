@@ -1,11 +1,9 @@
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Home, ShoppingBag, ChefHat, Heart, User, Map } from 'lucide-react-native';
+import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../context/ThemeContext';
-import { Radius } from '../../constants/theme';
+import { Colors, Radius, glow } from '../../constants/theme';
 
-function CustomTabBar({ state, descriptors, navigation, colors }: any) {
+function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
 
   const ALLOWED_ROUTES = ['index', 'cart', 'explore', 'favorites', 'profile'];
@@ -15,8 +13,6 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
     <View style={[
       s.tabBar,
       {
-        backgroundColor: colors.bg.surface,
-        borderTopColor: colors.border.subtle,
         paddingBottom: Math.max(insets.bottom, 20),
         height: 70 + Math.max(insets.bottom, 20)
       }
@@ -37,13 +33,13 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
           }
         };
 
-        let Icon = Home;
-        if (route.name === 'cart') Icon = ShoppingBag;
-        else if (route.name === 'explore') Icon = ChefHat;
-        else if (route.name === 'favorites') Icon = Heart;
-        else if (route.name === 'profile') Icon = User;
-        else if (route.name === 'index') Icon = Home;
-        else return null; // Sécurité supplémentaire
+        let emoji = '🏠';
+        if (route.name === 'cart') emoji = '🛒';
+        else if (route.name === 'explore') emoji = '🍽️';
+        else if (route.name === 'favorites') emoji = '❤️';
+        else if (route.name === 'profile') emoji = '👤';
+        else if (route.name === 'index') emoji = '🏠';
+        else return null;
 
         return (
           <TouchableOpacity
@@ -51,11 +47,12 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
             onPress={onPress}
             style={s.tabItem}
           >
-            <Icon
-              size={26}
-              color={isFocused ? colors.primary : colors.text.muted}
-              strokeWidth={isFocused ? 2.5 : 2}
-            />
+            <View style={[
+              s.iconContainer,
+              isFocused && { backgroundColor: Colors.client.primary, ...glow(Colors.client.glow, 8) }
+            ]}>
+              <Text style={{ fontSize: 24, opacity: isFocused ? 1 : 0.6 }}>{emoji}</Text>
+            </View>
           </TouchableOpacity>
         );
       })}
@@ -64,11 +61,9 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
 }
 
 export default function ClientLayout() {
-  const { colors } = useTheme();
-
   return (
     <Tabs
-      tabBar={props => <CustomTabBar {...props} colors={colors} />}
+      tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
@@ -90,20 +85,19 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    backgroundColor: Colors.bg.surface,
+    borderTopColor: Colors.border.default,
   },
   tabItem: {
-    width: 50,
-    height: 50,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });

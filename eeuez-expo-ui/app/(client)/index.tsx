@@ -4,17 +4,19 @@ import {
   ScrollView, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DrawerMenu, { DrawerItem } from '../../components/DrawerMenu';
 import { PressableScale, ConfettiBurst, EmojiPop, FloatingReaction, PulseRing, useButtonPress } from '../../components/Animations';
 import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } from '../../constants/theme';
-import { MOCK_CLIENT, RESTAURANTS_LISTE } from '../../data/mockData';
 
 const DRAWER_ITEMS: DrawerItem[] = [
   { key: 'accueil',       label: 'Accueil',              icon: '🏠', section: 'Découverte' },
   { key: 'carte',         label: 'Carte & Restaurants',  icon: '🗺️' },
   { key: 'scanner',       label: 'Scanner QR Code',      icon: '📷' },
   { key: 'panier',        label: 'Mon Panier',           icon: '🛒', badge: 2, section: 'Commandes' },
-  { key: 'commandes',     label: 'Mes Commandes',        icon: '📦' },
+  { key: 'historique',    label: 'Historique des commandes', icon: '📜' },
   { key: 'suivi',         label: 'Suivi en cours',       icon: '📍', badge: 1 },
   { key: 'favoris',       label: 'Restaurants Favoris',  icon: '❤️', section: 'Mon Compte' },
   { key: 'adresses',      label: 'Mes Adresses',         icon: '📌' },
@@ -35,9 +37,11 @@ function StatutPill({ statut }: { statut: string }) {
   );
 }
 
-// ─── CARTE RESTAURANT avec bouton Favori animé ─────────────────────────────
-function RestoCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
-  const [isFav, setIsFav] = useState(resto.id === 'r1');
+import { restaurantService, commandeService } from '../../services/apiService';
+import { useAppContext } from '../../context/AppContext';
+
+function RestoCard({ resto }: { resto: any }) {
+  const [isFav, setIsFav] = useState(false);
   const { emojiVisible, triggerSuccess } = useButtonPress();
   const slideIn = useRef(new Animated.Value(0)).current;
   const opacityIn = useRef(new Animated.Value(0)).current;
@@ -55,14 +59,16 @@ function RestoCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
     if (nv) triggerSuccess('❤️');
   };
 
+  const router = useRouter();
+
   return (
     <Animated.View style={{
       opacity: opacityIn,
       transform: [{ translateY: slideIn.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
     }}>
-      <PressableScale style={s.restoCard} scaleDown={0.97}>
-        <View style={[s.restoThumb, { backgroundColor: resto.couleur + '22' }]}>
-          <Text style={{ fontSize: 38 }}>{resto.emoji}</Text>
+      <PressableScale style={s.restoCard} scaleDown={0.97} onPress={() => router.push(`/(client)/restaurant/${resto.id}` as any)}>
+        <View style={[s.restoThumb, { backgroundColor: Colors.bg.elevated }]}>
+          <Text style={{ fontSize: 38 }}>{resto.logo ? '🍽️' : '🏪'}</Text>
           {!resto.isOuvert && (
             <View style={s.fermeOverlay}>
               <Text style={s.fermeText}>Fermé</Text>
@@ -70,12 +76,12 @@ function RestoCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
           )}
         </View>
         <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={s.restoName}>{resto.nom}</Text>
-          <Text style={s.restoCat}>{resto.categorie} · {resto.distance} km</Text>
+          <Text style={s.restoName}>{resto.nom || resto.nomEtablissement}</Text>
+          <Text style={s.restoCat}>Restaurant · {resto.distance ? resto.distance.toFixed(1) : '1.2'} km</Text>
           <View style={[s.row, { gap: 8, marginTop: 8, flexWrap: 'wrap' }]}>
-            <View style={s.metaChip}><Text style={s.metaText}>⭐ {resto.note}</Text></View>
-            <View style={s.metaChip}><Text style={s.metaText}>🕐 {resto.temps} min</Text></View>
-            <View style={s.metaChip}><Text style={s.metaText}>{resto.frais}F livr.</Text></View>
+            <View style={s.metaChip}><Text style={s.metaText}>⭐ {resto.noteGlobale || resto.note || 4.5}</Text></View>
+            <View style={s.metaChip}><Text style={s.metaText}>🕐 {resto.tempsLivraisonMoyen || 30} min</Text></View>
+            <View style={s.metaChip}><Text style={s.metaText}>{resto.fraisLivraison || 500}F livr.</Text></View>
           </View>
         </View>
         {/* Bouton ❤️ favori avec animation */}
@@ -96,8 +102,16 @@ function RestoCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
 function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideIn = useRef(new Animated.Value(30)).current;
-  const STATUTS = ['en_preparation', 'prete', 'livreur_assigne', 'en_livraison'];
-  const [statutIdx, setStatutIdx] = useState(0);
+  
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [activeOrder, setActiveOrderLocal] = useState<any>(null);
+  const [hasUnreadNotif, setHasUnreadNotif] = useState(false);
+  const prevStatut = useRef<string | null>(null);
+  const [locationName, setLocationName] = useState('Recherche position...');
+  const [loadingRestos, setLoadingRestos] = useState(true);
+  const [errorRestos, setErrorRestos] = useState(false);
+  const router = useRouter();
+  
   const { confettiVisible, emojiVisible, emoji: reactionEmoji, triggerSuccess } = useButtonPress();
 
   useEffect(() => {
@@ -105,13 +119,109 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
       Animated.timing(fadeIn, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.timing(slideIn, { toValue: 0, duration: 600, useNativeDriver: true }),
     ]).start();
-    const timer = setInterval(() => {
-      setStatutIdx(prev => (prev < STATUTS.length - 1 ? prev + 1 : prev));
-    }, 4000);
-    return () => clearInterval(timer);
+    
+    const initLocationAndFetch = async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        let lat = 3.848;
+        let lon = 11.502; // Default Yaoundé
+        
+        if (status === 'granted') {
+          let loc = await Location.getCurrentPositionAsync({});
+          lat = loc.coords.latitude;
+          lon = loc.coords.longitude;
+          let addr = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+          if (addr && addr.length > 0) {
+            const locName = addr[0].district || addr[0].city || addr[0].subregion || 'Inconnu';
+            const locCity = addr[0].city || addr[0].region || '';
+            setLocationName(`${locName}${locCity ? ', ' + locCity : ''}`);
+          } else {
+            setLocationName('Position inconnue');
+          }
+        } else {
+          setLocationName('Position par défaut (Yaoundé)');
+        }
+        
+        // Helper function for retrying the fetch
+        const fetchWithRetry = async (latitude: number, longitude: number, retries = 5, delay = 2000) => {
+          for (let i = 0; i < retries; i++) {
+            try {
+              const data: any = await restaurantService.getMapRestaurants(latitude, longitude);
+              setRestaurants(data.slice(0, 5));
+              setLoadingRestos(false);
+              setErrorRestos(false);
+              return; // Success, exit retry loop
+            } catch (err) {
+              console.log(`Erreur fetch restos (essai ${i + 1}/${retries})`, err);
+              if (i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+              } else {
+                throw err; // All retries failed
+              }
+            }
+          }
+        };
+
+        await fetchWithRetry(lat, lon, 9999, 3000); // Retry infiniment toutes les 3s
+
+      } catch (err) {
+        console.log('Erreur fetch restos finale', err);
+        setLoadingRestos(false);
+        setErrorRestos(true);
+        if (locationName === 'Recherche position...') {
+          setLocationName('Erreur localisation');
+        }
+      }
+    };
+
+    initLocationAndFetch();
+      
+    const fetchOrder = async () => {
+      try {
+        const data: any = await commandeService.getHistorique();
+        const active = data.find((c: any) => c.statut !== 'livree' && c.statut !== 'annulee');
+        if (active) setActiveOrderLocal(active);
+        else setActiveOrderLocal(null);
+      } catch(e) {}
+    };
+    
+    fetchOrder();
+    const orderInterval = setInterval(fetchOrder, 3000); // Poll status every 3s
+    
+    return () => clearInterval(orderInterval);
   }, []);
 
-  const handleSuivre = () => triggerSuccess('🛵');
+  useEffect(() => {
+    if (activeOrder) {
+      if (prevStatut.current && prevStatut.current !== activeOrder.statut) {
+         setHasUnreadNotif(true); // Statut changé = Nouvelle notification !
+         
+         // Enregistrer la notification en local
+         const cfg = StatutConfig[activeOrder.statut as keyof typeof StatutConfig] || { label: activeOrder.statut, emoji: '🔔', color: Colors.client.primary, bg: Colors.client.bg };
+         const newNotif = {
+           id: Date.now().toString(),
+           title: `Commande #${activeOrder.id}`,
+           message: `Le statut de votre commande est maintenant : ${cfg.label} ${cfg.emoji}`,
+           time: new Date().toLocaleTimeString().slice(0, 5),
+           color: cfg.color,
+           bg: cfg.bg,
+           read: false
+         };
+         AsyncStorage.getItem('eeuez_notifs').then(str => {
+            const arr = str ? JSON.parse(str) : [];
+            AsyncStorage.setItem('eeuez_notifs', JSON.stringify([newNotif, ...arr]));
+         });
+      }
+      prevStatut.current = activeOrder.statut;
+    } else {
+      prevStatut.current = null;
+    }
+  }, [activeOrder]);
+
+  const handleSuivre = () => {
+    triggerSuccess('🛵');
+    router.push('/(client)/suivi' as any);
+  };
 
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
@@ -123,14 +233,21 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
             </PressableScale>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
-              <Text style={s.greeting}>Bonjour, {MOCK_CLIENT.prenom} 👋</Text>
-              <Text style={s.locationText}>📍 Bastos, Yaoundé</Text>
+              <Text style={s.greeting}>Bonjour 👋</Text>
+              <Text style={s.locationText}>📍 {locationName}</Text>
             </View>
-            <PressableScale scaleDown={0.85}>
+            <PressableScale scaleDown={0.85} onPress={() => {
+              setHasUnreadNotif(false);
+              router.push('/(client)/notifications' as any);
+            }}>
               <View style={s.notifBtn}>
-                <PulseRing color={Colors.danger} size={36}>
-                  <Text style={{ fontSize: 20 }}>🔔</Text>
-                </PulseRing>
+                {hasUnreadNotif ? (
+                  <PulseRing color={Colors.danger} size={36}>
+                    <Text style={{ fontSize: 20 }}>🔔</Text>
+                  </PulseRing>
+                ) : (
+                  <Text style={{ fontSize: 20, padding: 8 }}>🔔</Text>
+                )}
               </View>
             </PressableScale>
           </View>
@@ -146,28 +263,29 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         </Animated.View>
 
         {/* Commande live — statut animé */}
-        <Animated.View style={[s.liveCard, { opacity: fadeIn }, glow(Colors.client.glow, 14)]}>
-          <View style={s.liveBadgeRow}>
-            <View style={s.liveDotWrap}><View style={s.liveDot} /></View>
-            <Text style={[s.liveLabel, { color: Colors.danger }]}>EN COURS</Text>
-          </View>
-          <Text style={s.liveTitle}>Commande #CMD-001</Text>
-          <Text style={s.liveSub}>Le Phénix d'Or · Poulet DG × 1, Ndolé × 1</Text>
-          <View style={s.liveFooter}>
-            <StatutPill statut={STATUTS[statutIdx]} />
-            <Text style={[s.liveEta, { color: Colors.client.primary }]}>~{12 - statutIdx * 3} min</Text>
-          </View>
-          {/* Bouton avec FloatingReaction + confetti */}
-          <View style={{ position: 'relative', alignItems: 'center' }}>
-            <FloatingReaction emoji={reactionEmoji} visible={emojiVisible} />
-            <ConfettiBurst visible={confettiVisible} />
-            <PressableScale onPress={handleSuivre} style={{ width: '100%' }}>
-              <View style={[s.liveSuiviBtn, glow(Colors.client.glow, 8)]}>
-                <Text style={s.liveSuiviBtnText}>📍  Suivre en direct</Text>
-              </View>
-            </PressableScale>
-          </View>
-        </Animated.View>
+        {activeOrder && (
+          <Animated.View style={[s.liveCard, { opacity: fadeIn }, glow(Colors.client.glow, 14)]}>
+            <View style={s.liveBadgeRow}>
+              <View style={s.liveDotWrap}><View style={s.liveDot} /></View>
+              <Text style={[s.liveLabel, { color: Colors.danger }]}>EN COURS</Text>
+            </View>
+            <Text style={s.liveTitle}>Commande #{activeOrder.id}</Text>
+            <Text style={s.liveSub}>{activeOrder.lignes?.length || 0} articles en préparation</Text>
+            <View style={s.liveFooter}>
+              <StatutPill statut={activeOrder.statut} />
+              <Text style={[s.liveEta, { color: Colors.client.primary }]}>~{activeOrder.delai_estime || 25} min</Text>
+            </View>
+            <View style={{ position: 'relative', alignItems: 'center' }}>
+              <FloatingReaction emoji={reactionEmoji} visible={emojiVisible} />
+              <ConfettiBurst visible={confettiVisible} />
+              <PressableScale onPress={handleSuivre} style={{ width: '100%' }}>
+                <View style={[s.liveSuiviBtn, glow(Colors.client.glow, 8)]}>
+                  <Text style={s.liveSuiviBtnText}>📍  Suivre en direct</Text>
+                </View>
+              </PressableScale>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Bannière Promo */}
         <Animated.View style={[s.promoBanner, { opacity: fadeIn }]}>
@@ -192,7 +310,7 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               { e: '🍹', l: 'Boissons',  c: Colors.restaurant.light },
               { e: '🍰', l: 'Desserts',  c: Colors.livreur.light },
             ].map(cat => (
-              <PressableScale key={cat.l} style={[s.catPill, { borderColor: cat.c + '44' }]} scaleDown={0.9}>
+              <PressableScale key={cat.l} style={[s.catPill, { borderColor: cat.c + '44' }] as any} scaleDown={0.9}>
                 <Text style={{ fontSize: 22 }}>{cat.e}</Text>
                 <Text style={[s.catLabel, { color: cat.c }]}>{cat.l}</Text>
               </PressableScale>
@@ -208,196 +326,94 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <Text style={[s.seeAll, { color: Colors.client.primary }]}>Voir tout ›</Text>
             </PressableScale>
           </View>
-          {RESTAURANTS_LISTE.map(resto => <RestoCard key={resto.id} resto={resto} />)}
+          {restaurants.length > 0 ? (
+            restaurants.map(resto => <RestoCard key={resto.id} resto={resto} />)
+          ) : loadingRestos ? (
+            <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.text.muted }}>
+              Chargement des restaurants...
+            </Text>
+          ) : errorRestos ? (
+            <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.danger }}>
+              Erreur de connexion au serveur.
+            </Text>
+          ) : (
+            <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.text.muted }}>
+              Aucun restaurant trouvé à proximité.
+            </Text>
+          )}
         </View>
 
-        <View style={{ height: 100 }} />
       </SafeAreaView>
     </ScrollView>
-  );
-}
-
-// ─── SUIVI TEMPS-RÉEL ─────────────────────────────────────────────────────
-function SuiviScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const slideAnims = useRef(Array(6).fill(0).map(() => new Animated.Value(0))).current;
-  const [currentStep, setCurrentStep] = useState(3);
-  const { confettiVisible, emojiVisible, emoji, triggerSuccess } = useButtonPress();
-
-  useEffect(() => {
-    Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.1, duration: 900, useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1,   duration: 900, useNativeDriver: true }),
-    ])).start();
-    Animated.stagger(80, slideAnims.map(a =>
-      Animated.spring(a, { toValue: 1, tension: 70, friction: 10, useNativeDriver: true })
-    )).start();
-  }, []);
-
-  const ETAPES = [
-    { label: 'Commande reçue',       heure: '12:05', acteur: 'Client' },
-    { label: 'Acceptée — 25 min',    heure: '12:07', acteur: 'Restaurant' },
-    { label: 'En préparation',        heure: '12:08', acteur: 'Cuisines Phénix' },
-    { label: 'Livreur Paul assigné', heure: '12:26', acteur: 'EEUEZ' },
-    { label: 'En route vers vous',   heure: '12:28', acteur: 'Paul N. 🛵' },
-    { label: 'Livraison estimée',    heure: '~12:43', acteur: '' },
-  ];
-
-  return (
-    <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
-      <SafeAreaView>
-        <View style={s.topBar}>
-          <PressableScale onPress={onOpenDrawer}>
-            <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
-          </PressableScale>
-          <Text style={[s.greeting, { fontSize: 18, flex: 1, marginLeft: 12 }]}>Suivi en Direct</Text>
-        </View>
-
-        {/* Carte livreur */}
-        <View style={[s.trackCard, glow(Colors.client.glow, 18)]}>
-          <View style={s.mapMock}>
-            <Text style={s.mapMockBg}>🗺️</Text>
-            <Animated.View style={[s.livreurPin, { transform: [{ scale: pulseAnim }] }]}>
-              <Text style={{ fontSize: 32 }}>🛵</Text>
-              <View style={[s.pinRipple, { borderColor: Colors.client.primary }]} />
-            </Animated.View>
-          </View>
-          <View style={s.livreurInfoRow}>
-            <View style={[s.livreurAvatar, { backgroundColor: Colors.client.bg }]}>
-              <Text style={{ fontSize: 22 }}>👨</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.livreurNom}>Paul Nkolo</Text>
-              <Text style={s.livreurSub}>🏍️ Yamaha · YD-5678-A · ⭐ 4.7</Text>
-            </View>
-            <PressableScale scaleDown={0.85}>
-              <View style={[s.callBtn, { backgroundColor: Colors.client.bg }, glowSubtle(Colors.client.primary)]}>
-                <Text style={{ fontSize: 20 }}>📞</Text>
-              </View>
-            </PressableScale>
-          </View>
-          <View style={s.etaRow}>
-            <Text style={s.etaLabel}>Arrivée estimée</Text>
-            <Text style={[s.etaValue, { color: Colors.client.primary }]}>~12 minutes</Text>
-          </View>
-        </View>
-
-        {/* Timeline */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Progression de la Commande</Text>
-          {ETAPES.map((etape, i) => {
-            const fait = i <= currentStep;
-            const enCours = i === currentStep;
-            const anim = slideAnims[i] ?? new Animated.Value(1);
-            return (
-              <Animated.View key={i} style={[s.etapeRow, {
-                opacity: anim,
-                transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }]
-              }]}>
-                <View style={s.etapeLeft}>
-                  <View style={[s.etapeDot,
-                    fait && s.etapeDotFait,
-                    enCours && { backgroundColor: Colors.bg.elevated, borderColor: Colors.client.primary, ...glow(Colors.client.glow, 6) }
-                  ]}>
-                    {fait && !enCours && <Text style={{ fontSize: 9, color: '#FFF' }}>✓</Text>}
-                    {enCours && <View style={s.etapeDotPulse} />}
-                  </View>
-                  {i < ETAPES.length - 1 && (
-                    <View style={[s.etapeLine, fait && { backgroundColor: Colors.client.primary + '44' }]} />
-                  )}
-                </View>
-                <View style={s.etapeRight}>
-                  <Text style={[s.etapeLabel, !fait && { color: Colors.text.muted }]}>{etape.label}</Text>
-                  <View style={s.row}>
-                    {etape.acteur ? (
-                      <View style={[s.acteurChip, { backgroundColor: fait ? Colors.client.bg : Colors.bg.surface }]}>
-                        <Text style={[s.acteurText, { color: fait ? Colors.client.primary : Colors.text.muted }]}>{etape.acteur}</Text>
-                      </View>
-                    ) : null}
-                    <Text style={s.etapeHeure}>{etape.heure}</Text>
-                  </View>
-                </View>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        {/* Signaler un problème UC-X8 */}
-        <View style={{ position: 'relative', alignItems: 'center' }}>
-          <ConfettiBurst visible={confettiVisible} />
-          <EmojiPop emoji={emoji} visible={emojiVisible} size={28} />
-          <PressableScale style={{ width: '100%' }}>
-            <View style={[s.signalBtn, { borderColor: Colors.danger + '44' }]}>
-              <Text style={[s.signalBtnText, { color: Colors.danger }]}>⚠️  Signaler un problème (UC-X8)</Text>
-            </View>
-          </PressableScale>
-        </View>
-
-        <View style={{ height: 80 }} />
-      </SafeAreaView>
-    </ScrollView>
-  );
-}
-
-function PlaceholderScreen({ title, emoji, desc, onOpenDrawer }: {
-  title: string; emoji: string; desc?: string; onOpenDrawer: () => void;
-}) {
-  const scaleIn = useRef(new Animated.Value(0)).current;
-  useEffect(() => { Animated.spring(scaleIn, { toValue: 1, tension: 65, friction: 8, useNativeDriver: true }).start(); }, []);
-  return (
-    <View style={s.screen}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={s.topBar}>
-          <PressableScale onPress={onOpenDrawer}>
-            <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
-          </PressableScale>
-          <Text style={[s.greeting, { fontSize: 18, flex: 1, marginLeft: 12 }]}>{title}</Text>
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14 }}>
-          <Animated.Text style={{ fontSize: 64, transform: [{ scale: scaleIn }] }}>{emoji}</Animated.Text>
-          <Text style={s.greeting}>{title}</Text>
-          <Text style={[s.locationText, { textAlign: 'center', paddingHorizontal: 40 }]}>{desc ?? 'En cours de développement'}</Text>
-        </View>
-      </SafeAreaView>
-    </View>
   );
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function ClientApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [screen, setScreen] = useState('accueil');
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
+  const router = useRouter();
   const open = () => setDrawerOpen(true);
 
-  const screens: Record<string, JSX.Element> = {
-    accueil:       <AccueilScreen onOpenDrawer={open} />,
-    carte:         <PlaceholderScreen title="Carte & Restaurants" emoji="🗺️" onOpenDrawer={open} />,
-    scanner:       <PlaceholderScreen title="Scanner QR Code (UC-X1)" emoji="📷" onOpenDrawer={open} />,
-    panier:        <PlaceholderScreen title="Mon Panier" emoji="🛒" desc="2 articles · 8 000 FCFA" onOpenDrawer={open} />,
-    commandes:     <PlaceholderScreen title="Mes Commandes" emoji="📦" onOpenDrawer={open} />,
-    suivi:         <SuiviScreen onOpenDrawer={open} />,
-    favoris:       <PlaceholderScreen title="Restaurants Favoris" emoji="❤️" onOpenDrawer={open} />,
-    adresses:      <PlaceholderScreen title="Mes Adresses" emoji="📌" onOpenDrawer={open} />,
-    paiements:     <PlaceholderScreen title="Paiements" emoji="💳" onOpenDrawer={open} />,
-    avis:          <PlaceholderScreen title="Mes Avis (UC-X5)" emoji="⭐" onOpenDrawer={open} />,
-    notifications: <PlaceholderScreen title="Notifications" emoji="🔔" desc="3 nouvelles" onOpenDrawer={open} />,
-    profil:        <PlaceholderScreen title="Mon Profil" emoji="👤" desc={`${MOCK_CLIENT.prenom} ${MOCK_CLIENT.nom}`} onOpenDrawer={open} />,
-    aide:          <PlaceholderScreen title="Aide & Support (UC-X8)" emoji="💬" onOpenDrawer={open} />,
-    deconnexion:   <PlaceholderScreen title="Déconnexion" emoji="🚪" onOpenDrawer={open} />,
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const data: any = await commandeService.getHistorique();
+        const active = data.some((c: any) => c.statut !== 'livree' && c.statut !== 'annulee');
+        setHasActiveOrder(active);
+      } catch(e) {}
+    };
+    fetchOrder();
+    const int = setInterval(fetchOrder, 3000);
+    return () => clearInterval(int);
+  }, []);
+
+  const handleNavigate = (key: string) => {
+    setDrawerOpen(false);
+    switch (key) {
+      case 'accueil':
+        break; // Déjà ici
+      case 'panier':
+        router.push('/(client)/cart' as any);
+        break;
+      case 'historique':
+        router.push('/(client)/historique' as any);
+        break;
+      case 'carte':
+        router.push('/(client)/explore' as any);
+        break;
+      case 'favoris':
+        router.push('/(client)/favorites' as any);
+        break;
+      case 'profil':
+        router.push('/(client)/profile' as any);
+        break;
+      case 'notifications':
+        router.push('/(client)/notifications' as any);
+        break;
+      case 'suivi':
+        router.push('/(client)/suivi' as any);
+        break;
+      default:
+        console.log("Nav vers", key);
+        break;
+    }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg.screen }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
-      {screens[screen] ?? screens.accueil}
+      
+      <AccueilScreen onOpenDrawer={open} />
+      
       <DrawerMenu
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        items={DRAWER_ITEMS}
-        activeKey={screen}
-        onNavigate={setScreen}
-        headerTitle={`${MOCK_CLIENT.prenom} ${MOCK_CLIENT.nom}`}
-        headerSubtitle="Client · Yaoundé, Cameroun"
+        items={DRAWER_ITEMS.filter(item => item.key !== 'suivi' || hasActiveOrder)}
+        activeKey={'accueil'}
+        onNavigate={handleNavigate}
+        headerTitle={`Client`}
+        headerSubtitle="Yaoundé, Cameroun"
         headerEmoji="🛍️"
         accentColor={Colors.client.primary}
         accentBg={Colors.client.bg}

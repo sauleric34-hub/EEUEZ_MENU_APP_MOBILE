@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}{{ user_obj.get_full_name|default:user_obj.username }} — Menu Admin{% endblock %}
+{% block topbar_title %}Profil Utilisateur{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:user_list' %}">Utilisateurs</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">{{ user_obj.get_full_name|default:user_obj.username }}</span>
+</div>
+
+<div class="page-header anim-fade-up">
+  <div class="hero-info">
+    <div style="width:72px;height:72px;border-radius:50%;background:var(--accent-blue-dim);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;color:var(--accent-blue);">{{ user_obj.first_name|first|upper|default:user_obj.username|first|upper }}</div>
+    <div>
+      <h1 class="page-title">{{ user_obj.get_full_name|default:user_obj.username }}</h1>
+      <p class="page-subtitle">{{ user_obj.email }} · {{ user_obj.telephone|default:"Pas de téléphone" }}</p>
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        {% if user_obj.role == 'admin' %}<span class="badge badge-blue">Admin</span>
+        {% elif user_obj.role == 'restaurant' %}<span class="badge badge-green">Restaurant</span>
+        {% elif user_obj.role == 'client' %}<span class="badge badge-gray">Client</span>
+        {% else %}<span class="badge badge-amber">Livreur</span>{% endif %}
+        {% if user_obj.is_active %}<span class="badge badge-green">Actif</span>{% else %}<span class="badge badge-red">Inactif</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="btn-group">
+    <form method="post" action="{% url 'core:user_toggle' user_obj.pk %}">{% csrf_token %}
+      <button class="btn {% if user_obj.is_active %}btn-danger{% else %}btn-amber{% endif %} btn-sm">{% if user_obj.is_active %}Suspendre{% else %}Réactiver{% endif %}</button>
+    </form>
+    {% if user_obj != request.user %}
+    <form method="post" action="{% url 'core:user_delete' user_obj.pk %}" onsubmit="return confirm('Supprimer cet utilisateur ? Action irréversible.')">{% csrf_token %}
+      <button class="btn btn-danger btn-sm">Supprimer</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="charts-grid charts-grid-2">
+  <div class="glass-card" style="padding:24px;">
+    <div class="section-title">Informations</div>
+    <div class="stat-row"><span class="stat-row-label">Nom d'utilisateur</span><span class="stat-row-value">{{ user_obj.username }}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Inscription</span><span class="stat-row-value">{{ user_obj.date_joined|date:"d/m/Y à H:i" }}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Dernière connexion</span><span class="stat-row-value">{{ user_obj.last_login|date:"d/m/Y à H:i"|default:"Jamais" }}</span></div>
+    <div class="stat-row"><span class="stat-row-label">Rôle</span><span class="stat-row-value">{{ user_obj.get_role_display }}</span></div>
+    {% if user_obj.role == 'client' %}
+    <div class="stat-row"><span class="stat-row-label">Total dépensé</span><span class="stat-row-value" style="color:var(--accent-green);">{{ total_depense|floatformat:0 }} FCFA</span></div>
+    {% endif %}
+    {% if user_obj.role == 'restaurant' and user_obj.restaurant_profile %}
+    <div style="margin-top:16px;">
+      <a href="{% url 'core:restaurant_detail' user_obj.restaurant_profile.pk %}" class="btn btn-secondary btn-sm">Voir le profil restaurant →</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if user_obj.role == 'client' and commandes %}
+  <div class="table-wrapper" style="border-radius:var(--radius);">
+    <div class="table-header"><div class="chart-title">Historique commandes</div></div>
+    <table>
+      <thead><tr><th>#</th><th>Restaurant</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for cmd in commandes %}
+        <tr>
+          <td>#{{ cmd.pk }}</td>
+          <td>{{ cmd.restaurant.nom|default:"—" }}</td>
+          <td style="color:var(--accent-green);font-weight:600;">{{ cmd.montant_total|floatformat:0 }} F</td>
+          <td>{% if cmd.statut == 'livree' %}<span class="badge badge-green">{{ cmd.get_statut_display }}</span>{% elif cmd.statut == 'annulee' or cmd.statut == 'refusee' %}<span class="badge badge-red">{{ cmd.get_statut_display }}</span>{% else %}<span class="badge badge-blue">{{ cmd.get_statut_display }}</span>{% endif %}</td>
+          <td style="font-size:0.75rem;">{{ cmd.created_at|date:"d/m/Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="glass-card" style="padding:24px;">
+    <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg><p>Pas de commandes associées</p></div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

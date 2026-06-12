@@ -74,7 +74,7 @@ export default function DrawerMenu({
   if (!isVisible) return null;
 
   const renderItems = () => {
-    const result: JSX.Element[] = [];
+    const result: any[] = [];
     let currentSection = '';
     items.forEach((item, idx) => {
       if (item.section && item.section !== currentSection) {

@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Carte — Menu Admin{% endblock %}
+{% block topbar_title %}Carte des Restaurants{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.map-layout { display: flex; height: calc(100vh - var(--topbar-height) - 32px); gap: 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+#eeuez-map { flex: 1; min-height: 400px; background: #0d1117; }
+#map-panel {
+  width: 0; min-width: 0; overflow: hidden;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+  display: flex; flex-direction: column;
+}
+#map-panel.active { width: 320px; min-width: 320px; }
+.map-panel-header { padding: 20px; border-bottom: 1px solid var(--border); }
+.map-controls {
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  z-index: 1000;
+  display: flex; gap: 6px;
+  background: rgba(17,17,24,0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 8px;
+}
+.map-filter-btn {
+  padding: 7px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+  border: none; cursor: pointer; transition: var(--transition);
+  background: transparent; color: var(--text-secondary);
+}
+.map-filter-btn:hover { color: var(--text-primary); background: var(--bg-card); }
+.map-filter-btn.active { background: var(--accent-green); color: #000; box-shadow: var(--glow-green); }
+.map-filter-btn.amber.active { background: var(--accent-amber); color: #000; }
+.map-filter-btn.red.active { background: var(--accent-red); color: #fff; }
+.map-stats {
+  position: absolute; bottom: 32px; left: 24px; z-index: 1000;
+  background: rgba(17,17,24,0.92); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px;
+  display: flex; gap: 20px;
+}
+.map-stat { text-align: center; }
+.map-stat-val { font-size: 1.2rem; font-weight: 700; color: var(--text-primary); }
+.map-stat-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.map-marker {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,0.2);
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+.map-marker:hover { transform: scale(1.15); }
+#map-panel-close {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px;
+  color: var(--text-secondary); cursor: pointer; font-size: 0.8rem;
+  transition: var(--transition);
+}
+#map-panel-close:hover { color: var(--accent-red); border-color: var(--accent-red); }
+.leaflet-control-attribution { background: rgba(10,10,15,0.8) !important; color: #9CA3AF !important; }
+.leaflet-control-attribution a { color: var(--accent-green) !important; }
+@media (max-width: 768px) {
+  .map-layout { flex-direction: column; height: auto; }
+  #eeuez-map { height: 55vh; min-height: 280px; }
+  #map-panel.active { width: 100%; min-width: 0; max-height: 40vh; overflow-y: auto; }
+  .map-controls { top: auto; bottom: 8px; left: 50%; transform: translateX(-50%); flex-wrap: wrap; justify-content: center; }
+  .map-stats { bottom: auto; top: 8px; left: 8px; gap: 12px; padding: 8px 14px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up" style="margin-bottom:16px;">
+  <div>
+    <h1 class="page-title">Carte des Restaurants</h1>
+    <p class="page-subtitle">{{ total }} restaurant{{ total|pluralize }} · {{ with_coords }} avec coordonnées GPS</p>
+  </div>
+  <div class="btn-group">
+    <span class="badge badge-green">● Actif</span>
+    <span class="badge badge-amber">● En attente</span>
+    <span class="badge badge-red">● Suspendu</span>
+  </div>
+</div>
+
+<div style="position:relative;" class="anim-fade-up" style="animation-delay:0.1s;">
+  <!-- Filtres flottants -->
+  <div class="map-controls">
+    <button id="filter-all" class="map-filter-btn active" onclick="filterMarkers('all')">Tous</button>
+    <button id="filter-actif" class="map-filter-btn" onclick="filterMarkers('actif')">Actifs</button>
+    <button id="filter-attente" class="map-filter-btn amber" onclick="filterMarkers('attente')">En attente</button>
+    <button id="filter-suspendu" class="map-filter-btn red" onclick="filterMarkers('suspendu')">Suspendus</button>
+  </div>
+
+  <!-- Stats flottantes -->
+  <div class="map-stats">
+    <div class="map-stat">
+      <div class="map-stat-val" id="map-total">—</div>
+      <div class="map-stat-label">Affichés</div>
+    </div>
+    <div class="map-stat">
+      <div class="map-stat-val" style="color:var(--accent-green);">{{ total }}</div>
+      <div class="map-stat-label">Total</div>
+    </div>
+    <div class="map-stat">
+      <div class="map-stat-val" style="color:var(--text-muted);">{{ with_coords }}</div>
+      <div class="map-stat-label">Géolocalisés</div>
+    </div>
+  </div>
+
+  <div class="map-layout">
+    <div id="eeuez-map"></div>
+    <div id="map-panel">
+      <button id="map-panel-close">✕ Fermer</button>
+      <div style="padding:40px 20px;color:var(--text-muted);text-align:center;font-size:0.85rem;">
+        Cliquez sur un marqueur pour voir les informations du restaurant
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if with_coords == 0 %}
+<div class="alert alert-warning" style="margin-top:16px;">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  Aucun restaurant n'a de coordonnées GPS. Modifiez un restaurant pour ajouter sa latitude et longitude.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts_head %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/map.js' %}"></script>
+{% endblock %}

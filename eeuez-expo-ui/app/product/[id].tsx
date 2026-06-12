@@ -1,211 +1,198 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView, StatusBar } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, StatusBar, Animated, ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../../context/ThemeContext';
-import { useCart } from '../../context/CartContext';
-import { Typography, Radius, Spacing, shadow } from '../../constants/theme';
-import { ChevronLeft, ShoppingBag, Plus, Minus } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } from '../../constants/theme';
+import { PressableScale, ConfettiBurst, EmojiPop, useButtonPress } from '../../components/Animations';
 import { MOCK_RESTAURANT_USER } from '../../data/mockData';
-import { PressableScale } from '../../components/Animations';
+import { useAppContext } from '../../context/AppContext';
 
-const { width, height } = Dimensions.get('window');
+function StatutPill({ statut }: { statut: string }) {
+  const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
+  return (
+    <View style={[s.pill, { backgroundColor: cfg.bg }]}>
+      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.emoji} {cfg.label}</Text>
+    </View>
+  );
+}
 
-const DEFAULT_PRODUCT: any = {
-    id: 'default',
-    nom: 'Cheese Burger',
-    prix: 10.00,
-    tempsPreparation: 15,
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
-};
+function AvisStars({ note, onRate }: { note: number; onRate: (n: number) => void }) {
+  return (
+    <View style={s.starsRow}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <PressableScale key={n} onPress={() => onRate(n)}>
+          <Text style={{ fontSize: 28 }}>{n <= note ? '⭐' : '☆'}</Text>
+        </PressableScale>
+      ))}
+    </View>
+  );
+}
 
 export default function ProductDetailScreen() {
-    const { id } = useLocalSearchParams();
-    const { colors } = useTheme();
-    const { addItem, items } = useCart();
-    const router = useRouter();
-    const [quantity, setQuantity] = useState(2);
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const [qty, setQty] = useState(1);
+  const [rating, setRating] = useState(0);
+  const [added, setAdded] = useState(false);
+  const { confettiVisible, emojiVisible, emoji, triggerSuccess } = useButtonPress();
+  const fadeIn  = useRef(new Animated.Value(0)).current;
+  const slideIn = useRef(new Animated.Value(60)).current;
+  const { addToCart } = useAppContext();
 
-    const allPlats = MOCK_RESTAURANT_USER.menu.flatMap(cat => cat.plats);
-    const plat: any = allPlats.find(p => p.id === id) || DEFAULT_PRODUCT;
+  // Trouver le plat dans le menu mock
+  let plat: any = null;
+  for (const cat of (MOCK_RESTAURANT_USER.menu ?? [])) {
+    const found = cat.plats.find((p: any) => p.id === id);
+    if (found) { plat = { ...found, restaurantNom: MOCK_RESTAURANT_USER.nomEtablissement }; break; }
+  }
+  plat = plat ?? {
+    id: 'p1', nom: 'Poulet DG', description: 'Poulet sauté aux plantains et légumes frais',
+    prix: 4500, ingredents: ['Poulet', 'Plantains', 'Carottes', 'Poivrons'],
+    noteGlobale: 4.9, tempsPreparation: 20, restaurantNom: "Le Phénix d'Or", isPopulaire: true,
+  };
 
-    const handleAddToCart = () => {
-        const itemToAdd = {
-            ...plat,
-            description: plat.description || 'Délicieux repas par défaut',
-            image: plat.image || DEFAULT_PRODUCT.image
-        };
-        for (let i = 0; i < quantity; i++) {
-            addItem(itemToAdd);
-        }
-        router.back();
-    };
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(slideIn, { toValue: 0, tension: 60, friction: 9, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-    const totalCartQuantity = items.reduce((sum, item) => sum + (item.quantity as number || 0), 0);
+  const handleAdd = () => {
+    triggerSuccess('🛒');
+    setAdded(true);
+    addToCart({ id: plat.id, nom: plat.nom, prix: plat.prix, quantite: qty, restaurantId: 'resto-1' });
+    setTimeout(() => setAdded(false), 2000);
+  };
 
-    return (
-        <View style={s.container}>
-            <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+  return (
+    <View style={s.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
+      <SafeAreaView style={{ flex: 1 }}>
 
-            {/* Background Blob Stylisé (Positionné pour supporter l'image centrée) */}
-            <View style={[s.blobBackground, { backgroundColor: colors.primary }]} />
-
-            <SafeAreaView style={{ flex: 1 }}>
-                {/* Header Icons Area */}
-                <View style={s.headerIcons}>
-                    <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
-                        <ChevronLeft size={24} color="#000" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => router.push('/(client)/cart')} style={s.iconBtn}>
-                        <ShoppingBag size={24} color="#A67C52" />
-                        {totalCartQuantity > 0 && (
-                            <View style={[s.badge, { backgroundColor: colors.primary }]}>
-                                <Text style={s.badgeText}>{totalCartQuantity}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                </View>
-
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
-                    {/* Title and Tabs Section */}
-                    <View style={s.titleSection}>
-                        <Text style={s.mainTitle}>Order Details 🍔</Text>
-
-                        <View style={s.tabsContainer}>
-                            <View style={[s.activeTabBg, { backgroundColor: '#FFD60022' }]}>
-                                <Text style={[s.tabText, { color: '#000', fontWeight: '800' }]}>Active Orders</Text>
-                                <View style={[s.tabIndicator, { backgroundColor: colors.primary }]} />
-                            </View>
-                            <TouchableOpacity style={s.inactiveTab}>
-                                <Text style={[s.tabText, { color: '#999' }]}>Past Orders</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Product Image Area - RE-CENTRÉ TOTALEMENT */}
-                    <View style={s.imageArea}>
-                        <Image
-                            source={{ uri: plat.image || DEFAULT_PRODUCT.image }}
-                            style={s.mainProductImage}
-                            resizeMode="contain"
-                        />
-                    </View>
-
-                    {/* Floating Card (La carte reste inchangée dans son design premium) */}
-                    <View style={[s.detailCard, shadow.medium]}>
-                        <Text style={s.cardCode}>#{plat.id.slice(0, 4).toUpperCase()} CODE</Text>
-                        <Text style={s.cardTitle}>Cheese Burger</Text>
-
-                        <View style={s.cardPriceRow}>
-                            <Text style={s.cardPrice}>$10.00</Text>
-                            <Text style={s.cardDelivery}>15 min Delivery</Text>
-                        </View>
-
-                        <View style={s.cardSelector}>
-                            <TouchableOpacity onPress={() => setQuantity(Math.max(1, quantity - 1))}>
-                                <View style={[s.qtyBox, { borderColor: '#FDEEE0' }]}>
-                                    <Minus size={22} color="#FDCAB0" />
-                                </View>
-                            </TouchableOpacity>
-
-                            <Text style={s.qtyText}>{quantity}</Text>
-
-                            <TouchableOpacity onPress={() => setQuantity(quantity + 1)}>
-                                <View style={[s.qtyBox, { borderColor: '#FDEEE0' }]}>
-                                    <Plus size={22} color="#FDCAB0" />
-                                </View>
-                            </TouchableOpacity>
-                        </View>
-
-                        <PressableScale onPress={handleAddToCart} style={s.cardBtn}>
-                            <View style={[s.cardBtnInner, { backgroundColor: '#FFA726' }]}>
-                                <Text style={s.cardBtnText}>Add to Cart</Text>
-                            </View>
-                        </PressableScale>
-                    </View>
-                </ScrollView>
-            </SafeAreaView>
+        {/* Confetti + Emoji */}
+        <View style={{ position: 'absolute', top: 100, alignSelf: 'center', zIndex: 100 }}>
+          <ConfettiBurst visible={confettiVisible} />
+          <EmojiPop emoji={emoji} visible={emojiVisible} size={48} />
         </View>
-    );
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+
+          {/* Header */}
+          <Animated.View style={[s.header, { opacity: fadeIn }]}>
+            <PressableScale onPress={() => router.back()}>
+              <View style={s.backBtn}><Text style={s.backArrow}>←</Text></View>
+            </PressableScale>
+            <Text style={s.headerTitle}>Détail du plat</Text>
+            <View style={{ width: 44 }} />
+          </Animated.View>
+
+          {/* Hero plat */}
+          <Animated.View style={[s.platHero, { opacity: fadeIn, transform: [{ translateY: slideIn }] }]}>
+            <View style={[s.platEmojiBox, glowSubtle(Colors.restaurant.primary)]}>
+              <Text style={{ fontSize: 72 }}>🍽️</Text>
+            </View>
+            {plat.isPopulaire && (
+              <View style={s.popularBadge}>
+                <Text style={s.popularText}>⭐ Plat populaire</Text>
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Infos */}
+          <Animated.View style={[s.infoBox, { opacity: fadeIn }]}>
+            <Text style={s.platNom}>{plat.nom}</Text>
+            <Text style={s.platResto}>🏪 {plat.restaurantNom}</Text>
+            <View style={s.metaRow}>
+              <View style={s.metaChip}><Text style={s.metaText}>⭐ {plat.noteGlobale ?? '4.9'}</Text></View>
+              <View style={s.metaChip}><Text style={s.metaText}>⏱ {plat.tempsPreparation ?? 20} min</Text></View>
+              <View style={s.metaChip}><Text style={s.metaText}>{plat.isVegetarien ? '🥦 Végétarien' : '🍗 Viande'}</Text></View>
+            </View>
+            <Text style={s.platDesc}>{plat.description}</Text>
+          </Animated.View>
+
+          {/* Ingrédients */}
+          {plat.ingredients?.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>🧄 Ingrédients</Text>
+              <View style={s.ingredientsList}>
+                {plat.ingredients.map((ing: string) => (
+                  <View key={ing} style={s.ingredientChip}>
+                    <Text style={s.ingredientText}>{ing}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Donner un avis */}
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>⭐ Donner un avis</Text>
+            <AvisStars note={rating} onRate={setRating} />
+            {rating > 0 && <Text style={[s.ratingLabel, { color: Colors.livreur.primary }]}>Merci pour votre avis ! ({rating}/5)</Text>}
+          </View>
+
+        </ScrollView>
+
+        {/* CTA Commander */}
+        <View style={s.ctaBox}>
+          <View style={s.qtyControl}>
+            <PressableScale onPress={() => setQty(q => Math.max(1, q - 1))}>
+              <View style={s.qtyBtn}><Text style={s.qtyBtnText}>−</Text></View>
+            </PressableScale>
+            <Text style={s.qtyText}>{qty}</Text>
+            <PressableScale onPress={() => setQty(q => q + 1)}>
+              <View style={[s.qtyBtn, { backgroundColor: Colors.client.bg, borderColor: Colors.client.primary }]}>
+                <Text style={[s.qtyBtnText, { color: Colors.client.primary }]}>+</Text>
+              </View>
+            </PressableScale>
+          </View>
+          <PressableScale onPress={handleAdd} style={{ flex: 1 }}>
+            <View style={[s.addBtn, glow(Colors.client.glow, 12)]}>
+              <Text style={s.addBtnText}>
+                {added ? '✅ Ajouté !' : `🛒 Ajouter — ${((plat.prix ?? 4500) * qty).toLocaleString()} FCFA`}
+              </Text>
+            </View>
+          </PressableScale>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
 }
 
 const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFFFFF' },
-    blobBackground: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: height * 0.52,
-        borderTopLeftRadius: 55,
-        transform: [{ scaleY: 1.1 }],
-    },
-    headerIcons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 10,
-    },
-    iconBtn: { padding: 5 },
-    badge: { position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
-    badgeText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
-    scrollContent: { paddingBottom: 40 },
-    titleSection: { paddingHorizontal: 25, marginTop: 5 },
-    mainTitle: { fontSize: 28, fontWeight: '900', color: '#111' },
-    tabsContainer: { flexDirection: 'row', marginTop: 15, alignItems: 'center' },
-    activeTabBg: {
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 14,
-        backgroundColor: '#FFF0E6',
-        marginRight: 15,
-        alignItems: 'center',
-    },
-    tabText: { fontSize: 14 },
-    tabIndicator: { width: 14, height: 3, borderRadius: 2, marginTop: 4 },
-    inactiveTab: { paddingHorizontal: 10 },
-    imageArea: {
-        height: height * 0.42,
-        marginTop: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: '100%',
-    },
-    mainProductImage: {
-        width: width * 0.9,
-        height: '100%',
-    },
-    detailCard: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 45,
-        borderRadius: 35,
-        padding: 24,
-        alignItems: 'center',
-        marginTop: -35,
-    },
-    cardCode: { fontSize: 12, fontWeight: '700', color: '#BDBDBD', marginBottom: 4 },
-    cardTitle: { fontSize: 22, fontWeight: '700', color: '#FBC02D', marginBottom: 10 },
-    cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
-    cardPrice: { fontSize: 19, fontWeight: '900', color: '#212121' },
-    cardDelivery: { fontSize: 12, color: '#9E9E9E', fontWeight: '600' },
-    cardSelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 30,
-        marginBottom: 25,
-    },
-    qtyBox: {
-        width: 50,
-        height: 50,
-        borderRadius: 15,
-        borderWidth: 2,
-        justifyContent: 'center',
-        alignItems: 'center'
-    },
-    qtyText: { fontSize: 24, fontWeight: '900', color: '#424242' },
-    cardBtn: { width: '100%' },
-    cardBtnInner: { height: 62, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-    cardBtnText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  container:      { flex: 1, backgroundColor: Colors.bg.app },
+  header:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  backBtn:        { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.glass.bg, justifyContent: 'center', alignItems: 'center' },
+  backArrow:      { fontSize: 22, color: Colors.text.primary },
+  headerTitle:    { ...Typography.h3, fontSize: 18 },
+  platHero:       { alignItems: 'center', paddingVertical: Spacing.xl },
+  platEmojiBox:   { width: 140, height: 140, borderRadius: 40, backgroundColor: Colors.restaurant.bg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.restaurant.primary + '44' },
+  popularBadge:   { marginTop: 14, backgroundColor: Colors.livreur.bg, paddingHorizontal: 16, paddingVertical: 6, borderRadius: Radius.full },
+  popularText:    { fontSize: 13, fontWeight: '800', color: Colors.livreur.primary },
+  infoBox:        { paddingHorizontal: Spacing.md, gap: 10 },
+  platNom:        { ...Typography.h1, fontSize: 26 },
+  platResto:      { ...Typography.small, color: Colors.text.secondary },
+  metaRow:        { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 },
+  metaChip:       { backgroundColor: Colors.bg.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border.default },
+  metaText:       { ...Typography.small, fontWeight: '700' },
+  platDesc:       { ...Typography.body, marginTop: 4, lineHeight: 22 },
+  section:        { paddingHorizontal: Spacing.md, marginTop: Spacing.lg, gap: 12 },
+  sectionTitle:   { ...Typography.h3, fontSize: 16 },
+  ingredientsList:{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  ingredientChip: { backgroundColor: Colors.bg.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border.default },
+  ingredientText: { ...Typography.small },
+  starsRow:       { flexDirection: 'row', gap: 8 },
+  ratingLabel:    { ...Typography.small, fontWeight: '700', marginTop: 4 },
+  ctaBox:         { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.md, backgroundColor: Colors.bg.surface, borderTopWidth: 1, borderTopColor: Colors.border.default, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  qtyControl:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bg.elevated, borderRadius: Radius.lg, paddingHorizontal: 10, paddingVertical: 8 },
+  qtyBtn:         { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: Colors.border.default, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.bg.surface },
+  qtyBtnText:     { fontSize: 18, fontWeight: '700', color: Colors.text.primary },
+  qtyText:        { ...Typography.h3, minWidth: 24, textAlign: 'center' },
+  addBtn:         { backgroundColor: Colors.client.primary, borderRadius: Radius.xl, paddingVertical: 16, alignItems: 'center' },
+  addBtnText:     { color: Colors.bg.app, fontWeight: '900', fontSize: 15 },
+  pill:           { paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.full },
+  pillText:       { fontSize: 11, fontWeight: '700' },
 });

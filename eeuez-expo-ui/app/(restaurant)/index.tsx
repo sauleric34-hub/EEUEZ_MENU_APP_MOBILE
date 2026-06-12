@@ -352,7 +352,7 @@ export default function RestaurantApp() {
   const [screen, setScreen] = useState('tableau_bord');
   const open = () => setDrawerOpen(true);
 
-  const screens: Record<string, JSX.Element> = {
+  const screens: any = {
     tableau_bord: <TableauDeBord onOpenDrawer={open} />,
     commandes:    <PlaceholderScreen title="Toutes les Commandes" emoji="📋" onOpenDrawer={open} />,
     menu:         <PlaceholderScreen title="Gestion du Menu" emoji="🍽️" onOpenDrawer={open} />,
@@ -442,5 +442,5 @@ const s = StyleSheet.create({
   rankText: { fontSize: 13, fontWeight: '900' },
   platVentes: { ...Typography.small, marginTop: 2 },
   platRevenu: { ...Typography.bodyBold, fontSize: 16 },
-  bg: { elevated: Colors.bg.elevated },
+
 });
