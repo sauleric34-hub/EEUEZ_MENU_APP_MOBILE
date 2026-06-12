@@ -13,6 +13,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client')
     telephone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    gain_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    nombre_livraisons = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = 'Utilisateur'
@@ -36,6 +38,8 @@ class RestaurantProfile(models.Model):
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=10.00)
     is_verified = models.BooleanField(default=False)
     is_open = models.BooleanField(default=True)
+    temps_livraison_moyen = models.PositiveIntegerField(default=30)
+    frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=500)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -118,6 +122,7 @@ class Commande(models.Model):
     montant_restaurant = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     adresse_livraison = models.CharField(max_length=300, blank=True)
     notes = models.TextField(blank=True)
+    delai_estime = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

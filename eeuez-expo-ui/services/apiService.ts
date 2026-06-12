@@ -97,20 +97,23 @@ export const platService = {
 
 export const commandeService = {
   /** Passer une commande */
-  passer: (body: object) => api.post('/client/commandes', body),
+  passer: (body: object) => api.post('/client/commandes/', body),
 
   /** Historique des commandes */
-  getHistorique: () => api.get('/client/commandes'),
+  getHistorique: () => api.get('/client/commandes/'),
 
   /** Détail d'une commande */
-  getDetail: (id: number) => api.get(`/client/commandes/${id}`),
+  getDetail: (id: number) => api.get(`/client/commandes/${id}/`),
 
   /** Suivi GPS de la livraison */
-  getTracking: (id: number) => api.get(`/client/commandes/${id}/tracking`),
+  getTracking: (id: number) => api.get(`/client/commandes/${id}/tracking/`),
+
+  /** Mettre à jour le statut (Simulation) */
+  updateStatus: (id: number, statut: string) => api.patch(`/client/commandes/${id}/`, { statut }),
 
   /** Laisser un avis */
   laisserAvis: (commandeId: number, body: { notePlat?: number; noteLivraison?: number; commentaire: string }) =>
-    api.post(`/client/commandes/${commandeId}/avis`, body),
+    api.post(`/client/commandes/${commandeId}/avis/`, body),
 };
 
 // ─── SERVICES RESTAURANT (workspace) ─────────────────────────────

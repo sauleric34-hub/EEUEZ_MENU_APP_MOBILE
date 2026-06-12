@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu · Food Fast Easy</title>
+{% load static %}
+<!-- Anti-flash thème -->
+<script>(function(){var t=localStorage.getItem('menu-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   MENU LANDING — DESIGN SYSTEM
+   ============================================================ */
+
+/* --- Thème sombre (défaut) --- */
+:root, :root[data-theme="dark"] {
+  --green:   #E8591C;
+  --green-d: #C94A14;
+  --amber:   #F5A623;
+  --blue:    #3B82F6;
+  --red:     #EF4444;
+  --success: #38A169;
+  --bg:      #08080E;
+  --bg2:     #0D0D16;
+  --bg3:     #12121C;
+  --border:  rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --txt1:    #F9FAFB;
+  --txt2:    #9CA3AF;
+  --txt3:    #4B5563;
+  --nav-bg:  rgba(8,8,14,.8);
+  --nav-link-hover: rgba(255,255,255,.05);
+  --strip-bg: #0D0D16;
+  --r:       14px;
+  --r2:      24px;
+  --ease:    cubic-bezier(0.4,0,0.2,1);
+  --t:       0.3s var(--ease);
+}
+
+/* --- Thème clair --- */
+:root[data-theme="light"] {
+  --green:   #E8591C;
+  --green-d: #C94A14;
+  --amber:   #F5A623;
+  --blue:    #3B82F6;
+  --red:     #EF4444;
+  --success: #38A169;
+  --bg:      #F8F5F0;
+  --bg2:     #FFFFFF;
+  --bg3:     #F0EBE3;
+  --border:  rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.13);
+  --txt1:    #18181B;
+  --txt2:    #52525B;
+  --txt3:    #A1A1AA;
+  --nav-bg:  rgba(248,245,240,.92);
+  --nav-link-hover: rgba(0,0,0,.05);
+  --strip-bg: #FFFFFF;
+  --r:       14px;
+  --r2:      24px;
+  --ease:    cubic-bezier(0.4,0,0.2,1);
+  --t:       0.3s var(--ease);
+}
+
+/* Transition douce */
+html { transition: background .3s ease; }
+body { transition: background .3s ease, color .3s ease; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;overflow-x:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt1);overflow-x:hidden;line-height:1.6}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}
+
+/* -------- ANIMATIONS -------- */
+@keyframes fadeUp   { from{opacity:0;transform:translateY(32px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+@keyframes float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+@keyframes spin     { to{transform:rotate(360deg)} }
+@keyframes pulseRing{ 0%{box-shadow:0 0 0 0 rgba(232,89,28,.45)} 70%{box-shadow:0 0 0 18px rgba(232,89,28,0)} 100%{box-shadow:0 0 0 0 rgba(232,89,28,0)} }
+@keyframes shimmer  { from{background-position:-200% 0} to{background-position:200% 0} }
+@keyframes gradFlow { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+@keyframes blobMove { 0%,100%{border-radius:60% 40% 30% 70%/60% 30% 70% 40%} 50%{border-radius:30% 60% 70% 40%/50% 60% 30% 60%} }
+@keyframes countUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes marquee  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes reveal   { from{clip-path:inset(0 100% 0 0)} to{clip-path:inset(0 0% 0 0)} }
+
+.anim-up  { animation:fadeUp .6s var(--ease) both }
+.anim-in  { animation:fadeIn .5s ease both }
+.d1{animation-delay:.05s}.d2{animation-delay:.12s}.d3{animation-delay:.2s}.d4{animation-delay:.28s}.d5{animation-delay:.36s}.d6{animation-delay:.44s}
+
+/* -------- GLOBALS -------- */
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+button{font-family:inherit;cursor:pointer;border:none}
+section{position:relative;overflow:hidden}
+
+.container{max-width:1180px;margin:0 auto;padding:0 24px}
+.tag{display:inline-flex;align-items:center;gap:7px;padding:5px 14px;border-radius:99px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border:1px solid}
+.tag-green{color:#38A169;border-color:rgba(56,161,105,.25);background:rgba(56,161,105,.08)}
+.tag-amber{color:var(--amber);border-color:rgba(245,158,11,.25);background:rgba(245,158,11,.08)}
+.tag-blue {color:var(--blue) ;border-color:rgba(59,130,246,.25) ;background:rgba(59,130,246,.08)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulseRing 2s infinite}
+
+/* -------- NAVBAR -------- */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:900;
+  padding:0 24px;height:68px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--nav-bg);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--border);
+  animation:fadeIn .5s ease both;
+  transition:background .3s ease, border-color .3s ease;
+}
+.nav-logo{display:flex;align-items:center;gap:11px}
+.nav-logo-img{width:34px;height:34px;border-radius:9px;object-fit:cover;border:1px solid var(--border2)}
+.nav-brand{font-size:1.1rem;font-weight:800;letter-spacing:-.02em;color:var(--txt1)}
+.nav-links{display:flex;align-items:center;gap:6px}
+.nav-link{padding:8px 16px;border-radius:9px;font-size:.85rem;font-weight:500;color:var(--txt2);transition:var(--t)}
+.nav-link:hover{color:var(--txt1);background:var(--nav-link-hover)}
+.nav-cta{
+  padding:9px 22px;border-radius:9px;font-size:.85rem;font-weight:700;
+  background:var(--green);color:#fff;
+  transition:var(--t);box-shadow:0 0 18px rgba(232,89,28,.3);
+}
+.nav-cta:hover{background:var(--green-d);transform:translateY(-1px);box-shadow:0 0 28px rgba(232,89,28,.5)}
+.nav-theme-btn{
+  width:36px;height:36px;border-radius:9px;border:1px solid var(--border2);
+  background:var(--nav-link-hover);color:var(--txt2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:var(--t);flex-shrink:0;
+}
+.nav-theme-btn:hover{border-color:var(--green);color:var(--green);background:rgba(232,89,28,.08)}
+.nav-theme-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.nav-theme-btn .icon-sun{display:none}
+.nav-theme-btn .icon-moon{display:block}
+:root[data-theme="light"] .nav-theme-btn .icon-sun{display:block}
+:root[data-theme="light"] .nav-theme-btn .icon-moon{display:none}
+.nav-hamburger{display:none;flex-direction:column;gap:5px;padding:8px;background:none;border:none;cursor:pointer}
+.nav-hamburger span{display:block;width:22px;height:2px;background:var(--txt2);border-radius:2px;transition:var(--t)}
+
+/* -------- HERO -------- */
+.hero{
+  min-height:100vh;display:flex;align-items:center;
+  padding:100px 0 80px;
+  background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(16,185,129,.07) 0%, transparent 70%);
+}
+.hero-inner{
+  display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;
+}
+.hero-eyebrow{margin-bottom:20px}
+.hero-title{
+  font-size:clamp(2.4rem,5vw,3.8rem);font-weight:900;
+  letter-spacing:-.04em;line-height:1.08;margin-bottom:24px;
+}
+.hero-title .accent{
+  background:linear-gradient(135deg,var(--green),#06b6d4,var(--blue));
+  background-size:200% 200%;animation:gradFlow 4s ease infinite;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-desc{font-size:1.05rem;color:var(--txt2);max-width:480px;line-height:1.75;margin-bottom:36px}
+.hero-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:14px 28px;border-radius:11px;font-size:.95rem;font-weight:700;
+  background:var(--green);color:#fff;
+  box-shadow:0 0 24px rgba(232,89,28,.35);transition:var(--t);
+}
+.btn-primary:hover{background:var(--green-d);transform:translateY(-2px);box-shadow:0 0 36px rgba(232,89,28,.55)}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:13px 24px;border-radius:11px;font-size:.95rem;font-weight:600;
+  color:var(--txt1);border:1px solid var(--border2);background:var(--nav-link-hover);
+  transition:var(--t);
+}
+.btn-secondary:hover{border-color:var(--green);color:var(--green);background:rgba(16,185,129,.06)}
+.btn svg{width:18px;height:18px;stroke:currentColor;flex-shrink:0}
+
+.hero-trust{display:flex;align-items:center;gap:10px;margin-top:28px;font-size:.8rem;color:var(--txt3)}
+.hero-trust-imgs{display:flex}
+.hero-trust-imgs span{
+  width:30px;height:30px;border-radius:50%;border:2px solid var(--bg);
+  background:var(--bg3);display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;font-weight:700;color:var(--txt2);margin-left:-8px;
+}
+.hero-trust-imgs span:first-child{margin-left:0}
+
+/* Hero visual */
+.hero-visual{position:relative;display:flex;align-items:center;justify-content:center}
+.hero-blob{
+  position:absolute;inset:-20%;
+  background:radial-gradient(circle,rgba(16,185,129,.12) 0%,rgba(59,130,246,.06) 50%,transparent 70%);
+  animation:blobMove 8s ease-in-out infinite;
+  border-radius:60% 40% 30% 70%/60% 30% 70% 40%;
+}
+.hero-phone{
+  position:relative;z-index:1;
+  width:280px;
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:32px;
+  padding:16px;
+  box-shadow:0 40px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.05);
+  animation:float 5s ease-in-out infinite;
+}
+.phone-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:0 4px}
+.phone-bar-left{font-size:.7rem;font-weight:700;color:var(--txt2)}
+.phone-bar-right{display:flex;gap:4px}
+.phone-bar-right span{width:5px;height:5px;border-radius:50%;background:var(--txt3)}
+.phone-bar-right span:first-child{background:var(--red)}
+.phone-bar-right span:nth-child(2){background:var(--amber)}
+.phone-bar-right span:last-child{background:var(--green)}
+.phone-search{
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:14px;
+}
+.phone-search svg{width:14px;height:14px;stroke:var(--txt3);flex-shrink:0}
+.phone-search span{font-size:.72rem;color:var(--txt3)}
+.phone-cats{display:flex;gap:6px;margin-bottom:14px;overflow:hidden}
+.phone-cat{
+  padding:5px 11px;border-radius:8px;font-size:.65rem;font-weight:700;
+  background:var(--bg3);border:1px solid var(--border);color:var(--txt2);white-space:nowrap;
+  flex-shrink:0;
+}
+.phone-cat.active{background:rgba(56,161,105,.15);border-color:rgba(56,161,105,.3);color:#38A169}
+.phone-cards{display:flex;flex-direction:column;gap:8px}
+.phone-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:11px;
+  padding:10px;display:flex;gap:10px;align-items:center;
+}
+.phone-card-img{
+  width:42px;height:42px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.phone-card-img svg{width:22px;height:22px;stroke:currentColor}
+.phone-card-body{flex:1;min-width:0}
+.phone-card-name{font-size:.72rem;font-weight:700;color:var(--txt1);margin-bottom:2px}
+.phone-card-sub{font-size:.63rem;color:var(--txt2)}
+.phone-card-price{font-size:.72rem;font-weight:800;color:var(--green);white-space:nowrap}
+
+/* Floating badges on phone */
+.float-badge{
+  position:absolute;z-index:2;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:12px;
+  padding:10px 14px;display:flex;align-items:center;gap:8px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+  font-size:.72rem;
+}
+.float-badge svg{width:16px;height:16px;stroke:currentColor;flex-shrink:0}
+.float-badge-1{top:10%;left:-30%;animation:float 4s 0.5s ease-in-out infinite}
+.float-badge-2{bottom:15%;right:-25%;animation:float 4.5s 1s ease-in-out infinite}
+.float-badge-3{top:55%;left:-35%;animation:float 5s 0.2s ease-in-out infinite}
+
+/* -------- MARQUEE STRIP -------- */
+.strip{
+  padding:18px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:var(--bg2);overflow:hidden;
+}
+.strip-inner{display:flex;gap:0;width:max-content;animation:marquee 22s linear infinite}
+.strip-item{
+  display:flex;align-items:center;gap:10px;
+  padding:0 40px;font-size:.82rem;font-weight:600;color:var(--txt2);
+  white-space:nowrap;
+}
+.strip-item svg{width:16px;height:16px;stroke:var(--green);flex-shrink:0}
+.strip-sep{color:var(--txt3)}
+
+/* -------- STATS -------- */
+.stats{padding:80px 0}
+.stats-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;
+  border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;
+}
+.stat-item{
+  padding:44px 36px;text-align:center;background:var(--bg2);
+  border-right:1px solid var(--border);transition:var(--t);
+}
+.stat-item:last-child{border-right:none}
+.stat-item:hover{background:var(--bg3)}
+.stat-num{
+  font-size:clamp(2.6rem,5vw,4rem);font-weight:900;letter-spacing:-.04em;
+  background:linear-gradient(135deg,var(--txt1),var(--txt2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1;margin-bottom:8px;
+}
+.stat-num .accent{
+  background:linear-gradient(135deg,var(--green),#F5A623);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.stat-label{font-size:.82rem;color:var(--txt2);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.stat-sub{font-size:.72rem;color:var(--txt3);margin-top:4px}
+
+/* -------- HOW IT WORKS -------- */
+.how{padding:100px 0;background:radial-gradient(ellipse 70% 50% at 50% 50%,rgba(59,130,246,.05) 0%,transparent 70%)}
+.section-header{text-align:center;margin-bottom:64px}
+.section-tag{margin-bottom:16px}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;letter-spacing:-.03em;margin-bottom:14px}
+.section-desc{font-size:1rem;color:var(--txt2);max-width:520px;margin:0 auto;line-height:1.7}
+.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;position:relative}
+.steps-grid::before{
+  content:'';position:absolute;top:36px;left:calc(16.67% + 20px);right:calc(16.67% + 20px);
+  height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);
+  z-index:0;
+}
+.step{
+  position:relative;z-index:1;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);
+  padding:32px 28px;text-align:center;transition:var(--t);
+}
+.step:hover{border-color:var(--green);transform:translateY(-4px);box-shadow:0 20px 60px rgba(16,185,129,.1)}
+.step-num{
+  width:48px;height:48px;border-radius:50%;
+  border:2px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 20px;
+  font-size:.75rem;font-weight:800;color:var(--green);
+  background:rgba(16,185,129,.08);position:relative;
+}
+.step-num::after{
+  content:attr(data-n);font-size:.65rem;font-weight:700;
+  position:absolute;top:-2px;right:-2px;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--green);color:#000;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 8px rgba(16,185,129,.5);
+}
+.step-icon{color:var(--green)}
+.step-icon svg{width:22px;height:22px;stroke:currentColor}
+.step-title{font-size:1rem;font-weight:700;margin-bottom:8px}
+.step-desc{font-size:.83rem;color:var(--txt2);line-height:1.65}
+
+/* -------- FEATURES -------- */
+.features{padding:100px 0}
+.features-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.feature-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);
+  padding:36px;transition:var(--t);position:relative;overflow:hidden;
+}
+.feature-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--fc-color,var(--green));opacity:0;transition:var(--t);
+}
+.feature-card:hover::before{opacity:1}
+.feature-card:hover{border-color:rgba(255,255,255,.12);transform:translateY(-3px);box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.feature-card.large{grid-column:span 2}
+.feature-icon{
+  width:48px;height:48px;border-radius:13px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:20px;
+}
+.feature-icon svg{width:24px;height:24px;stroke:currentColor}
+.feature-title{font-size:1.05rem;font-weight:700;margin-bottom:10px}
+.feature-desc{font-size:.85rem;color:var(--txt2);line-height:1.65}
+.feature-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:14px;padding:4px 12px;border-radius:99px;font-size:.7rem;font-weight:700;
+}
+
+/* -------- RESTAURANTS -------- */
+.restaurants{padding:100px 0;background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(16,185,129,.04) 0%,transparent 70%)}
+.resto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px}
+.resto-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);
+  overflow:hidden;transition:var(--t);cursor:pointer;
+  display:flex;flex-direction:column;
+}
+.resto-card:hover{border-color:rgba(255,255,255,.14);transform:translateY(-4px);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.resto-cover{
+  height:140px;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.resto-cover-bg{
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--rc1,#0f2027),var(--rc2,#203a43),var(--rc3,#2c5364));
+  transition:var(--t);
+}
+.resto-card:hover .resto-cover-bg{transform:scale(1.04)}
+.resto-cover-icon{position:relative;z-index:1}
+.resto-cover-icon svg{width:40px;height:40px;stroke:rgba(255,255,255,.25)}
+.resto-cover-badge{
+  position:absolute;top:12px;right:12px;z-index:2;
+  background:rgba(0,0,0,.6);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.1);border-radius:8px;
+  padding:4px 10px;font-size:.65rem;font-weight:700;color:var(--green);
+  display:flex;align-items:center;gap:4px;
+}
+.resto-cover-badge span{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulseRing 2s infinite}
+.resto-body{padding:20px;flex:1;display:flex;flex-direction:column}
+.resto-name{font-size:.95rem;font-weight:700;margin-bottom:4px}
+.resto-meta{font-size:.75rem;color:var(--txt2);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.resto-meta svg{width:12px;height:12px;stroke:var(--txt3)}
+.resto-stats{display:flex;gap:14px;margin-top:auto}
+.resto-stat{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--txt2)}
+.resto-stat svg{width:13px;height:13px;stroke:var(--amber)}
+.resto-stat strong{color:var(--txt1);font-weight:700}
+
+/* Empty resto card */
+.resto-card-empty{
+  border:1px dashed var(--border2);border-radius:var(--r2);
+  min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:var(--txt3);transition:var(--t);cursor:default;
+}
+.resto-card-empty svg{width:28px;height:28px;stroke:currentColor;opacity:.3}
+.resto-card-empty p{font-size:.8rem}
+
+/* -------- MENU PREVIEW -------- */
+.menu-section{padding:100px 0}
+.menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.dish-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  overflow:hidden;transition:var(--t);
+}
+.dish-card:hover{border-color:rgba(255,255,255,.12);transform:translateY(-3px);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.dish-img{
+  height:110px;display:flex;align-items:center;justify-content:center;
+  background:var(--bg3);position:relative;
+}
+.dish-img svg{width:36px;height:36px;stroke:rgba(255,255,255,.15)}
+.dish-popular{
+  position:absolute;top:8px;left:8px;
+  background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);
+  color:var(--amber);font-size:.6rem;font-weight:800;
+  padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.05em;
+}
+.dish-body{padding:14px}
+.dish-name{font-size:.83rem;font-weight:700;margin-bottom:3px}
+.dish-from{font-size:.7rem;color:var(--txt2);margin-bottom:10px}
+.dish-footer{display:flex;align-items:center;justify-content:space-between}
+.dish-price{font-size:.9rem;font-weight:800;color:var(--green)}
+.dish-add{
+  width:28px;height:28px;border-radius:8px;
+  background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.25);
+  display:flex;align-items:center;justify-content:center;
+  transition:var(--t);cursor:pointer;color:var(--green);
+}
+.dish-add:hover{background:var(--green);color:#000}
+.dish-add svg{width:14px;height:14px;stroke:currentColor}
+
+/* -------- CTA SECTION -------- */
+.cta-section{
+  padding:100px 0;
+  background:radial-gradient(ellipse 60% 80% at 50% 50%,rgba(16,185,129,.1) 0%,rgba(59,130,246,.05) 40%,transparent 70%);
+}
+.cta-card{
+  background:var(--bg2);border:1px solid var(--border2);border-radius:32px;
+  padding:72px 60px;text-align:center;position:relative;overflow:hidden;
+}
+.cta-card::before{
+  content:'';position:absolute;inset:0;border-radius:32px;
+  background:radial-gradient(ellipse 80% 80% at 50% 0%,rgba(16,185,129,.08) 0%,transparent 60%);
+  pointer-events:none;
+}
+.cta-title{font-size:clamp(2rem,4vw,3rem);font-weight:900;letter-spacing:-.03em;margin-bottom:16px}
+.cta-desc{font-size:1rem;color:var(--txt2);max-width:480px;margin:0 auto 36px;line-height:1.7}
+.cta-actions{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.cta-note{font-size:.75rem;color:var(--txt3);margin-top:20px;display:flex;align-items:center;gap:6px;justify-content:center}
+.cta-note svg{width:14px;height:14px;stroke:var(--txt3)}
+
+/* -------- FOOTER -------- */
+.footer{
+  border-top:1px solid var(--border);padding:52px 0 32px;
+  background:var(--bg2);
+}
+.footer-inner{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:48px;margin-bottom:48px}
+.footer-logo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.footer-logo-img{width:30px;height:30px;border-radius:8px;object-fit:cover;border:1px solid var(--border2)}
+.footer-logo-name{font-size:1rem;font-weight:800}
+.footer-logo-name span{color:var(--green)}
+.footer-desc{font-size:.82rem;color:var(--txt2);line-height:1.7;margin-bottom:20px}
+.footer-socials{display:flex;gap:8px}
+.footer-social{
+  width:34px;height:34px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg3);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--txt2);transition:var(--t);
+}
+.footer-social:hover{border-color:var(--green);color:var(--green);background:rgba(16,185,129,.08)}
+.footer-social svg{width:15px;height:15px;stroke:currentColor}
+.footer-col-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txt1);margin-bottom:16px}
+.footer-links{display:flex;flex-direction:column;gap:9px}
+.footer-links a{font-size:.83rem;color:var(--txt2);transition:var(--t)}
+.footer-links a:hover{color:var(--green)}
+.footer-bottom{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-top:28px;border-top:1px solid var(--border);
+  font-size:.75rem;color:var(--txt3);
+}
+.footer-bottom-right{display:flex;gap:20px}
+
+/* -------- RESPONSIVE -------- */
+@media(max-width:1024px){
+  .hero-inner{grid-template-columns:1fr;text-align:center;gap:40px}
+  .hero-desc{max-width:100%;margin:0 auto 36px}
+  .hero-actions{justify-content:center}
+  .hero-trust{justify-content:center}
+  .hero-visual{display:none}
+  .resto-grid{grid-template-columns:repeat(2,1fr)}
+  .menu-grid{grid-template-columns:repeat(2,1fr)}
+  .footer-inner{grid-template-columns:1fr 1fr}
+}
+@media(max-width:768px){
+  .nav-links,.nav-cta{display:none}
+  .nav-hamburger{display:flex}
+  .stats-grid{grid-template-columns:1fr;border-radius:var(--r)}
+  .stat-item{border-right:none;border-bottom:1px solid var(--border)}
+  .stat-item:last-child{border-bottom:none}
+  .steps-grid{grid-template-columns:1fr}
+  .steps-grid::before{display:none}
+  .features-grid{grid-template-columns:1fr}
+  .feature-card.large{grid-column:auto}
+  .resto-grid{grid-template-columns:1fr}
+  .menu-grid{grid-template-columns:1fr 1fr}
+  .cta-card{padding:48px 24px}
+  .footer-inner{grid-template-columns:1fr}
+  .footer-bottom{flex-direction:column;gap:12px;text-align:center}
+  .footer-bottom-right{flex-wrap:wrap;justify-content:center}
+}
+@media(max-width:480px){
+  .menu-grid{grid-template-columns:1fr}
+  .hero-actions{flex-direction:column;align-items:stretch}
+  .btn-primary,.btn-secondary{justify-content:center}
+}
+
+/* -------- SCROLL REVEAL (JS enhanced) -------- */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ NAVBAR -->
+<nav class="nav">
+  <div class="nav-logo">
+    <img src="{% static 'logo.png' %}" alt="Menu" class="nav-logo-img" onerror="this.style.display='none'">
+    <span class="nav-brand">Menu</span>
+  </div>
+  <div class="nav-links">
+    <a href="#comment" class="nav-link">Comment ça marche</a>
+    <a href="#restaurants" class="nav-link">Restaurants</a>
+    <a href="#menu" class="nav-link">Menu</a>
+    <a href="#fonctionnalites" class="nav-link">Fonctionnalités</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <a href="{% url 'core:login' %}" class="nav-link" style="display:flex;align-items:center;gap:6px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" width="15" height="15"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Admin
+    </a>
+    <button class="nav-theme-btn" id="landingThemeToggle" title="Thème clair / sombre">
+      <svg class="icon-moon" viewBox="0 0 24 24" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+    <a href="#telechargement" class="nav-cta">Télécharger l'app</a>
+  </div>
+  <button class="nav-hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- ============================================================ HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-inner">
+      <div>
+        <div class="hero-eyebrow anim-up">
+          <span class="tag tag-green"><span class="dot"></span>Disponible au Cameroun</span>
+        </div>
+        <h1 class="hero-title anim-up d1">
+          Vos restaurants<br>
+          préférés,<br>
+          <span class="accent">livrés en minutes</span>
+        </h1>
+        <p class="hero-desc anim-up d2">
+          Découvrez des centaines de restaurants locaux, consultez leurs menus en temps réel et commandez directement depuis votre téléphone — livraison assurée par le restaurant.
+        </p>
+        <div class="hero-actions anim-up d3">
+          <a href="#telechargement" class="btn-primary btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Télécharger gratuitement
+          </a>
+          <a href="#restaurants" class="btn-secondary btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Explorer les menus
+          </a>
+        </div>
+        <div class="hero-trust anim-up d4">
+          <div class="hero-trust-imgs">
+            <span>JK</span><span>SM</span><span>PN</span><span>MF</span><span>+</span>
+          </div>
+          <span>Déjà utilisé par <strong style="color:var(--txt1)">{{ stats.restaurants }} restaurants</strong> partenaires</span>
+        </div>
+      </div>
+
+      <!-- Phone mockup -->
+      <div class="hero-visual anim-in d2">
+        <div class="hero-blob"></div>
+        <!-- Badge flottant 1 -->
+        <div class="float-badge float-badge-1" style="color:var(--green)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>Commande confirmée</span>
+        </div>
+        <!-- Badge flottant 2 -->
+        <div class="float-badge float-badge-2" style="color:var(--amber)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <div>
+            <div style="font-weight:700;color:var(--txt1)">4.9 / 5</div>
+            <div style="font-size:.6rem;color:var(--txt2)">2 148 avis</div>
+          </div>
+        </div>
+        <!-- Badge flottant 3 -->
+        <div class="float-badge float-badge-3" style="color:var(--blue)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          <span>En route — 12 min</span>
+        </div>
+        <!-- Phone -->
+        <div class="hero-phone">
+          <div class="phone-bar">
+            <span class="phone-bar-left">9:41</span>
+            <div class="phone-bar-right">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="phone-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Chercher un restaurant…</span>
+          </div>
+          <div class="phone-cats">
+            <div class="phone-cat active">Tous</div>
+            <div class="phone-cat">Grillades</div>
+            <div class="phone-cat">Poissons</div>
+            <div class="phone-cat">Desserts</div>
+          </div>
+          <div class="phone-cards">
+            {% if plats_vedette %}
+              {% for plat in plats_vedette|slice:":3" %}
+              <div class="phone-card">
+                <div class="phone-card-img" style="background:rgba(16,185,129,.12);color:var(--green)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+                </div>
+                <div class="phone-card-body">
+                  <div class="phone-card-name">{{ plat.nom }}</div>
+                  <div class="phone-card-sub">{{ plat.restaurant.nom }}</div>
+                </div>
+                <div class="phone-card-price">{{ plat.prix|floatformat:0 }} F</div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="phone-card">
+                <div class="phone-card-img" style="background:rgba(16,185,129,.12);color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div>
+                <div class="phone-card-body"><div class="phone-card-name">Ndolé au poisson</div><div class="phone-card-sub">Le Phénix d'Or</div></div>
+                <div class="phone-card-price">3 500 F</div>
+              </div>
+              <div class="phone-card">
+                <div class="phone-card-img" style="background:rgba(245,158,11,.12);color:var(--amber)"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></div>
+                <div class="phone-card-body"><div class="phone-card-name">Poulet DG</div><div class="phone-card-sub">Chez Mama Africa</div></div>
+                <div class="phone-card-price">4 000 F</div>
+              </div>
+              <div class="phone-card">
+                <div class="phone-card-img" style="background:rgba(59,130,246,.12);color:var(--blue)"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 2l1.5 1.5a5 5 0 0 0 7 0l.5-.5.5.5a5 5 0 0 0 7 0L21 2"/><path d="M3 12l1.5 1.5a5 5 0 0 0 7 0l.5-.5.5.5a5 5 0 0 0 7 0L21 12"/><path d="M3 22l1.5-1.5a5 5 0 0 1 7 0l.5.5.5-.5a5 5 0 0 1 7 0L21 22"/></svg></div>
+                <div class="phone-card-body"><div class="phone-card-name">Soya grillé</div><div class="phone-card-sub">Braises & Épices</div></div>
+                <div class="phone-card-price">1 500 F</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ STRIP -->
+<div class="strip">
+  <div class="strip-inner">
+    {% for item in "123456"|make_list %}
+    <div class="strip-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Restaurants vérifiés
+    </div>
+    <div class="strip-item"><span class="strip-sep">·</span></div>
+    <div class="strip-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      Livraison rapide
+    </div>
+    <div class="strip-item"><span class="strip-sep">·</span></div>
+    <div class="strip-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Paiement Mobile Money
+    </div>
+    <div class="strip-item"><span class="strip-sep">·</span></div>
+    <div class="strip-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Menus actualisés en temps réel
+    </div>
+    <div class="strip-item"><span class="strip-sep">·</span></div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ============================================================ STATS -->
+<section class="stats" id="stats">
+  <div class="container">
+    <div class="stats-grid reveal">
+      <div class="stat-item">
+        <div class="stat-num"><span class="accent" data-target="{{ stats.restaurants }}">0</span><span class="accent">+</span></div>
+        <div class="stat-label">Restaurants partenaires</div>
+        <div class="stat-sub">Vérifiés et actifs sur la plateforme</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num"><span class="accent" data-target="{{ stats.plats }}">0</span><span class="accent">+</span></div>
+        <div class="stat-label">Plats au catalogue</div>
+        <div class="stat-sub">Mis à jour en temps réel par les restaurants</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num"><span class="accent" data-target="{{ stats.villes }}">0</span></div>
+        <div class="stat-label">Ville{{ stats.villes|pluralize }} couvertes</div>
+        <div class="stat-sub">Et en expansion continue</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ HOW IT WORKS -->
+<section class="how" id="comment">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-tag"><span class="tag tag-blue">Processus simple</span></div>
+      <h2 class="section-title">Commander n'a jamais été aussi simple</h2>
+      <p class="section-desc">Trois étapes suffisent pour recevoir votre repas préféré, directement à votre porte.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step reveal">
+        <div class="step-num" data-n="1">
+          <div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        </div>
+        <div class="step-title">Explorez les restaurants</div>
+        <div class="step-desc">Parcourez des dizaines de restaurants locaux, filtrez par cuisine, note ou proximité et consultez les menus mis à jour en temps réel.</div>
+      </div>
+      <div class="step reveal" style="transition-delay:.12s">
+        <div class="step-num" data-n="2">
+          <div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+        </div>
+        <div class="step-title">Composez votre commande</div>
+        <div class="step-desc">Sélectionnez vos plats, personnalisez votre commande et choisissez votre mode de paiement : MTN Money, Orange Money ou carte bancaire.</div>
+      </div>
+      <div class="step reveal" style="transition-delay:.24s">
+        <div class="step-num" data-n="3">
+          <div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+        </div>
+        <div class="step-title">Recevez votre repas</div>
+        <div class="step-desc">Le restaurant prépare et gère la livraison directement. Suivez votre commande en temps réel et recevez une notification à chaque étape.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ RESTAURANTS -->
+<section class="restaurants" id="restaurants">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-tag"><span class="tag tag-green"><span class="dot"></span>Partenaires actifs</span></div>
+      <h2 class="section-title">Restaurants disponibles près de vous</h2>
+      <p class="section-desc">Des établissements soigneusement sélectionnés qui valorisent la qualité et la fraîcheur de leurs plats.</p>
+    </div>
+    <div class="resto-grid">
+      {% if restaurants %}
+        {% for r in restaurants %}
+        <div class="resto-card reveal" style="transition-delay:{{ forloop.counter0 }}0ms;--rc1:{% cycle '#0f2027' '#1a0533' '#002d1f' '#1a1a00' '#001f33' '#1a000d' %};--rc2:{% cycle '#203a43' '#2d1b69' '#004d35' '#332200' '#003366' '#330011' %};--rc3:{% cycle '#2c5364' '#5c1b8a' '#006644' '#4d3300' '#004d99' '#4d001a' %}">
+          <div class="resto-cover">
+            <div class="resto-cover-bg"></div>
+            <div class="resto-cover-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="resto-cover-badge"><span></span>Ouvert</div>
+          </div>
+          <div class="resto-body">
+            <div class="resto-name">{{ r.nom }}</div>
+            <div class="resto-meta">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {{ r.ville }} · {{ r.adresse|truncatechars:30 }}
+            </div>
+            <div class="resto-stats">
+              <div class="resto-stat">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <strong>{{ r.note_avg|floatformat:1|default:"—" }}</strong>
+              </div>
+              <div class="resto-stat" style="color:var(--txt2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style="stroke:var(--txt3)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg>
+                <strong style="color:var(--txt2);">{{ r.nb_commandes }} commande{{ r.nb_commandes|pluralize }}</strong>
+              </div>
+              <div class="resto-stat" style="color:var(--txt2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style="stroke:var(--txt3)"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>
+                <strong style="color:var(--txt2);">{{ r.plats.count }} plat{{ r.plats.count|pluralize }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if restaurants|length < 3 %}
+          <div class="resto-card-empty reveal">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <p>D'autres restaurants bientôt disponibles</p>
+          </div>
+        {% endif %}
+      {% else %}
+        {% for i in "123"|make_list %}
+        <div class="resto-card-empty reveal">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <p>Les restaurants arrivent bientôt</p>
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    <div style="text-align:center;">
+      <a href="#" class="btn-secondary btn reveal">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Voir tous les restaurants
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ MENU PREVIEW -->
+<section class="menu-section" id="menu">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-tag"><span class="tag tag-amber">Menu du moment</span></div>
+      <h2 class="section-title">Des plats qui font saliver</h2>
+      <p class="section-desc">Un aperçu de ce qui vous attend sur la plateforme. Chaque restaurant met son menu à jour en temps réel.</p>
+    </div>
+    <div class="menu-grid">
+      {% if plats_vedette %}
+        {% for plat in plats_vedette %}
+        <div class="dish-card reveal" style="transition-delay:{{ forloop.counter0 }}5ms;">
+          <div class="dish-img">
+            {% if plat.image %}
+              <img src="{{ plat.image.url }}" alt="{{ plat.nom }}" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;">
+            {% else %}
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            {% endif %}
+            {% if plat.is_popular %}<div class="dish-popular">Populaire</div>{% endif %}
+          </div>
+          <div class="dish-body">
+            <div class="dish-name">{{ plat.nom }}</div>
+            <div class="dish-from">{{ plat.restaurant.nom }}</div>
+            <div class="dish-footer">
+              <div class="dish-price">{{ plat.prix|floatformat:0 }} FCFA</div>
+              <button class="dish-add">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="dish-card reveal d1">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg><div class="dish-popular">Populaire</div></div>
+          <div class="dish-body"><div class="dish-name">Ndolé au poisson</div><div class="dish-from">Le Phénix d'Or</div><div class="dish-footer"><div class="dish-price">3 500 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal d2">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Poulet DG</div><div class="dish-from">Chez Mama Africa</div><div class="dish-footer"><div class="dish-price">4 000 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal d3">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg><div class="dish-popular">Populaire</div></div>
+          <div class="dish-body"><div class="dish-name">Soya grillé</div><div class="dish-from">Braises &amp; Épices</div><div class="dish-footer"><div class="dish-price">1 500 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal d4">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M3 2l1.5 1.5a5 5 0 0 0 7 0l.5-.5.5.5a5 5 0 0 0 7 0L21 2"/><path d="M3 12l1.5 1.5a5 5 0 0 0 7 0l.5-.5.5.5a5 5 0 0 0 7 0L21 12"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Poisson braisé</div><div class="dish-from">Saveurs du Cameroun</div><div class="dish-footer"><div class="dish-price">5 000 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal d5">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Eru et waterfufu</div><div class="dish-from">Le Griot Fumé</div><div class="dish-footer"><div class="dish-price">3 000 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal d6">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Beignets haricots</div><div class="dish-from">Ndolé &amp; Co</div><div class="dish-footer"><div class="dish-price">500 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Miondo sauce jaune</div><div class="dish-from">Chez Mama Africa</div><div class="dish-footer"><div class="dish-price">2 000 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+        <div class="dish-card reveal">
+          <div class="dish-img"><svg viewBox="0 0 24 24" fill="none" stroke-width="1"><path d="M8 2v4M12 2v4M16 2v4M2 10h20M6 14h.01M10 14h.01M14 14h.01M18 14h.01M6 18h.01M10 18h.01M14 18h.01M18 18h.01"/></svg></div>
+          <div class="dish-body"><div class="dish-name">Jus de gingembre</div><div class="dish-from">Le Phénix d'Or</div><div class="dish-footer"><div class="dish-price">800 FCFA</div><button class="dish-add"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ FEATURES -->
+<section class="features" id="fonctionnalites">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-tag"><span class="tag tag-blue">Fonctionnalités</span></div>
+      <h2 class="section-title">Tout ce dont vous avez besoin</h2>
+      <p class="section-desc">Une expérience pensée pour les clients, les restaurants et les livreurs.</p>
+    </div>
+    <div class="features-grid">
+      <!-- Large card -->
+      <div class="feature-card large reveal" style="--fc-color:var(--green);display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;">
+        <div>
+          <div class="feature-icon" style="background:rgba(16,185,129,.12);color:var(--green)">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="feature-title">Suivi en temps réel</div>
+          <div class="feature-desc">Suivez chaque étape de votre commande — confirmation, préparation, collecte et livraison — directement dans l'application avec des notifications push instantanées.</div>
+          <span class="feature-badge tag-green" style="margin-top:16px;display:inline-flex;">GPS intégré</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:var(--r);padding:24px;border:1px solid var(--border);">
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:.78rem;color:var(--txt2);">En préparation</span>
+              <span style="font-size:.78rem;font-weight:700;color:var(--amber);">60%</span>
+            </div>
+            <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+              <div class="progress-bar" style="height:100%;width:0;border-radius:3px;background:var(--amber);transition:width 1.5s var(--ease);box-shadow:0 0 8px rgba(245,158,11,.5);" data-width="60%"></div>
+            </div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:.78rem;color:var(--txt2);">En route</span>
+              <span style="font-size:.78rem;font-weight:700;color:var(--blue);">80%</span>
+            </div>
+            <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+              <div class="progress-bar" style="height:100%;width:0;border-radius:3px;background:var(--blue);transition:width 1.5s var(--ease);box-shadow:0 0 8px rgba(59,130,246,.5);" data-width="80%"></div>
+            </div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:.78rem;color:var(--txt2);">Livré</span>
+              <span style="font-size:.78rem;font-weight:700;color:var(--green);">100%</span>
+            </div>
+            <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+              <div class="progress-bar" style="height:100%;width:0;border-radius:3px;background:var(--green);transition:width 1.5s var(--ease);box-shadow:0 0 8px rgba(16,185,129,.5);" data-width="100%"></div>
+            </div>
+          </div>
+          <div style="margin-top:20px;padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:9px;display:flex;align-items:center;gap:10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            <span style="font-size:.78rem;color:var(--green);font-weight:600;">Livraison estimée : 18 min</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" style="--fc-color:var(--amber);transition-delay:.05s">
+        <div class="feature-icon" style="background:rgba(245,158,11,.12);color:var(--amber)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="feature-title">Paiement Mobile Money</div>
+        <div class="feature-desc">Payez en toute sécurité avec MTN Mobile Money, Orange Money, votre carte bancaire ou en espèces à la livraison.</div>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+          <span class="feature-badge tag-amber">MTN Money</span>
+          <span class="feature-badge tag-amber">Orange Money</span>
+          <span class="feature-badge" style="color:var(--blue);border-color:rgba(59,130,246,.25);background:rgba(59,130,246,.08);">Carte</span>
+          <span class="feature-badge" style="color:var(--txt2);border-color:var(--border);background:rgba(255,255,255,.04);">Espèces</span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" style="--fc-color:var(--blue);transition-delay:.1s">
+        <div class="feature-icon" style="background:rgba(59,130,246,.12);color:var(--blue)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+        </div>
+        <div class="feature-title">Menus en temps réel</div>
+        <div class="feature-desc">Les restaurants mettent à jour leurs menus à leur propre rythme. Disponibilité, prix et promotions sont toujours exacts au moment de la commande.</div>
+        <span class="feature-badge tag-blue" style="margin-top:16px;display:inline-flex;">Synchronisation instantanée</span>
+      </div>
+
+      <div class="feature-card reveal" style="--fc-color:var(--green);transition-delay:.05s">
+        <div class="feature-icon" style="background:rgba(16,185,129,.12);color:var(--green)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="feature-title">Avis certifiés</div>
+        <div class="feature-desc">Seuls les clients ayant réellement commandé peuvent laisser un avis. Les restaurants peuvent répondre publiquement pour maintenir un dialogue de qualité.</div>
+        <span class="feature-badge tag-green" style="margin-top:16px;display:inline-flex;">Avis vérifiés</span>
+      </div>
+
+      <div class="feature-card reveal" style="--fc-color:var(--red);transition-delay:.1s">
+        <div class="feature-icon" style="background:rgba(239,68,68,.12);color:var(--red)">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        </div>
+        <div class="feature-title">Tableau de bord restaurant</div>
+        <div class="feature-desc">Les restaurateurs gèrent leur menu, suivent les commandes, analysent leurs performances financières et configurent leurs horaires depuis un panneau dédié.</div>
+        <span class="feature-badge" style="color:var(--red);border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08);margin-top:16px;display:inline-flex;">Interface restaurant</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ CTA -->
+<section class="cta-section" id="telechargement">
+  <div class="container">
+    <div class="cta-card reveal">
+      <div class="section-tag" style="margin-bottom:20px;"><span class="tag tag-green"><span class="dot"></span>Disponible maintenant</span></div>
+      <h2 class="cta-title">Prêt à commander<br>votre premier repas ?</h2>
+      <p class="cta-desc">Rejoignez des milliers de clients qui profitent déjà de la meilleure expérience de commande en ligne au Cameroun.</p>
+      <div class="cta-actions">
+        <a href="#" class="btn-primary btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M8 12l3 3 5-5"/></svg>
+          Télécharger sur Android
+        </a>
+        <a href="#" class="btn-secondary btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4l3 3"/></svg>
+          Disponible bientôt sur iOS
+        </a>
+      </div>
+      <div class="cta-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Téléchargement gratuit · Aucune inscription requise pour explorer
+      </div>
+
+      <!-- Decoration grid -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:48px;max-width:560px;margin-left:auto;margin-right:auto;">
+        <div style="padding:20px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--r);text-align:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" width="24" height="24" style="margin:0 auto 10px;display:block;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div style="font-size:.75rem;font-weight:600;color:var(--txt1);">Commission transparente</div>
+        </div>
+        <div style="padding:20px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--r);text-align:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" width="24" height="24" style="margin:0 auto 10px;display:block;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <div style="font-size:.75rem;font-weight:600;color:var(--txt1);">Restaurants vérifiés</div>
+        </div>
+        <div style="padding:20px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--r);text-align:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" width="24" height="24" style="margin:0 auto 10px;display:block;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.53 3.49 2 2 0 0 1 3.5 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <div style="font-size:.75rem;font-weight:600;color:var(--txt1);">Support 24h/24</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-logo">
+          <img src="{% static 'logo.png' %}" alt="Menu" class="footer-logo-img" onerror="this.style.display='none'">
+          <span class="footer-logo-name">Menu</span>
+        </div>
+        <p class="footer-desc">La plateforme de commande de repas en ligne qui connecte les clients aux meilleurs restaurants locaux du Cameroun.</p>
+        <div class="footer-socials">
+          <a href="#" class="footer-social"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+          <a href="#" class="footer-social"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg></a>
+          <a href="#" class="footer-social"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>
+          <a href="#" class="footer-social"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.4a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg></a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title">Plateforme</div>
+        <div class="footer-links">
+          <a href="#restaurants">Restaurants</a>
+          <a href="#menu">Menu</a>
+          <a href="#comment">Comment ça marche</a>
+          <a href="#telechargement">Télécharger</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title">Partenaires</div>
+        <div class="footer-links">
+          <a href="#">Devenir restaurant partenaire</a>
+          <a href="#">Programme livreur</a>
+          <a href="{% url 'core:login' %}">Espace Admin</a>
+          <a href="#">API Développeurs</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title">Légal</div>
+        <div class="footer-links">
+          <a href="#">Conditions d'utilisation</a>
+          <a href="#">Politique de confidentialité</a>
+          <a href="#">Mentions légales</a>
+          <a href="#">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2025 Menu. Tous droits réservés. Conçu au Cameroun.</span>
+      <div class="footer-bottom-right">
+        <a href="#">Politique de cookies</a>
+        <a href="#">Accessibilité</a>
+        <a href="#">Plan du site</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================================================ SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ---- Scroll reveal ---- */
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  /* ---- Counter animation ---- */
+  function animateCounter(el, target) {
+    const duration = 1800;
+    const start = performance.now();
+    function tick(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased).toLocaleString('fr-FR');
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  const statsObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('[data-target]').forEach(el => {
+          animateCounter(el, parseInt(el.dataset.target) || 0);
+        });
+        statsObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('.stats-grid').forEach(el => statsObs.observe(el));
+
+  /* ---- Progress bars ---- */
+  const barObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('.progress-bar').forEach(bar => {
+          setTimeout(() => { bar.style.width = bar.dataset.width; }, 300);
+        });
+        barObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.3 });
+  document.querySelectorAll('.feature-card').forEach(el => barObs.observe(el));
+
+  /* ---- GSAP page entry ---- */
+  if (typeof gsap !== 'undefined') {
+    gsap.from('.nav', { duration: .6, opacity: 0, y: -20, ease: 'power3.out' });
+    gsap.from('.hero-title', { duration: .8, opacity: 0, y: 40, ease: 'power3.out', delay: .1 });
+    gsap.from('.hero-desc', { duration: .7, opacity: 0, y: 30, ease: 'power3.out', delay: .25 });
+    gsap.from('.hero-actions', { duration: .6, opacity: 0, y: 24, ease: 'power3.out', delay: .4 });
+    gsap.from('.hero-trust', { duration: .5, opacity: 0, y: 16, ease: 'power3.out', delay: .55 });
+    gsap.from('.hero-phone', { duration: 1, opacity: 0, scale: .9, y: 30, ease: 'back.out(1.4)', delay: .3 });
+    gsap.from('.float-badge', { duration: .7, opacity: 0, scale: .8, stagger: .15, ease: 'back.out(1.7)', delay: .7 });
+  }
+
+  /* ---- Dish add button micro-interaction ---- */
+  document.querySelectorAll('.dish-add').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const orig = this.innerHTML;
+      this.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>';
+      this.style.background = 'var(--green)';
+      this.style.color = '#000';
+      setTimeout(() => {
+        this.innerHTML = orig;
+        this.style.background = '';
+        this.style.color = '';
+      }, 1200);
+    });
+  });
+
+  /* ---- Smooth scroll ---- */
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  /* ---- Nav background on scroll (respecte le thème courant) ---- */
+  const nav = document.querySelector('.nav');
+  function updateNavBg() {
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    if (window.scrollY > 60) {
+      nav.style.background = isDark ? 'rgba(8,8,14,.97)' : 'rgba(248,245,240,.98)';
+    } else {
+      nav.style.background = '';
+    }
+  }
+  window.addEventListener('scroll', updateNavBg, { passive: true });
+
+  /* ---- Toggle thème ---- */
+  function initLandingTheme() {
+    const btn = document.getElementById('landingThemeToggle');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const root = document.documentElement;
+      const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      root.setAttribute('data-theme', next);
+      localStorage.setItem('menu-theme', next);
+      updateNavBg();
+    });
+  }
+  initLandingTheme();
+
+});
+</script>
+</body>
+</html>

@@ -1,23 +1,27 @@
 {
   "expo": {
-    "name": "eeuez-expo-ui",
-    "slug": "eeuez-expo-ui",
+    "name": "EEUEZ",
+    "slug": "eeuez",
     "version": "1.0.0",
-    "scheme": "eeuez-expo-ui",
+    "scheme": "eeuez",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A0B05"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eeuez.menu"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#1A0B05",
+        "foregroundImage": "./assets/icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "package": "com.eeuez.menu"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Créer un restaurant — Menu Admin{% endblock %}
+{% block topbar_title %}Nouveau Restaurant{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:restaurant_list' %}">Restaurants</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Créer</span>
+</div>
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Nouveau Restaurant</h1>
+    <p class="page-subtitle">Remplissez les informations pour créer un compte restaurant</p>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div class="charts-grid charts-grid-2">
+    <!-- Compte utilisateur -->
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">Compte utilisateur</div>
+      <div class="form-group">
+        <label class="form-label">Nom d'utilisateur *</label>
+        <input type="text" name="username" class="input-field" placeholder="jean.kamga" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input type="email" name="email" class="input-field" placeholder="contact@restaurant.cm" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe *</label>
+        <input type="password" name="password" class="input-field" placeholder="••••••••" required minlength="8">
+      </div>
+    </div>
+
+    <!-- Infos restaurant -->
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">Informations restaurant</div>
+      <div class="form-group">
+        <label class="form-label">Nom du restaurant *</label>
+        <input type="text" name="nom" class="input-field" placeholder="Le Phénix d'Or" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea name="description" class="input-field" placeholder="Spécialités camerounaises…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Taux de commission (%) *</label>
+        <input type="number" name="commission_rate" class="input-field" value="10" min="0" max="100" step="0.5" required>
+      </div>
+    </div>
+
+    <!-- Adresse -->
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">Localisation</div>
+      <div class="form-group">
+        <label class="form-label">Adresse *</label>
+        <input type="text" name="adresse" class="input-field" placeholder="Rue de la Paix" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ville *</label>
+        <input type="text" name="ville" class="input-field" placeholder="Yaoundé" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pays</label>
+        <input type="text" name="pays" class="input-field" value="Cameroun">
+      </div>
+      <div class="coords-grid">
+        <div class="form-group">
+          <label class="form-label">Latitude</label>
+          <input type="number" name="latitude" class="input-field" placeholder="3.848" step="any">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Longitude</label>
+          <input type="number" name="longitude" class="input-field" placeholder="11.502" step="any">
+        </div>
+      </div>
+    </div>
+
+    <!-- Médias -->
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">Médias</div>
+      <div class="form-group">
+        <label class="form-label">Logo</label>
+        <input type="file" name="logo" accept="image/*" class="input-field" data-preview="logoPreview" style="padding:8px;">
+        <img id="logoPreview" style="display:none;margin-top:10px;width:80px;height:80px;border-radius:12px;object-fit:cover;border:1px solid var(--border);">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo de couverture</label>
+        <input type="file" name="cover_image" accept="image/*" class="input-field" data-preview="coverPreview" style="padding:8px;">
+        <img id="coverPreview" style="display:none;margin-top:10px;width:100%;height:100px;border-radius:12px;object-fit:cover;border:1px solid var(--border);">
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">
+    <a href="{% url 'core:restaurant_list' %}" class="btn btn-secondary">Annuler</a>
+    <button type="submit" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
+      Créer le Restaurant
+    </button>
+  </div>
+</form>
+{% endblock %}
