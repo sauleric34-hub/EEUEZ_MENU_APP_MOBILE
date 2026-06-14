@@ -297,7 +297,7 @@ const s = StyleSheet.create({
   backArrow:     { fontSize: 22, color: Colors.text.primary },
   headerTitle:   { ...Typography.h3 },
   headerRight:   { width: 44 },
-  mapCard:       { marginHorizontal: Spacing.md, marginBottom: Spacing.xl, backgroundColor: Colors.bg.surface, borderRadius: Radius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: Colors.border.subtle },
+  mapCard:       { marginHorizontal: Spacing.md, marginBottom: Spacing.xl, backgroundColor: Colors.bg.surface, borderRadius: Radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border.subtle },
   mapContainer:  { height: 280, width: '100%' },
   map:           { ...StyleSheet.absoluteFillObject },
   homeMarker:    { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.client.primary },

@@ -106,7 +106,7 @@ export default function CartScreen() {
           </View>
         ) : (
           <>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.md }}>
               {/* Groupement restaurant */}
               <View style={s.restaurantBadge}>
                 <Text style={s.restaurantBadgeText}>🏪 Restaurant</Text>

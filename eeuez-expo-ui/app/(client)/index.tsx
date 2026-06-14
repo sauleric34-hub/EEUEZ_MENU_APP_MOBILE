@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated,
-  ScrollView, StatusBar,
+  ScrollView, StatusBar, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -104,6 +104,8 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const slideIn = useRef(new Animated.Value(30)).current;
   
   const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [activeOrder, setActiveOrderLocal] = useState<any>(null);
   const [hasUnreadNotif, setHasUnreadNotif] = useState(false);
   const prevStatut = useRef<string | null>(null);
@@ -113,6 +115,39 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const router = useRouter();
   
   const { confettiVisible, emojiVisible, emoji: reactionEmoji, triggerSuccess } = useButtonPress();
+
+  const filteredRestaurants = restaurants.filter(resto => {
+    // 1. Search filter
+    if (search.trim() !== '') {
+      const q = search.toLowerCase();
+      const matchName = (resto.nom || resto.nomEtablissement || '').toLowerCase().includes(q);
+      const matchCat = (resto.categorie || '').toLowerCase().includes(q);
+      if (!matchName && !matchCat) return false;
+    }
+
+    // 2. Category filter
+    if (!selectedCat) return true;
+    const catLower = (resto.categorie || '').toLowerCase();
+    
+    switch (selectedCat) {
+      case 'Populaire':
+        return (resto.noteGlobale || resto.note || 0) >= 4.5;
+      case 'Tradition':
+        return catLower.includes('tradition') || catLower.includes('camerounais') || catLower.includes('africain');
+      case 'Grillades':
+        return catLower.includes('grill') || catLower.includes('braisé') || catLower.includes('viande');
+      case 'Fast Food':
+        return catLower.includes('fast') || catLower.includes('burger');
+      case 'Pizza':
+        return catLower.includes('pizza') || catLower.includes('pizz');
+      case 'Boissons':
+        return catLower.includes('boisson') || catLower.includes('jus') || catLower.includes('bar');
+      case 'Desserts':
+        return catLower.includes('dessert') || catLower.includes('sucr') || catLower.includes('gâteau') || catLower.includes('patiss');
+      default:
+        return catLower.includes(selectedCat.toLowerCase());
+    }
+  });
 
   useEffect(() => {
     Animated.parallel([
@@ -253,13 +288,19 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           </View>
 
           {/* Barre de recherche */}
-          <PressableScale style={s.searchBar} scaleDown={0.98}>
+          <View style={[s.searchBar, { paddingVertical: 0, paddingLeft: Spacing.md }]}>
             <Text style={{ fontSize: 18 }}>🔍</Text>
-            <Text style={s.searchPlaceholder}>Rechercher un plat, un restaurant…</Text>
-            <View style={[s.filterBtn, { backgroundColor: Colors.client.bg }]}>
+            <TextInput
+              placeholder="Rechercher un plat, un restaurant…"
+              placeholderTextColor={Colors.text.muted}
+              style={[s.searchPlaceholder, { color: Colors.text.primary, height: 50 }]}
+              value={search}
+              onChangeText={setSearch}
+            />
+            <TouchableOpacity style={[s.filterBtn, { backgroundColor: Colors.client.bg }]}>
               <Text style={[s.filterText, { color: Colors.client.primary }]}>Filtres</Text>
-            </View>
-          </PressableScale>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Commande live — statut animé */}
@@ -310,9 +351,23 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               { e: '🍹', l: 'Boissons',  c: Colors.restaurant.light },
               { e: '🍰', l: 'Desserts',  c: Colors.livreur.light },
             ].map(cat => (
-              <PressableScale key={cat.l} style={[s.catPill, { borderColor: cat.c + '44' }] as any} scaleDown={0.9}>
+              <PressableScale
+                key={cat.l}
+                style={[
+                  s.catPill,
+                  {
+                    borderColor: cat.c + '44',
+                    backgroundColor: selectedCat === cat.l ? cat.c : Colors.bg.surface
+                  }
+                ] as any}
+                scaleDown={0.9}
+                onPress={() => setSelectedCat(selectedCat === cat.l ? null : cat.l)}
+              >
                 <Text style={{ fontSize: 22 }}>{cat.e}</Text>
-                <Text style={[s.catLabel, { color: cat.c }]}>{cat.l}</Text>
+                <Text style={[
+                  s.catLabel,
+                  { color: selectedCat === cat.l ? '#FFF' : cat.c }
+                ]}>{cat.l}</Text>
               </PressableScale>
             ))}
           </ScrollView>
@@ -326,8 +381,8 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <Text style={[s.seeAll, { color: Colors.client.primary }]}>Voir tout ›</Text>
             </PressableScale>
           </View>
-          {restaurants.length > 0 ? (
-            restaurants.map(resto => <RestoCard key={resto.id} resto={resto} />)
+          {filteredRestaurants.length > 0 ? (
+            filteredRestaurants.map(resto => <RestoCard key={resto.id} resto={resto} />)
           ) : loadingRestos ? (
             <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.text.muted }}>
               Chargement des restaurants...
@@ -338,7 +393,7 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
             </Text>
           ) : (
             <Text style={{ textAlign: 'center', marginVertical: 20, color: Colors.text.muted }}>
-              Aucun restaurant trouvé à proximité.
+              Aucun restaurant trouvé.
             </Text>
           )}
         </View>

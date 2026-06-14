@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, StatusBar, Animated, ScrollView,
+  View, Text, StyleSheet, StatusBar, Animated, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +8,7 @@ import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } f
 import { PressableScale, ConfettiBurst, EmojiPop, useButtonPress } from '../../components/Animations';
 import { MOCK_RESTAURANT_USER } from '../../data/mockData';
 import { useAppContext } from '../../context/AppContext';
+import { restaurantService } from '../../services/apiService';
 
 function StatutPill({ statut }: { statut: string }) {
   const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
@@ -41,31 +42,116 @@ export default function ProductDetailScreen() {
   const slideIn = useRef(new Animated.Value(60)).current;
   const { addToCart } = useAppContext();
 
-  // Trouver le plat dans le menu mock
-  let plat: any = null;
-  for (const cat of (MOCK_RESTAURANT_USER.menu ?? [])) {
-    const found = cat.plats.find((p: any) => p.id === id);
-    if (found) { plat = { ...found, restaurantNom: MOCK_RESTAURANT_USER.nomEtablissement }; break; }
-  }
-  plat = plat ?? {
-    id: 'p1', nom: 'Poulet DG', description: 'Poulet sauté aux plantains et légumes frais',
-    prix: 4500, ingredents: ['Poulet', 'Plantains', 'Carottes', 'Poivrons'],
-    noteGlobale: 4.9, tempsPreparation: 20, restaurantNom: "Le Phénix d'Or", isPopulaire: true,
-  };
+  const [plat, setPlat] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.spring(slideIn, { toValue: 0, tension: 60, friction: 9, useNativeDriver: true }),
     ]).start();
-  }, []);
+
+    const loadPlat = async () => {
+      try {
+        const restaurants: any = await restaurantService.getNearby(3.848, 11.502);
+        let foundPlat: any = null;
+        for (const r of restaurants) {
+          if (r.menu) {
+            for (const cat of r.menu) {
+              if (cat.plats) {
+                const found = cat.plats.find((p: any) => String(p.id) === String(id));
+                if (found) {
+                  foundPlat = { ...found, restaurantNom: r.nomEtablissement, restaurantId: r.id };
+                  break;
+                }
+              }
+            }
+          }
+          if (foundPlat) break;
+        }
+
+        if (foundPlat) {
+          setPlat({
+            ...foundPlat,
+            ingredients: foundPlat.ingredients || [],
+          });
+        } else {
+          // Fallback sur le mock local
+          let mockFound = null;
+          for (const cat of (MOCK_RESTAURANT_USER.menu ?? [])) {
+            const found = cat.plats.find((p: any) => String(p.id) === String(id));
+            if (found) {
+              mockFound = { ...found, restaurantNom: MOCK_RESTAURANT_USER.nomEtablissement, restaurantId: 'r1' };
+              break;
+            }
+          }
+          if (mockFound) {
+            setPlat({
+              ...mockFound,
+              ingredients: mockFound.ingredients || [],
+            });
+          } else {
+            // Default fallback
+            setPlat({
+              id: id || 'p1',
+              nom: 'Poulet DG',
+              description: 'Poulet sauté aux plantains et légumes frais',
+              prix: 4500,
+              ingredients: ['Poulet', 'Plantains', 'Carottes', 'Poivrons'],
+              noteGlobale: 4.9,
+              tempsPreparation: 20,
+              restaurantNom: "Le Phénix d'Or",
+              restaurantId: 'r1',
+              isPopulaire: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erreur de chargement du plat depuis l'API:", err);
+        // Fallback sur le mock local
+        let mockFound = null;
+        for (const cat of (MOCK_RESTAURANT_USER.menu ?? [])) {
+          const found = cat.plats.find((p: any) => String(p.id) === String(id));
+          if (found) {
+            mockFound = { ...found, restaurantNom: MOCK_RESTAURANT_USER.nomEtablissement, restaurantId: 'r1' };
+            break;
+          }
+        }
+        setPlat(mockFound || {
+          id: id || 'p1',
+          nom: 'Poulet DG',
+          description: 'Poulet sauté aux plantains et légumes frais',
+          prix: 4500,
+          ingredients: ['Poulet', 'Plantains', 'Carottes', 'Poivrons'],
+          noteGlobale: 4.9,
+          tempsPreparation: 20,
+          restaurantNom: "Le Phénix d'Or",
+          restaurantId: 'r1',
+          isPopulaire: true,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPlat();
+  }, [id]);
 
   const handleAdd = () => {
+    if (!plat) return;
     triggerSuccess('🛒');
     setAdded(true);
-    addToCart({ id: plat.id, nom: plat.nom, prix: plat.prix, quantite: qty, restaurantId: 'resto-1' });
+    addToCart({ id: plat.id, nom: plat.nom, prix: plat.prix, quantite: qty, restaurantId: plat.restaurantId || 'r1' });
     setTimeout(() => setAdded(false), 2000);
   };
+
+  if (loading || !plat) {
+    return (
+      <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.client.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={s.container}>
