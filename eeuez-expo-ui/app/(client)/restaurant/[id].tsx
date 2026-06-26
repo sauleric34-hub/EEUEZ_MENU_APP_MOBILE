@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PressableScale, useButtonPress, FloatingReaction } from '../../../components/Animations';
 import { Colors, Typography, Spacing, Radius, glow } from '../../../constants/theme';
 import { useAppContext } from '../../../context/AppContext';
-import { MOCK_RESTAURANT_USER, RESTAURANTS_LISTE } from '../../../data/mockData';
+import { restaurantService } from '../../../services/apiService';
+import { MOCK_RESTAURANT_USER } from '../../../data/mockData';
 
 export default function RestaurantScreen() {
   const { id } = useLocalSearchParams();
@@ -15,9 +16,21 @@ export default function RestaurantScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const { emojiVisible, emoji: reactionEmoji, triggerSuccess } = useButtonPress();
 
-  // Find minimal data and full menu
-  const restoMeta = RESTAURANTS_LISTE.find(r => r.id === id) || RESTAURANTS_LISTE[0];
-  const restoFull = MOCK_RESTAURANT_USER; // Mock shared for demo
+  const [restoFull, setRestoFull] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    restaurantService.getDescription(Number(id))
+      .then(res => {
+        setRestoFull(res);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.log("Info: Le backend est hors-ligne, chargement données simulées pour restaurant", id);
+        setRestoFull(MOCK_RESTAURANT_USER);
+        setLoading(false);
+      });
+  }, [id]);
 
   // Header Parallax effect
   const headerHeight = scrollY.interpolate({
@@ -26,13 +39,17 @@ export default function RestaurantScreen() {
     extrapolate: 'clamp',
   });
 
+  if (loading || !restoFull) {
+    return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Chargement...</Text></View>;
+  }
+
   const handleAddCart = (plat: any) => {
     addToCart({
       id: plat.id,
       nom: plat.nom,
       prix: plat.prix,
       quantite: 1,
-      restaurantId: restoMeta.id,
+      restaurantId: restoFull.id,
     });
     triggerSuccess('🛒');
   };
@@ -49,7 +66,7 @@ export default function RestaurantScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
       {/* Dynamic Header */}
-      <Animated.View style={[s.header, { height: headerHeight, backgroundColor: restoMeta.couleur }]}>
+      <Animated.View style={[s.header, { height: headerHeight, backgroundColor: '#FF6B6B' }]}>
         <View style={s.headerOverlay} />
         <SafeAreaView style={s.topBar}>
           <PressableScale onPress={() => router.back()}>
@@ -58,9 +75,13 @@ export default function RestaurantScreen() {
           <View style={s.notifBtn}><Text style={{ fontSize: 22 }}>💬</Text></View>
         </SafeAreaView>
         <Animated.View style={s.headerContent}>
-          <Text style={{ fontSize: 60, marginBottom: 10 }}>{restoMeta.emoji}</Text>
-          <Text style={s.title}>{restoMeta.nom}</Text>
-          <Text style={s.subtitle}>{restoMeta.categorie} • {restoMeta.distance} km</Text>
+          <Text style={{ fontSize: 60, marginBottom: 10 }}>🍽️</Text>
+          <Text style={s.title}>{restoFull.nom}</Text>
+          <Text style={s.subtitle}>
+            {typeof restoFull.adresse === 'string' 
+              ? restoFull.adresse 
+              : `${restoFull.adresse?.rue || ''}, ${restoFull.adresse?.ville || ''}`}
+          </Text>
         </Animated.View>
       </Animated.View>
 
@@ -72,11 +93,11 @@ export default function RestaurantScreen() {
         <View style={s.infoCard}>
           <View style={s.rowBetween}>
             <View>
-              <Text style={s.ratingText}>⭐ {restoMeta.note} ({restoMeta.avis} avis)</Text>
-              <Text style={s.deliveryText}>🛵 {restoMeta.temps} min • {restoMeta.frais} FCFA</Text>
+              <Text style={s.ratingText}>⭐ {restoFull.note} ({restoFull.avis || 0} avis)</Text>
+              <Text style={s.deliveryText}>🛵 {restoFull.temps} min • {restoFull.frais} FCFA</Text>
             </View>
             <View style={s.openBadge}>
-              <Text style={s.openBadgeText}>{restoMeta.isOuvert ? 'OUVERT' : 'FERMÉ'}</Text>
+              <Text style={s.openBadgeText}>{restoFull.isOuvert ? 'OUVERT' : 'FERMÉ'}</Text>
             </View>
           </View>
           <Text style={s.description}>{restoFull.description}</Text>
@@ -104,7 +125,7 @@ export default function RestaurantScreen() {
                       </View>
                     </PressableScale>
                     <PressableScale onPress={() => handleAddCart(plat)} scaleDown={0.9}>
-                      <View style={[s.addBtn, { backgroundColor: restoMeta.couleur }]}>
+                      <View style={[s.addBtn, { backgroundColor: Colors.client.primary }]}>
                         <Text style={s.addBtnText}>+ Ajouter</Text>
                       </View>
                     </PressableScale>

@@ -39,7 +39,7 @@ export default function DrawerMenu({
   isOpen, onClose, items, activeKey, onNavigate,
   headerTitle, headerSubtitle, headerIcon: HeaderIcon, accentColor, accentBg
 }: DrawerProps) {
-  const { theme, toggleTheme, colors } = useTheme();
+  const { isDark, toggleTheme, colors } = useTheme();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   // isVisible reste true pendant l'animation de fermeture pour capturer les touches
@@ -95,7 +95,11 @@ export default function DrawerMenu({
           activeOpacity={0.7}
         >
           <View style={styles.itemIconContainer}>
-            <Icon size={20} color={isActive ? accentColor : item.danger ? colors.danger : colors.text.secondary} />
+            {typeof item.icon === 'string' ? (
+              <Text style={{ fontSize: 20 }}>{item.icon}</Text>
+            ) : (
+              <Icon size={20} color={isActive ? accentColor : item.danger ? colors.danger : colors.text.secondary} />
+            )}
           </View>
           <Text style={[
             styles.itemLabel,
@@ -136,7 +140,7 @@ export default function DrawerMenu({
 
       {/* ─── PANNEAU DRAWER ───────────────────────────────────────────── */}
       <Animated.View style={[styles.drawer, { transform: [{ translateX }], backgroundColor: colors.bg.app, borderRightColor: colors.border.default }]}>
-        <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg.app} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.bg.app} />
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* En-tête */}
@@ -163,15 +167,15 @@ export default function DrawerMenu({
               activeOpacity={0.8}
             >
               <View style={styles.row}>
-                {theme === 'dark' ? <Moon size={18} color={colors.primary} /> : <Sun size={18} color={colors.primary} />}
+                {isDark ? <Moon size={18} color={accentColor} /> : <Sun size={18} color={accentColor} />}
                 <Text style={[styles.themeBtnText, { color: colors.text.primary }]}>
-                  {theme === 'dark' ? 'Mode Luxe Sombre' : 'Mode Luxe Clair'}
+                  {isDark ? 'Mode Luxe Sombre' : 'Mode Luxe Clair'}
                 </Text>
               </View>
               <View style={[styles.toggleSwitch, { backgroundColor: colors.bg.elevated }]}>
                 <View style={[styles.toggleDot, {
-                  backgroundColor: colors.primary,
-                  alignSelf: theme === 'dark' ? 'flex-end' : 'flex-start'
+                  backgroundColor: accentColor,
+                  alignSelf: isDark ? 'flex-end' : 'flex-start'
                 }]} />
               </View>
             </TouchableOpacity>

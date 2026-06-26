@@ -1,14 +1,33 @@
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, TouchableOpacity, StyleSheet, Animated, Text } from 'react-native';
 import { Home, ShoppingBag, ChefHat, Heart, User, Map } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useAppContext } from '../../context/AppContext';
 import { Radius } from '../../constants/theme';
 
 function CustomTabBar({ state, descriptors, navigation, colors }: any) {
   const insets = useSafeAreaInsets();
+  const { cart } = useAppContext();
 
-  const ALLOWED_ROUTES = ['index', 'cart', 'explore', 'favorites', 'profile'];
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (cart.length > 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scaleAnim, { toValue: 1.2, duration: 500, useNativeDriver: true }),
+          Animated.timing(scaleAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.timing(scaleAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+        ])
+      ).start();
+    } else {
+      scaleAnim.setValue(1);
+    }
+  }, [cart.length]);
+
+  const ALLOWED_ROUTES = ['index', 'panier', 'explore', 'favorites', 'profile'];
   const visibleRoutes = state.routes.filter((route: any) => ALLOWED_ROUTES.includes(route.name));
 
   return (
@@ -32,18 +51,16 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
             canPreventDefault: true,
           });
 
-          if (!isFocused && !event.defaultPreventDefault) {
+          if (!isFocused && !event.defaultPrevented) {
             navigation.navigate(route.name);
           }
         };
 
-        let Icon = Home;
-        if (route.name === 'cart') Icon = ShoppingBag;
-        else if (route.name === 'explore') Icon = ChefHat;
-        else if (route.name === 'favorites') Icon = Heart;
-        else if (route.name === 'profile') Icon = User;
-        else if (route.name === 'index') Icon = Home;
-        else return null; // Sécurité supplémentaire
+        const Icon = route.name === 'index' ? Home :
+                     route.name === 'panier' ? ShoppingBag :
+                     route.name === 'explore' ? ChefHat :
+                     route.name === 'favorites' ? Heart :
+                     User;
 
         return (
           <TouchableOpacity
@@ -51,11 +68,18 @@ function CustomTabBar({ state, descriptors, navigation, colors }: any) {
             onPress={onPress}
             style={s.tabItem}
           >
-            <Icon
-              size={26}
-              color={isFocused ? colors.primary : colors.text.muted}
-              strokeWidth={isFocused ? 2.5 : 2}
-            />
+            <Animated.View style={route.name === 'panier' && cart.length > 0 ? { transform: [{ scale: scaleAnim }] } : {}}>
+              <Icon
+                size={26}
+                color={isFocused ? colors.primary : colors.text.muted}
+                strokeWidth={isFocused ? 2.5 : 2}
+              />
+              {route.name === 'panier' && cart.length > 0 && (
+                <View style={[s.badge, { backgroundColor: colors.danger }]}>
+                  <Text style={s.badgeText}>{cart.length}</Text>
+                </View>
+              )}
+            </Animated.View>
           </TouchableOpacity>
         );
       })}
@@ -72,7 +96,7 @@ export default function ClientLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
-      <Tabs.Screen name="cart" options={{ title: 'Panier' }} />
+      <Tabs.Screen name="panier" options={{ title: 'Panier' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="favorites" options={{ title: 'Favoris' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
@@ -101,9 +125,26 @@ const s = StyleSheet.create({
     shadowRadius: 10,
   },
   tabItem: {
-    width: 50,
-    height: 50,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

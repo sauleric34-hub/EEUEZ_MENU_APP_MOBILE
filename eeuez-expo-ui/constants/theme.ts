@@ -25,6 +25,7 @@ export const COLORS = {
       app: '#FDFDFD',
       surface: '#FFFFFF',
       elevated: '#F9F9F9',
+      screen: '#FDFDFD',
     },
     text: {
       primary: '#1A1A1A',
@@ -36,6 +37,10 @@ export const COLORS = {
       default: '#E5E5EA',
       subtle: '#F2F2F7',
     },
+    client: { primary: '#FF6B00', bg: '#FFF0E6', light: '#FFA366' },
+    restaurant: { primary: '#4CAF50', bg: '#E8F5E9', light: '#81C784' },
+    livreur: { primary: '#2196F3', bg: '#E3F2FD', light: '#64B5F6', glow: '#64B5F6' },
+    glass: { bg: 'rgba(255,255,255,0.7)', border: 'rgba(255,255,255,0.2)' },
   },
   dark: {
     primary: '#FF6B00',
@@ -53,6 +58,7 @@ export const COLORS = {
       app: '#0A0A0A',
       surface: '#121212',
       elevated: '#1C1C1E',
+      screen: '#0A0A0A',
     },
     text: {
       primary: '#FFFFFF',
@@ -64,6 +70,10 @@ export const COLORS = {
       default: '#2C2C2E',
       subtle: '#1C1C1E',
     },
+    client: { primary: '#FF6B00', bg: '#FFF0E6', light: '#FFA366' },
+    restaurant: { primary: '#4CAF50', bg: '#E8F5E9', light: '#81C784' },
+    livreur: { primary: '#2196F3', bg: '#E3F2FD', light: '#64B5F6', glow: '#64B5F6' },
+    glass: { bg: 'rgba(0,0,0,0.5)', border: 'rgba(255,255,255,0.1)' },
   },
 };
 

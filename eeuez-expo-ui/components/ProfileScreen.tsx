@@ -1,29 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
-import { MOCK_CLIENT } from '../data/mockData';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
 import { platService, commandeService } from '../services/apiService';
 import { PressableScale } from './Animations';
-import { useAppContext } from '../context/AppContext';
-import { RESTAURANTS_LISTE } from '../data/mockData';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MOCK_RESTAURANT_USER } from '../data/mockData';
 
 export default function ProfileScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const { pastOrders, likedDishes } = useAppContext();
-  
-  // Find plat details from MOCK_RESTAURANT_USER
-  const likedPlatsDetails = (likedDishes || []).map(id => {
-    for (const cat of MOCK_RESTAURANT_USER.menu) {
-      const plat = cat.plats.find(p => p.id.toString() === id);
-      if (plat) return plat;
-    }
-    return null;
-  }).filter(Boolean);
+  const { user } = useAuth();
+  const [commandes, setCommandes] = useState<any[]>([]);
+  const [likedPlats, setLikedPlats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const commandes = pastOrders || [];
-  const likedPlats = likedPlatsDetails || [];
-  const loading = false;
+  useEffect(() => {
+    Promise.all([
+      commandeService.getHistorique().catch(() => []),
+      platService.getPlatsLikes().catch(() => [])
+    ]).then(([cmdRes, likesRes]) => {
+      setCommandes(Array.isArray(cmdRes) ? cmdRes : (cmdRes.data || []));
+      setLikedPlats(Array.isArray(likesRes) ? likesRes : (likesRes.data || []));
+    }).finally(() => setLoading(false));
+  }, []);
+
 
   return (
     <View style={s.container}>
@@ -41,8 +39,8 @@ export default function ProfileScreen({ onOpenDrawer }: { onOpenDrawer: () => vo
             <View style={s.avatarContainer}>
               <Text style={{ fontSize: 50 }}>👤</Text>
             </View>
-            <Text style={s.userName}>{MOCK_CLIENT.prenom} {MOCK_CLIENT.nom}</Text>
-            <Text style={s.userEmail}>{MOCK_CLIENT.telephone}</Text>
+            <Text style={s.userName}>{user?.prenom} {user?.nom}</Text>
+            <Text style={s.userEmail}>{user?.email}</Text>
             <View style={s.editBtn}>
               <Text style={s.editBtnText}>Modifier le profil</Text>
             </View>

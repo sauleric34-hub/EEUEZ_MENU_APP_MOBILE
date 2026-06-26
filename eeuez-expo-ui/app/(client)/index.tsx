@@ -7,19 +7,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DrawerMenu, { DrawerItem } from '../../components/DrawerMenu';
 import { PressableScale, ConfettiBurst, EmojiPop, FloatingReaction, PulseRing, useButtonPress } from '../../components/Animations';
 import * as Location from 'expo-location';
-import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } from '../../constants/theme';
+import { Colors, Typography, Spacing, Radius, glow, glowSubtle } from '../../constants/theme';
 import { MOCK_CLIENT, RESTAURANTS_LISTE } from '../../data/mockData';
 import { restaurantService } from '../../services/apiService';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import CarteScreen from '../../components/CarteScreen';
 import ProfileScreen from '../../components/ProfileScreen';
 import { useAppContext } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
+import { ShoppingBag } from 'lucide-react-native';
 
-// DRAWER_ITEMS sera généré dynamiquement dans le composant principal
-// ...
+const LocalStatutConfig: Record<string, any> = {
+  en_attente: { label: 'En attente', color: Colors.text.secondary, bg: Colors.bg.elevated, emoji: '⏳' },
+  acceptee: { label: 'Acceptée', color: Colors.client.primary, bg: Colors.bg.elevated, emoji: '✅' },
+  en_preparation: { label: 'Préparation', color: Colors.accent, bg: Colors.bg.elevated, emoji: '🔥' },
+  prete: { label: 'Prête', color: Colors.success, bg: Colors.successBg, emoji: '🍽️' },
+  livreur_assigne: { label: 'Collecte', color: Colors.info, bg: Colors.bg.elevated, emoji: '🚲' },
+  en_collecte: { label: 'En collecte', color: Colors.info, bg: Colors.bg.elevated, emoji: '📦' },
+  en_livraison: { label: 'En chemin', color: Colors.success, bg: Colors.successBg, emoji: '🛵' },
+  livree: { label: 'Livrée', color: Colors.success, bg: Colors.successBg, emoji: '🎉' },
+  refusee: { label: 'Refusée', color: Colors.danger, bg: Colors.dangerBg, emoji: '❌' },
+  annulee: { label: 'Annulée', color: Colors.danger, bg: Colors.dangerBg, emoji: '🚫' },
+};
 
 function StatutPill({ statut }: { statut: string }) {
-  const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
+  const cfg = LocalStatutConfig[statut] || LocalStatutConfig.en_attente;
   return (
     <View style={[s.pill, { backgroundColor: cfg.bg }]}>
       <Text style={[s.pillText, { color: cfg.color }]}>{cfg.emoji} {cfg.label}</Text>
@@ -86,7 +98,8 @@ function RestoCard({ resto }: { resto: any }) {
 
 // ─── ACCUEIL ───────────────────────────────────────────────────────────────
 function AccueilScreen({ onOpenDrawer, onNavigate }: { onOpenDrawer: () => void, onNavigate: (screen: string) => void }) {
-  const { activeOrder, unreadCount } = useAppContext();
+  const { activeOrders, unreadCount } = useAppContext();
+  const { user } = useAuth();
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideIn = useRef(new Animated.Value(20)).current;
   const STATUTS = ['en_preparation', 'prete', 'livreur_assigne', 'en_livraison'];
@@ -112,24 +125,31 @@ function AccueilScreen({ onOpenDrawer, onNavigate }: { onOpenDrawer: () => void,
         } else {
           setAddress('Position Inconnue');
         }
+        fetchRestaurants(loc.coords);
       } catch (e) {
         setAddress('Erreur localisation');
+        fetchRestaurants({ latitude: 3.86667, longitude: 11.51667 });
       }
     })();
 
-    restaurantService.getMapRestaurants(3.86667, 11.51667, 50) // Mock coords Yaoundé
-      .then(res => {
-        if (!res.data || res.data.length === 0) {
+    const fetchRestaurants = (userLoc: { latitude: number, longitude: number }) => {
+      restaurantService.getMapRestaurants(userLoc.latitude, userLoc.longitude, 10.0)
+        .then(res => {
+          // Handle direct array response from fetch instead of axios .data
+          const restaurants = Array.isArray(res) ? res : (res.data || []);
+          if (restaurants.length === 0) {
+            setRestaurants(RESTAURANTS_LISTE);
+          } else {
+            setRestaurants(restaurants);
+          }
+        })
+        .catch(err => {
+          console.error("Erreur API restos:", err);
           setRestaurants(RESTAURANTS_LISTE);
-        } else {
-          setRestaurants(res.data);
-        }
-      })
-      .catch(err => {
-        console.log("Info: Le backend est hors-ligne, chargement des données locales.");
-        setRestaurants(RESTAURANTS_LISTE);
-      })
-      .finally(() => setLoadingRestos(false));
+        })
+        .finally(() => setLoadingRestos(false));
+    };
+
     Animated.parallel([
       Animated.timing(fadeIn, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.timing(slideIn, { toValue: 0, duration: 600, useNativeDriver: true }),
@@ -156,7 +176,7 @@ function AccueilScreen({ onOpenDrawer, onNavigate }: { onOpenDrawer: () => void,
               <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
             </PressableScale>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
-              <Text style={s.greeting}>Bonjour, {MOCK_CLIENT.prenom} 👋</Text>
+              <Text style={s.greeting}>Bonjour, {user?.prenom || 'Client'} 👋</Text>
               <Text style={s.locationText}>📍 {address}</Text>
             </View>
             <PressableScale scaleDown={0.85} onPress={() => onNavigate('notifications')}>
@@ -173,30 +193,29 @@ function AccueilScreen({ onOpenDrawer, onNavigate }: { onOpenDrawer: () => void,
           </View>
         </Animated.View>
 
-        {/* Commande live (Uniquement s'il y a une vraie commande active) */}
-        {activeOrder && (
-          <Animated.View style={[s.liveCard, { opacity: fadeIn }, glow(Colors.client.glow, 14)]}>
+        {/* Commandes live */}
+        {activeOrders.map(order => (
+          <Animated.View key={order.id} style={[s.liveCard, { opacity: fadeIn }, glow(Colors.client.glow, 14)]}>
             <View style={s.liveBadgeRow}>
               <View style={s.liveDotWrap}><View style={s.liveDot} /></View>
               <Text style={[s.liveLabel, { color: Colors.danger }]}>EN COURS</Text>
             </View>
-            <Text style={s.liveTitle}>Commande #{activeOrder.id}</Text>
-            <Text style={s.liveSub}>Total: {activeOrder.total} FCFA</Text>
+            <Text style={s.liveTitle}>Commande #{order.id}</Text>
+            <Text style={s.liveSub}>Total: {order.total} FCFA</Text>
             <View style={s.liveFooter}>
-              <StatutPill statut={activeOrder.status} />
+              <StatutPill statut={order.status} />
             </View>
-            {/* Bouton avec FloatingReaction + confetti */}
             <View style={{ position: 'relative', alignItems: 'center' }}>
               <FloatingReaction emoji={reactionEmoji} visible={emojiVisible} />
               <ConfettiBurst visible={confettiVisible} />
-              <PressableScale onPress={() => { triggerSuccess('🛵'); router.push(`/tracking/${activeOrder.id}`); }} style={{ width: '100%' }}>
+              <PressableScale onPress={() => { triggerSuccess('🛵'); router.push(`/tracking/${order.id}`); }} style={{ width: '100%' }}>
                 <View style={[s.liveSuiviBtn, glow(Colors.client.glow, 8)]}>
                   <Text style={s.liveSuiviBtnText}>📍 Suivre en direct</Text>
                 </View>
               </PressableScale>
             </View>
           </Animated.View>
-        )}
+        ))}
 
         {/* Bannière Promo */}
         <Animated.View style={[s.promoBanner, { opacity: fadeIn }]}>
@@ -254,150 +273,72 @@ function AccueilScreen({ onOpenDrawer, onNavigate }: { onOpenDrawer: () => void,
 
 // ─── SUIVI TEMPS-RÉEL ─────────────────────────────────────────────────────
 function SuiviScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const { activeOrder } = useAppContext();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const slideAnims = useRef(Array(6).fill(0).map(() => new Animated.Value(0))).current;
-  const [currentStep, setCurrentStep] = useState(3);
-  const { confettiVisible, emojiVisible, emoji, triggerSuccess } = useButtonPress();
-
-  useEffect(() => {
-    Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.1, duration: 900, useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1,   duration: 900, useNativeDriver: true }),
-    ])).start();
-    Animated.stagger(80, slideAnims.map(a =>
-      Animated.spring(a, { toValue: 1, tension: 70, friction: 10, useNativeDriver: true })
-    )).start();
-
-    // Simulation de l'avancée de la livraison
-    const timer = setInterval(() => {
-      setCurrentStep(prev => {
-        if (prev < 5) return prev + 1;
-        clearInterval(timer);
-        return prev;
-      });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (currentStep === 5) {
-      setTimeout(() => triggerSuccess('🎉'), 500);
-    }
-  }, [currentStep]);
-
-  const orderTime = activeOrder ? new Date(activeOrder.date) : new Date();
-  const h = (offset: number) => {
-    const d = new Date(orderTime.getTime() + offset * 60000);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-  };
-
-  const restoName = activeOrder?.items[0]?.nom || 'Restaurant';
-
-  const ETAPES = [
-    { label: 'Commande reçue',       heure: h(0), acteur: 'Client' },
-    { label: 'Acceptée — 25 min',    heure: h(2), acteur: 'Restaurant' },
-    { label: 'En préparation',       heure: h(3), acteur: restoName },
-    { label: 'Livreur assigné',      heure: h(15), acteur: 'EEUEZ' },
-    { label: 'En route vers vous',   heure: h(18), acteur: 'Livreur 🛵' },
-    { label: 'Livraison estimée',    heure: `~${h(35)}`, acteur: '' },
-  ];
+  const { activeOrders } = useAppContext();
+  const router = useRouter();
 
   return (
-    <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
-      <SafeAreaView>
+    <View style={s.screen}>
+      <SafeAreaView style={{ flex: 1 }}>
         <View style={s.topBar}>
           <PressableScale onPress={onOpenDrawer}>
             <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
           </PressableScale>
           <Text style={[s.greeting, { fontSize: 18, flex: 1, marginLeft: 12 }]}>
-            {activeOrder ? `Suivi ${activeOrder.id}` : 'Suivi en Direct'}
+            Mes Livraisons ({activeOrders.length})
           </Text>
         </View>
 
-        {/* Carte livreur */}
-        <View style={[s.trackCard, glow(Colors.client.glow, 18)]}>
-          <View style={s.mapMock}>
-            <Text style={s.mapMockBg}>🗺️</Text>
-            <Animated.View style={[s.livreurPin, { transform: [{ scale: pulseAnim }] }]}>
-              <Text style={{ fontSize: 32 }}>🛵</Text>
-              <View style={[s.pinRipple, { borderColor: Colors.client.primary }]} />
-            </Animated.View>
-          </View>
-          <View style={s.livreurInfoRow}>
-            <View style={[s.livreurAvatar, { backgroundColor: Colors.client.bg }]}>
-              <Text style={{ fontSize: 22 }}>👨</Text>
+        <ScrollView style={{ flex: 1, padding: Spacing.md }} showsVerticalScrollIndicator={false}>
+          {activeOrders.length === 0 ? (
+            <View style={{ alignItems: 'center', marginTop: 100 }}>
+              <Text style={{ fontSize: 50, marginBottom: 20 }}>📦</Text>
+              <Text style={{ ...Typography.h3, color: Colors.text.primary }}>Aucune livraison en cours</Text>
+              <Text style={{ ...Typography.body, color: Colors.text.muted, marginTop: 10, textAlign: 'center' }}>
+                Vos commandes apparaîtront ici une fois validées.
+              </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.livreurNom}>Paul Nkolo</Text>
-              <Text style={s.livreurSub}>🏍️ Yamaha · YD-5678-A · ⭐ 4.7</Text>
-            </View>
-            <PressableScale scaleDown={0.85}>
-              <View style={[s.callBtn, { backgroundColor: Colors.client.bg }, glowSubtle(Colors.client.primary)]}>
-                <Text style={{ fontSize: 20 }}>📞</Text>
-              </View>
-            </PressableScale>
-          </View>
-          <View style={s.etaRow}>
-            <Text style={s.etaLabel}>Arrivée estimée</Text>
-            <Text style={[s.etaValue, { color: Colors.client.primary }]}>~12 minutes</Text>
-          </View>
-        </View>
+          ) : (
+            activeOrders.map(order => {
+              const restoName = order.items[0]?.nom || 'Restaurant';
+              const articleCount = order.items.reduce((sum: number, item: any) => sum + item.quantite, 0);
 
-        {/* Timeline */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>{currentStep === 5 ? 'Commande Livrée !' : 'Progression de la Commande'}</Text>
-          {ETAPES.map((etape, i) => {
-            const fait = i <= currentStep;
-            const enCours = i === currentStep;
-            const anim = slideAnims[i] ?? new Animated.Value(1);
-            return (
-              <Animated.View key={i} style={[s.etapeRow, {
-                opacity: anim,
-                transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }]
-              }]}>
-                <View style={s.etapeLeft}>
-                  <View style={[s.etapeDot,
-                    fait && s.etapeDotFait,
-                    enCours && { backgroundColor: Colors.bg.elevated, borderColor: Colors.client.primary, ...glow(Colors.client.glow, 6) }
-                  ]}>
-                    {fait && !enCours && <Text style={{ fontSize: 9, color: '#FFF' }}>✓</Text>}
-                    {enCours && <View style={s.etapeDotPulse} />}
+              return (
+                <View key={order.id} style={[s.trackCard, glow(Colors.client.glow, 8), { marginBottom: Spacing.md, padding: Spacing.md }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ ...Typography.h3, fontSize: 16 }}>Commande {order.id}</Text>
+                    <View style={[s.pill, { backgroundColor: Colors.client.bg }]}>
+                      <Text style={[s.pillText, { color: Colors.client.primary }]}>En route</Text>
+                    </View>
                   </View>
-                  {i < ETAPES.length - 1 && (
-                    <View style={[s.etapeLine, fait && { backgroundColor: Colors.client.primary + '44' }]} />
-                  )}
-                </View>
-                <View style={s.etapeRight}>
-                  <Text style={[s.etapeLabel, !fait && { color: Colors.text.muted }]}>{etape.label}</Text>
-                  <View style={s.row}>
-                    {etape.acteur ? (
-                      <View style={[s.acteurChip, { backgroundColor: fait ? Colors.client.bg : Colors.bg.surface }]}>
-                        <Text style={[s.acteurText, { color: fait ? Colors.client.primary : Colors.text.muted }]}>{etape.acteur}</Text>
-                      </View>
-                    ) : null}
-                    <Text style={s.etapeHeure}>{etape.heure}</Text>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: Colors.border.default }}>
+                      <Text style={{ fontSize: 20 }}>🍽️</Text>
+                    </View>
+                    <View>
+                      <Text style={{ ...Typography.bodyBold }}>{restoName}</Text>
+                      <Text style={{ ...Typography.small, color: Colors.text.secondary }}>
+                        {articleCount} article{articleCount > 1 ? 's' : ''} • {order.total} FCFA
+                      </Text>
+                    </View>
                   </View>
+
+                  <TouchableOpacity 
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/tracking/${order.id}`)}
+                    style={[s.liveSuiviBtn, { backgroundColor: Colors.danger, flexDirection: 'row', justifyContent: 'center', gap: 8 }]}
+                  >
+                    <Text style={{ fontSize: 16, color: '#FFF' }}>📍</Text>
+                    <Text style={[s.liveSuiviBtnText, { color: '#FFF' }]}>Suivre sur la carte détaillée</Text>
+                  </TouchableOpacity>
                 </View>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        {/* Signaler un problème UC-X8 */}
-        <View style={{ position: 'relative', alignItems: 'center' }}>
-          <ConfettiBurst visible={confettiVisible} />
-          <EmojiPop emoji={emoji} visible={emojiVisible} size={28} />
-          <PressableScale style={{ width: '100%' }}>
-            <View style={[s.signalBtn, { borderColor: Colors.danger + '44' }]}>
-              <Text style={[s.signalBtnText, { color: Colors.danger }]}>⚠️  Signaler un problème (UC-X8)</Text>
-            </View>
-          </PressableScale>
-        </View>
-
-        <View style={{ height: 80 }} />
+              );
+            })
+          )}
+          <View style={{ height: 80 }} />
+        </ScrollView>
       </SafeAreaView>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -425,9 +366,10 @@ function PlaceholderScreen({ title, emoji, desc, onOpenDrawer }: {
   );
 }
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────
+// ─── NOTIFICATIONS ──────────────────────────────────────────────────────────
 function NotificationsScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const { activeOrder } = useAppContext();
+  const { activeOrders } = useAppContext();
+  const activeOrder = activeOrders[0];
   
   const notifs = [];
   if (activeOrder) {
@@ -514,7 +456,7 @@ function FavorisScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
 // ─── COMMANDES ────────────────────────────────────────────────────────────
 function CommandesScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const { pastOrders, activeOrder } = useAppContext();
+  const { pastOrders, activeOrders } = useAppContext();
   
   return (
     <View style={s.screen}>
@@ -526,13 +468,13 @@ function CommandesScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           <Text style={[s.greeting, { fontSize: 18, flex: 1, marginLeft: 12 }]}>Mes Commandes</Text>
         </View>
         <ScrollView contentContainerStyle={{ padding: Spacing.md }}>
-          {activeOrder && (
-            <View style={[s.section, { borderColor: Colors.client.primary, borderWidth: 1 }]}>
+          {activeOrders.map(order => (
+            <View key={order.id} style={[s.section, { borderColor: Colors.client.primary, borderWidth: 1 }]}>
               <Text style={[s.sectionTitle, { color: Colors.client.primary }]}>En cours</Text>
-              <Text style={Typography.bodyBold}>Commande #{activeOrder.id}</Text>
-              <Text style={Typography.small}>{activeOrder.items.length} articles • {activeOrder.total} FCFA</Text>
+              <Text style={Typography.bodyBold}>Commande #{order.id}</Text>
+              <Text style={Typography.small}>{order.items.length} articles • {order.total} FCFA</Text>
             </View>
-          )}
+          ))}
 
           {pastOrders.length > 0 ? (
             pastOrders.map(order => (
@@ -550,7 +492,7 @@ function CommandesScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               </View>
             ))
           ) : (
-             !activeOrder && (
+             activeOrders.length === 0 && (
                <View style={{ alignItems: 'center', marginTop: 40 }}>
                  <Text style={{ fontSize: 40 }}>📦</Text>
                  <Text style={{ ...Typography.h3, marginTop: 10 }}>Aucune commande</Text>
@@ -716,9 +658,21 @@ function AvisScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function ClientApp() {
-  const { cart, activeOrder, unreadCount } = useAppContext();
+  const { cart, activeOrders, unreadCount } = useAppContext();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [screen, setScreen] = useState('accueil');
+  
+  // Lecture du paramètre screen s'il existe (ex: /?screen=carte)
+  const params = useLocalSearchParams();
+  const initialScreen = params.screen ? String(params.screen) : 'accueil';
+  const [screen, setScreen] = useState(initialScreen);
+  
+  // Mettre à jour l'écran si le paramètre change
+  useEffect(() => {
+    if (params.screen) {
+      setScreen(String(params.screen));
+    }
+  }, [params.screen]);
+
   const open = () => setDrawerOpen(true);
 
   const DRAWER_ITEMS: DrawerItem[] = [
@@ -726,8 +680,8 @@ export default function ClientApp() {
     { key: 'carte',         label: 'Carte & Restaurants',  icon: '🗺️' },
     { key: 'scanner',       label: 'Scanner QR Code',      icon: '📷' },
     { key: 'panier',        label: 'Mon Panier',           icon: '🛒', badge: cart.length > 0 ? cart.length : undefined, section: 'Commandes' },
-    { key: 'commandes',     label: 'Mes Commandes',        icon: '📦' },
-    ...(activeOrder ? [{ key: 'suivi', label: 'Suivi en cours', icon: '📍' }] : []),
+    { key: 'commandes',     label: 'Mes Commandes',        icon: '🧾' },
+    ...(activeOrders.length > 0 ? [{ key: 'suivi', label: 'Suivi en cours', icon: '🛵' }] : []),
     { key: 'favoris',       label: 'Restaurants Favoris',  icon: '❤️', section: 'Mon Compte' },
     { key: 'adresses',      label: 'Mes Adresses',         icon: '📌' },
     { key: 'paiements',     label: 'Paiements',            icon: '💳' },
@@ -767,7 +721,7 @@ export default function ClientApp() {
         onNavigate={setScreen}
         headerTitle={`${MOCK_CLIENT.prenom} ${MOCK_CLIENT.nom}`}
         headerSubtitle="Client · Yaoundé, Cameroun"
-        headerEmoji="🛍️"
+        headerIcon={ShoppingBag}
         accentColor={Colors.client.primary}
         accentBg={Colors.client.bg}
       />

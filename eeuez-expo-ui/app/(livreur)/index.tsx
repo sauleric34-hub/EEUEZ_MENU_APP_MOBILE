@@ -7,7 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DrawerMenu, { DrawerItem } from '../../components/DrawerMenu';
 import { PressableScale, ConfettiBurst, EmojiPop, FloatingReaction, PulseRing, useButtonPress } from '../../components/Animations';
 import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } from '../../constants/theme';
-import { MOCK_LIVREUR } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import { livreurService } from '../../services/apiService';
+import { Bike } from 'lucide-react-native';
 
 const DRAWER_ITEMS: DrawerItem[] = [
   { key: 'tableau_bord', label: 'Tableau de Bord',       icon: '🏠', section: 'Navigation' },
@@ -22,9 +24,33 @@ const DRAWER_ITEMS: DrawerItem[] = [
   { key: 'deconnexion',  label: 'Se déconnecter',         icon: '🚪', danger: true },
 ];
 
+// ─── COMPOSANTS UTILES ────────────────────────────────────────────────────────
+function LivraisonCard({ liv }: { liv: any }) {
+  const { confettiVisible: cv, emojiVisible: ev, emoji: em, triggerSuccess: ts } = useButtonPress();
+  return (
+    <View style={{ position: 'relative' }}>
+      <EmojiPop emoji={em} visible={ev} size={22} />
+      <ConfettiBurst visible={cv} />
+      <PressableScale onPress={() => ts('⭐')} style={s.livCard}>
+        <View style={[s.livIcon, { backgroundColor: Colors.successBg }]}>
+          <Text style={{ fontSize: 20 }}>✅</Text>
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={s.livId}>{liv.id} — {liv.client}</Text>
+          <Text style={s.livQuartier}>📍 {liv.quartier}</Text>
+          <Text style={{ fontSize: 12, marginTop: 2 }}>{'⭐'.repeat(liv.note)}</Text>
+        </View>
+        <Text style={[s.livMontant, { color: Colors.livreur.primary }]}>{liv.montant} F</Text>
+      </PressableScale>
+    </View>
+  );
+}
+
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
 function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+  const { user } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
+  const [missions, setMissions] = useState<any[]>([]);
   const toggleAnim = useRef(new Animated.Value(1)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   const missionAnim = useRef(new Animated.Value(0)).current;
@@ -49,6 +75,11 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
     const t1 = setTimeout(() => setMissionStatut('en_livraison'), 5000);
     const t2 = setInterval(() => setEtaMin(prev => Math.max(1, prev - 1)), 8000);
+    
+    livreurService.getMissions()
+      .then(res => setMissions(res))
+      .catch(err => console.log("Erreur missions ou mock:", err));
+      
     return () => { clearTimeout(t1); clearInterval(t2); };
   }, []);
 
@@ -76,7 +107,7 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
             </PressableScale>
             <View style={{ flex: 1, marginHorizontal: 10 }}>
-              <Text style={s.greeting}>Bonjour, {MOCK_LIVREUR.prenom} 👋</Text>
+              <Text style={s.greeting}>Bonjour, {user?.prenom || 'Livreur'} 👋</Text>
               <Text style={s.subTitle}>🏍️ Yamaha · YD-5678-A</Text>
             </View>
             {/* Toggle Online + confetti */}
@@ -178,9 +209,9 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           <Text style={s.sectionTitle}>Aujourd'hui</Text>
           <View style={s.statsRow}>
             {[
-              { e: '💵', l: 'Gains',     v: `${MOCK_LIVREUR.gainJour.toLocaleString()} F`, color: Colors.livreur.primary, bg: Colors.livreur.bg },
-              { e: '✅', l: 'Livraisons', v: '7', color: Colors.restaurant.primary, bg: Colors.restaurant.bg },
-              { e: '⭐', l: 'Ma Note',   v: `${MOCK_LIVREUR.noteGlobale}`, color: Colors.client.primary, bg: Colors.client.bg },
+              { e: '💵', l: 'Gains',     v: `${user?.stats.gainJour.toLocaleString()} F`, color: Colors.livreur.primary, bg: Colors.livreur.bg },
+              { e: '✅', l: 'Livraisons', v: `${user?.stats.nombreLivraisons}`, color: Colors.restaurant.primary, bg: Colors.restaurant.bg },
+              { e: '⭐', l: 'Ma Note',   v: `${user?.stats.noteGlobale}`, color: Colors.client.primary, bg: Colors.client.bg },
             ].map(stat => (
               <PressableScale key={stat.l} style={[s.statCard, glowSubtle(stat.color)]} scaleDown={0.94}>
                 <Text style={{ fontSize: 24, marginBottom: 4 }}>{stat.e}</Text>
@@ -198,26 +229,9 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
             { id: '#CMD-040', client: 'Marc T.',  quartier: 'Mvog-Mbi', montant: 1000, note: 5 },
             { id: '#CMD-039', client: 'Alice F.', quartier: 'Etoudi',   montant: 800,  note: 4 },
             { id: '#CMD-038', client: 'Jean K.',  quartier: 'Mendong',  montant: 1200, note: 5 },
-          ].map(liv => {
-            const { confettiVisible: cv, emojiVisible: ev, emoji: em, triggerSuccess: ts } = useButtonPress();
-            return (
-              <View key={liv.id} style={{ position: 'relative' }}>
-                <EmojiPop emoji={em} visible={ev} size={22} />
-                <ConfettiBurst visible={cv} />
-                <PressableScale onPress={() => ts('⭐')} style={s.livCard}>
-                  <View style={[s.livIcon, { backgroundColor: Colors.successBg }]}>
-                    <Text style={{ fontSize: 20 }}>✅</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={s.livId}>{liv.id} — {liv.client}</Text>
-                    <Text style={s.livQuartier}>📍 {liv.quartier}</Text>
-                    <Text style={{ fontSize: 12, marginTop: 2 }}>{'⭐'.repeat(liv.note)}</Text>
-                  </View>
-                  <Text style={[s.livMontant, { color: Colors.livreur.primary }]}>{liv.montant} F</Text>
-                </PressableScale>
-              </View>
-            );
-          })}
+          ].map(liv => (
+            <LivraisonCard key={liv.id} liv={liv} />
+          ))}
         </View>
 
         <View style={{ height: 80 }} />
@@ -228,6 +242,7 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
 // ─── GAINS ────────────────────────────────────────────────────────────────
 function GainsScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+  const { user } = useAuth();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, tension: 65, friction: 8, useNativeDriver: true }).start();
@@ -243,15 +258,15 @@ function GainsScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         </View>
         <Animated.View style={[s.gainsHero, glow(Colors.livreur.glow, 20), { transform: [{ scale: scaleAnim }] }]}>
           <Text style={s.gainsHeroLabel}>Total ce mois</Text>
-          <Text style={[s.gainsHeroVal, { color: Colors.livreur.primary }]}>{MOCK_LIVREUR.gainSemaine.toLocaleString()}</Text>
+          <Text style={[s.gainsHeroVal, { color: Colors.livreur.primary }]}>{user?.stats.gainSemaine.toLocaleString()}</Text>
           <Text style={s.gainsHeroCur}>FCFA</Text>
-          <Text style={s.gainsHeroSub}>{MOCK_LIVREUR.nombreLivraisons} livraisons · ⭐ {MOCK_LIVREUR.noteGlobale}</Text>
+          <Text style={s.gainsHeroSub}>{user?.stats.nombreLivraisons} livraisons · ⭐ {user?.stats.noteGlobale}</Text>
         </Animated.View>
         <View style={s.section}>
           <Text style={s.sectionTitle}>Par période</Text>
           {[
-            { label: "Aujourd'hui",    val: MOCK_LIVREUR.gainJour,    livs: 7 },
-            { label: 'Cette semaine',  val: MOCK_LIVREUR.gainSemaine, livs: 34 },
+            { label: "Aujourd'hui",    val: user?.stats.gainJour,    livs: 7 },
+            { label: 'Cette semaine',  val: user?.stats.gainSemaine, livs: 34 },
             { label: 'Ce mois',        val: 580000,                   livs: 145 },
           ].map(p => (
             <PressableScale key={p.label} style={s.gainRow}>
@@ -321,9 +336,9 @@ export default function LivreurApp() {
         items={DRAWER_ITEMS}
         activeKey={screen}
         onNavigate={setScreen}
-        headerTitle={`${MOCK_LIVREUR.prenom} ${MOCK_LIVREUR.nom}`}
+        headerTitle={`${user?.prenom} ${user?.nom}`}
         headerSubtitle="Livreur · Yamaha YD-5678-A"
-        headerEmoji="🛵"
+        headerIcon={Bike}
         accentColor={Colors.livreur.primary}
         accentBg={Colors.livreur.bg}
       />

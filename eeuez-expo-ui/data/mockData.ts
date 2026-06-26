@@ -145,17 +145,9 @@ export const MOCK_COMMANDES: Commande[] = [
 ];
 
 export const RESTAURANTS_LISTE = [
-<<<<<<< HEAD:data/mockData.ts
-  { id: 'r1', nom: "Le Phénix d'Or", categorie: 'Camerounais', icon: 'ChefHat', note: 4.8, avis: 342, temps: 25, frais: 500, distance: 1.2, isOuvert: true, couleur: '#FF6B35' },
-  { id: 'r2', nom: 'Pizza Palace', categorie: 'Pizzeria', icon: 'Pizza', note: 4.5, avis: 180, temps: 30, frais: 800, distance: 2.1, isOuvert: true, couleur: '#E63946' },
-  { id: 'r3', nom: 'Chez Mama Africa', categorie: 'Africain', icon: 'Flame', note: 4.6, avis: 95, temps: 20, frais: 300, distance: 0.8, isOuvert: false, couleur: '#2A9D8F' },
-  { id: 'r4', nom: 'Speed Burger', categorie: 'Fast Food', icon: 'Dam', note: 4.2, avis: 430, temps: 15, frais: 600, distance: 3.5, isOuvert: true, couleur: '#E9C46A' },
-  { id: 'r5', nom: 'Sakura Sushi', categorie: 'Japonais', icon: 'Fish', note: 4.7, avis: 67, temps: 40, frais: 1500, distance: 4.2, isOuvert: true, couleur: '#F4A261' },
-=======
-  { id: 'r1', nom: "Le Phénix d'Or", categorie: 'Camerounais', note: 4.8, avis: 342, temps: 25, frais: 500, distance: 1.2, isOuvert: true, couleur: '#FF6B35', emoji: '🍲', latitude: 3.8705, longitude: 11.5115 }, // Bastos area
-  { id: 'r2', nom: 'Pizza Palace', categorie: 'Pizzeria', note: 4.5, avis: 180, temps: 30, frais: 800, distance: 2.1, isOuvert: true, couleur: '#E63946', emoji: '🍕', latitude: 3.8475, longitude: 11.5025 }, // Centre Ville
-  { id: 'r3', nom: 'Chez Mama Africa', categorie: 'Africain', note: 4.6, avis: 95, temps: 20, frais: 300, distance: 0.8, isOuvert: false, couleur: '#2A9D8F', emoji: '🥘', latitude: 3.8805, longitude: 11.5205 }, // Diderot area
-  { id: 'r4', nom: 'Speed Burger', categorie: 'Fast Food', note: 4.2, avis: 430, temps: 15, frais: 600, distance: 3.5, isOuvert: true, couleur: '#E9C46A', emoji: '🍔', latitude: 3.8905, longitude: 11.5305 }, // Titi Garage area
-  { id: 'r5', nom: 'Sakura Sushi', categorie: 'Japonais', note: 4.7, avis: 67, temps: 40, frais: 1500, distance: 4.2, isOuvert: true, couleur: '#F4A261', emoji: '🍣', latitude: 3.8405, longitude: 11.5005 }, // Mvan area
->>>>>>> origin/main:eeuez-expo-ui/data/mockData.ts
+  { id: 'r1', nom: "Le Phénix d'Or", categorie: 'Camerounais', icon: 'ChefHat', note: 4.8, avis: 342, temps: 25, frais: 500, distance: 1.2, isOuvert: true, couleur: '#FF6B35', emoji: '🍲', latitude: 3.8705, longitude: 11.5115 },
+  { id: 'r2', nom: 'Pizza Palace', categorie: 'Pizzeria', icon: 'Pizza', note: 4.5, avis: 180, temps: 30, frais: 800, distance: 2.1, isOuvert: true, couleur: '#E63946', emoji: '🍕', latitude: 3.8475, longitude: 11.5025 },
+  { id: 'r3', nom: 'Chez Mama Africa', categorie: 'Africain', icon: 'Flame', note: 4.6, avis: 95, temps: 20, frais: 300, distance: 0.8, isOuvert: false, couleur: '#2A9D8F', emoji: '🥘', latitude: 3.8805, longitude: 11.5205 },
+  { id: 'r4', nom: 'Speed Burger', categorie: 'Fast Food', icon: 'Dam', note: 4.2, avis: 430, temps: 15, frais: 600, distance: 3.5, isOuvert: true, couleur: '#E9C46A', emoji: '🍔', latitude: 3.8905, longitude: 11.5305 },
+  { id: 'r5', nom: 'Sakura Sushi', categorie: 'Japonais', icon: 'Fish', note: 4.7, avis: 67, temps: 40, frais: 1500, distance: 4.2, isOuvert: true, couleur: '#F4A261', emoji: '🍣', latitude: 3.8405, longitude: 11.5005 },
 ];

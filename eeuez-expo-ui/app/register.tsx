@@ -45,14 +45,25 @@ export default function RegisterScreen() {
         setAllergyInput('');
     };
 
-    const handleRegister = () => {
-        register({
-            nom,
-            email,
-            telephone: tel,
-            allergies: selectedAllergies.join(', ')
-        });
-        router.replace('/(client)');
+    const handleRegister = async () => {
+        try {
+            const nameParts = nom.split(' ');
+            const nomFamille = nameParts[nameParts.length - 1] || '';
+            const prenom = nameParts.slice(0, -1).join(' ') || nomFamille;
+
+            await register({
+                nom: nomFamille,
+                prenom,
+                email,
+                telephone: tel,
+                password: pass,
+                allergies: selectedAllergies.join(', ')
+            });
+            // La redirection se fera automatiquement via index.tsx si on est de retour
+            router.replace('/(client)');
+        } catch (error) {
+            alert("Erreur d'inscription : " + (error as Error).message);
+        }
     };
 
     return (
@@ -120,7 +131,7 @@ export default function RegisterScreen() {
                             </View>
                         </PressableScale>
 
-                        <TouchableOpacity style={s.loginLink} onPress={() => router.replace('/(client)')}>
+                        <TouchableOpacity style={s.loginLink} onPress={() => router.replace('/login')}>
                             <Text style={{ color: colors.text.secondary }}>Déjà un compte ? <Text style={{ color: colors.primary, fontWeight: '700' }}>Se connecter</Text></Text>
                         </TouchableOpacity>
                     </View>

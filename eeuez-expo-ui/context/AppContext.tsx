@@ -22,8 +22,9 @@ type AppContextType = {
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   
-  activeOrder: Order | null;
-  setActiveOrder: (order: Order | null) => void;
+  activeOrders: Order[];
+  addActiveOrder: (order: Order) => void;
+  removeActiveOrder: (id: string) => void;
   
   pastOrders: Order[];
   addPastOrder: (order: Order) => void;
@@ -44,12 +45,15 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [pastOrders, setPastOrders] = useState<Order[]>([]);
   const [likedDishes, setLikedDishes] = useState<string[]>([]);
   const [followedRestaurants, setFollowedRestaurants] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const addActiveOrder = (order: Order) => setActiveOrders(prev => [...prev, order]);
+  const removeActiveOrder = (id: string) => setActiveOrders(prev => prev.filter(o => o.id !== id));
 
   const addToCart = (item: CartItem) => {
     setCart(prev => {
@@ -91,7 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       cart, addToCart, removeFromCart, clearCart,
-      activeOrder, setActiveOrder,
+      activeOrders, addActiveOrder, removeActiveOrder,
       pastOrders, addPastOrder,
       likedDishes, toggleLikeDish,
       followedRestaurants, toggleFollowRestaurant,

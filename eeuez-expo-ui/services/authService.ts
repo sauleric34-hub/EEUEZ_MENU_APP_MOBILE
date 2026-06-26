@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════
 //  EEUEZ MENU — Service d'authentification
-//  Connecte le frontend React Native au backend Spring Boot
+//  Connecte le frontend React Native au backend Django
+//  (Django REST Framework + SimpleJWT)
 // ═══════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

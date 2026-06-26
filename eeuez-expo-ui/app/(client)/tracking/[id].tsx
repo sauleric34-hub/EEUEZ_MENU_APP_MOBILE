@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MapView, { Marker, Polyline, AnimatedRegion, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Client } from '@stomp/stompjs';
+
 import { Colors, Typography, Spacing, Radius } from '../../../constants/theme';
 import { API_WS_URL } from '../../../constants/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PressableScale, ConfettiBurst } from '../../../components/Animations';
 import { restaurantService } from '../../../services/apiService';
+import { useAppContext } from '../../../context/AppContext';
+import { RESTAURANTS_LISTE } from '../../../data/mockData';
 
 // Formule de Haversine pour calculer la distance entre deux points GPS en km
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -33,6 +35,7 @@ function formatETA(seconds: number) {
 export default function TrackingScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { activeOrders } = useAppContext();
   const mapRef = useRef<MapView>(null);
   
   // Coordonnée pour le rendu (sert à la Polyline)
@@ -60,6 +63,14 @@ export default function TrackingScreen() {
   const lastEtaUpdateRef = useRef<number>(0); // Pour ne pas rafraîchir le texte trop souvent
 
   useEffect(() => {
+    // Réinitialiser les états lorsqu'on traque une nouvelle commande
+    setArrived(false);
+    setStatus('Connexion...');
+    setRouteCoords([]);
+    currentStep.current = 0;
+  }, [id]);
+
+  useEffect(() => {
     // Charger les restaurants environnants pour garnir la carte
     restaurantService.getMapRestaurants(3.86667, 11.51667, 50)
       .then(res => setRestaurants(res.data))
@@ -70,14 +81,23 @@ export default function TrackingScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
         setLocation(loc);
 
         // Fetch itinéraire routier via OSRM
         try {
-          const start = { latitude: 3.86667, longitude: 11.51667 };
+          // Trouver la commande active
+          const order = activeOrders.find(o => o.id === id);
+          let start = { latitude: 3.86667, longitude: 11.51667 }; // default fallback
+          
+          if (order) {
+            // Trouver le restaurant de la commande
+            const resto = RESTAURANTS_LISTE.find(r => r.id === order.items[0]?.restaurantId) || RESTAURANTS_LISTE[0];
+            start = { latitude: resto.latitude, longitude: resto.longitude };
+          }
+
           const end = loc.coords;
-          const url = `http://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+          const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
           const res = await fetch(url);
           const data = await res.json();
           if (data.routes && data.routes.length > 0) {
@@ -103,38 +123,40 @@ export default function TrackingScreen() {
       }
     })();
 
-    // Setup STOMP WebSocket
-    const stompClient = new Client({
-      brokerURL: API_WS_URL,
-      forceBinaryWSFrames: true,
-      appendMissingNULLonIncoming: true,
-      onConnect: () => {
-        setStatus('Connecté au livreur');
-        stompClient.subscribe(`/topic/commande/${id}/tracking`, (message) => {
-          if (message.body) {
-            const data = JSON.parse(message.body);
-            const newLoc = { latitude: data.latitude, longitude: data.longitude };
-            livreurLocAnim.timing({ latitude: newLoc.latitude, longitude: newLoc.longitude, duration: 1000, useNativeDriver: false }).start();
-            setLivreurLoc(newLoc);
-            mapRef.current?.animateToRegion({
-              ...newLoc,
-              latitudeDelta: 0.005,
-              longitudeDelta: 0.005,
-            }, 1000);
-          }
-        });
-      },
-      onStompError: (frame) => {
-        console.error('Broker reported error: ' + frame.headers['message']);
-        setStatus('Erreur connexion');
-      },
-      onWebSocketError: (event) => {
-        // console.error('WS Error:', event);
-        setStatus('Mode Démo (Livreur en route)');
-      }
-    });
+    // Setup Native WebSocket
+    const wsUrl = `${API_WS_URL}/topic/commande/${id}/tracking`;
+    const ws = new WebSocket(wsUrl);
 
-    // stompClient.activate(); // Désactivé pour la démo pour éviter les erreurs de connexion WebSocket
+    ws.onopen = () => {
+      setStatus('Connecté au livreur');
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data) {
+        try {
+          const data = JSON.parse(event.data);
+          const newLoc = { latitude: data.latitude, longitude: data.longitude };
+          livreurLocAnim.timing({ latitude: newLoc.latitude, longitude: newLoc.longitude, duration: 1000, useNativeDriver: false }).start();
+          setLivreurLoc(newLoc);
+          mapRef.current?.animateToRegion({
+            ...newLoc,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          }, 1000);
+        } catch(e) {
+          console.error("Erreur parse WS:", e);
+        }
+      }
+    };
+
+    ws.onerror = (e) => {
+      console.log('WS Error:', e);
+      setStatus('Mode Démo (Livreur en route)');
+    };
+
+    return () => {
+      ws.close();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -200,14 +222,22 @@ export default function TrackingScreen() {
         
         // S'il est à 20 mètres ou moins du point final, on le considère comme arrivé
         if (distToDest <= 0.02) {
-            setStatus('📍 Livreur Arrivé !');
-            setArrived(true);
-            clearInterval(simInterval);
-            return;
+          clearInterval(simInterval);
+          setArrived(true);
+          setStatus('📍 Livreur Arrivé !');
+          
+          // Terminer la livraison
+          const order = activeOrders.find(o => o.id === id);
+          if (order) {
+            removeActiveOrder(order.id);
+            addPastOrder({ ...order, status: 'livree' });
+            alert("Votre livraison est arrivée à destination !");
+            router.replace('/(client)');
+          }
+        } else {
+          currentStep.current += 1;
+          setStatus('Livreur en route');
         }
-
-        currentStep.current += 1;
-        setStatus('Livreur en route');
       } else {
         setStatus('📍 Livreur Arrivé !');
         setArrived(true);
@@ -339,8 +369,8 @@ const s = StyleSheet.create({
   statusPill: { backgroundColor: Colors.bg.elevated, paddingHorizontal: 15, paddingVertical: 8, borderRadius: Radius.full, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 5, elevation: 5 },
   statusText: { ...Typography.bodyBold, color: Colors.client.primary },
   livreurPin: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5, borderWidth: 2, borderColor: Colors.client.primary },
-  locationBtn: { position: 'absolute', bottom: 220, right: 20, width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.bg.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 15 },
+  locationBtn: { position: 'absolute', bottom: 270, right: 20, width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
+  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.bg.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 120, shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 15 },
   title: { ...Typography.h3, marginBottom: 15 },
   livreurInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: Colors.border.default },
   livreurAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.bg.elevated, justifyContent: 'center', alignItems: 'center', marginRight: 15 },

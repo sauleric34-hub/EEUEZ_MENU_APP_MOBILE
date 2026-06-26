@@ -1,14 +1,34 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, TextInput, FlatList, Keyboard } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, TextInput, FlatList, Keyboard, PanResponder } from 'react-native';
+import MapView, { Marker, Callout, Polyline, AnimatedRegion } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { restaurantService } from '../services/apiService';
 import { RESTAURANTS_LISTE } from '../data/mockData';
 import { useRouter } from 'expo-router';
 import { PressableScale } from './Animations';
+import { useAppContext } from '../context/AppContext';
 
 const { width, height } = Dimensions.get('window');
+
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatETA(seconds: number) {
+  if (!isFinite(seconds) || seconds < 0) return 'Calcul...';
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} sec`;
+  const mins = Math.round(seconds / 60);
+  return `${mins} min`;
+}
 
 // Base de données simulée des repères (Landmarks/Zones) pour l'autocomplétion
 const LANDMARKS = [
@@ -24,11 +44,23 @@ const LANDMARKS = [
 ];
 
 export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+  const { followedRestaurants, activeOrders, removeActiveOrder, addPastOrder } = useAppContext();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedResto, setSelectedResto] = useState<any>(null);
   
+  // -- Tracking Data --
+  const [activeRoutes, setActiveRoutes] = useState<Record<string, {
+    coords: {latitude: number, longitude: number}[];
+    etaText: string;
+    currentStep: number;
+    driverLoc: {latitude: number, longitude: number};
+  }>>({});
+  const animatedRegionsRef = useRef<Record<string, AnimatedRegion>>({});
+  const trackingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+
   // États de recherche
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -37,6 +69,29 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
   const mapRef = useRef<MapView>(null);
   const slideAnim = useRef(new Animated.Value(height)).current;
   const router = useRouter();
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => gestureState.dy > 15,
+      onPanResponderMove: (evt, gestureState) => {
+        if (gestureState.dy > 50) {
+          setShowDropdown(false);
+          Keyboard.dismiss();
+        }
+      },
+    })
+  ).current;
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => gestureState.dy > 15,
+      onPanResponderMove: (evt, gestureState) => {
+        if (gestureState.dy > 50) {
+          closeBottomSheet();
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     (async () => {
@@ -47,7 +102,7 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
         return;
       }
 
-      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
       setLocation(loc);
       fetchRestaurants(loc.coords.latitude, loc.coords.longitude);
     })();
@@ -56,10 +111,11 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
   const fetchRestaurants = (lat: number, lon: number) => {
     restaurantService.getMapRestaurants(lat, lon, 50)
       .then(res => {
-        if (!res.data || res.data.length === 0) {
+        const data = Array.isArray(res) ? res : (res.data || []);
+        if (data.length === 0) {
           setRestaurants(RESTAURANTS_LISTE);
         } else {
-          setRestaurants(res.data);
+          setRestaurants(data);
         }
       })
       .catch(err => {
@@ -67,6 +123,143 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
         setRestaurants(RESTAURANTS_LISTE);
       });
   };
+
+  // --- OSRM Routing & Animation Loop ---
+  useEffect(() => {
+    if (!location) return;
+
+    activeOrders.forEach(async (order, idx) => {
+      // Si la route existe déjà, ne rien faire
+      if (activeRoutes[order.id]) return;
+
+      try {
+        const restoId = order.items[0]?.restaurantId;
+        const resto = restaurants.find(r => r.id === restoId) || RESTAURANTS_LISTE.find(r => r.id === restoId) || RESTAURANTS_LISTE[0];
+        const start = { latitude: resto.latitude, longitude: resto.longitude };
+        const end = location.coords;
+        // Utilisez https pour éviter les erreurs Cleartext sur Android
+        const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.routes && data.routes.length > 0) {
+          const coords = data.routes[0].geometry.coordinates.map((c: any) => ({
+            latitude: c[1],
+            longitude: c[0]
+          }));
+          
+          let totalDist = 0;
+          for(let i=0; i<coords.length-1; i++){
+            totalDist += getDistanceFromLatLonInKm(coords[i].latitude, coords[i].longitude, coords[i+1].latitude, coords[i+1].longitude);
+          }
+          const initialEtaSec = totalDist / (30 / 3600); // 30 km/h
+          const etaText = formatETA(initialEtaSec);
+
+          // Ajout d'un léger décalage pour éviter que deux livreurs se superposent exactement
+          const startStep = Math.min((idx * 10) + 1, coords.length - 1);
+          const driverLoc = coords[startStep];
+
+          // Initialiser l'AnimatedRegion pour ce livreur
+          if (!animatedRegionsRef.current[order.id]) {
+            animatedRegionsRef.current[order.id] = new AnimatedRegion({
+              latitude: driverLoc.latitude,
+              longitude: driverLoc.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005
+            });
+          }
+
+          setActiveRoutes(prev => ({
+            ...prev,
+            [order.id]: { orderId: order.id, coords, etaText, currentStep: startStep, driverLoc }
+          }));
+        }
+      } catch (e) {
+        console.log("OSRM Error in CarteScreen:", e);
+        // Fallback: Trajet simulé simple si l'API échoue
+        const resto = restaurants.find(r => r.id === order.items[0]?.restaurantId) || RESTAURANTS_LISTE[0];
+        const driverLoc = { latitude: resto.latitude, longitude: resto.longitude };
+        const destLoc = location ? location.coords : { latitude: 3.86667, longitude: 11.51667 };
+        
+        if (!animatedRegionsRef.current[order.id]) {
+          animatedRegionsRef.current[order.id] = new AnimatedRegion({
+            latitude: driverLoc.latitude,
+            longitude: driverLoc.longitude,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005
+          });
+        }
+        
+        setActiveRoutes(prev => ({
+          ...prev,
+          [order.id]: { 
+            orderId: order.id, 
+            coords: [driverLoc, destLoc], 
+            etaText: "Calcul...", 
+            currentStep: 1, 
+            driverLoc 
+          }
+        }));
+      }
+    });
+  }, [activeOrders, location, restaurants]);
+
+  useEffect(() => {
+    // Boucle d'animation globale pour faire avancer tous les livreurs actifs
+    trackingIntervalRef.current = setInterval(() => {
+      setActiveRoutes(prev => {
+        const nextState = { ...prev };
+        let updated = false;
+
+        Object.keys(nextState).forEach(orderId => {
+          const routeData = nextState[orderId];
+          const N = routeData.coords.length;
+          // Calcule un pas pour que le trajet se fasse en ~30 secondes (30 pas)
+          const stepsPerTick = Math.max(1, Math.floor(N / 30));
+          
+            if (routeData.currentStep < N - 1) {
+              const nextStep = Math.min(routeData.currentStep + stepsPerTick, N - 1);
+              const nextLoc = routeData.coords[nextStep];
+              
+              // Animer le marker
+              const animRegion = animatedRegionsRef.current[orderId];
+              if (animRegion) {
+                animRegion.timing({
+                  latitude: nextLoc.latitude,
+                  longitude: nextLoc.longitude,
+                  duration: 1000,
+                  useNativeDriver: false
+                }).start();
+              }
+
+              nextState[orderId] = {
+                ...routeData,
+                currentStep: nextStep,
+                driverLoc: nextLoc
+              };
+              updated = true;
+            } else {
+              // LIVRAISON TERMINÉE
+              const order = activeOrders.find(o => o.id === orderId);
+              if (order) {
+                removeActiveOrder(order.id);
+                addPastOrder({ ...order, status: 'livree' });
+                alert(`Livraison terminée pour la commande ${order.id} !`);
+                delete nextState[orderId];
+                updated = true;
+              }
+            }
+        });
+
+        return updated ? nextState : prev;
+      });
+    }, 1000); // Met à jour chaque seconde (simulé)
+
+    return () => {
+      if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+    };
+  }, []);
 
   const allPlaces = React.useMemo(() => {
     const places = LANDMARKS.map(l => ({ ...l, isRestaurant: false }));
@@ -196,6 +389,57 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
             </Marker>
           );
         })}
+
+        {/* Livreurs pour les commandes en cours avec vraie route et ETA */}
+        {Object.values(activeRoutes).map((routeData) => {
+          const animRegion = animatedRegionsRef.current[routeData.orderId];
+          if (!animRegion) return null;
+
+          // Extraire juste la portion de route restante
+          const remainingCoords = routeData.coords.slice(routeData.currentStep);
+
+          return (
+            <React.Fragment key={`livreur_route_${routeData.orderId}`}>
+              {/* Vraie Route routière jusqu'au client */}
+              {remainingCoords.length > 0 && (
+                <Polyline
+                  coordinates={remainingCoords}
+                  strokeColor={Colors.danger}
+                  strokeWidth={4}
+                  lineDashPattern={[5, 5]}
+                />
+              )}
+              
+              <Marker.Animated
+                key={`livreur_${routeData.orderId}`}
+                coordinate={animRegion}
+                style={{ zIndex: 999 }}
+                onPress={() => setSelectedDriverId(selectedDriverId === routeData.orderId ? null : routeData.orderId)}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <View style={[s.proMarker, { backgroundColor: Colors.danger }]}>
+                    <View style={s.proMarkerInner}>
+                      <Text style={{ fontSize: 18 }}>🛵</Text>
+                    </View>
+                  </View>
+                  <View style={[s.proMarkerTail, { borderTopColor: Colors.danger }]} />
+                  
+                  {selectedDriverId === routeData.orderId && (
+                    <TouchableOpacity 
+                      activeOpacity={0.8} 
+                      onPress={() => router.push(`/tracking/${routeData.orderId}`)}
+                      style={{ backgroundColor: Colors.bg.surface, padding: 8, borderRadius: 8, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: {width: 0, height: 2}, minWidth: 120, marginTop: 4, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: Colors.danger, fontWeight: 'bold' }}>ETA: {routeData.etaText}</Text>
+                      <Text style={{ fontSize: 12, color: Colors.text.secondary }}>Commande #{routeData.orderId}</Text>
+                      <Text style={{ fontSize: 10, color: Colors.client.primary, marginTop: 4 }}>Cliquez pour suivre ➔</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </Marker.Animated>
+            </React.Fragment>
+          );
+        })}
       </MapView>
 
       <TouchableOpacity 
@@ -215,8 +459,15 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
       </TouchableOpacity>
 
       {/* Bottom Search UI (Yango style) */}
-      <View style={[s.bottomSearchContainer, showDropdown && s.bottomSearchContainerExpanded]}>
-        {showDropdown && <View style={s.dragHandle} />}
+      <View 
+        style={[s.bottomSearchContainer, showDropdown && s.bottomSearchContainerExpanded]}
+        {...(showDropdown ? panResponder.panHandlers : {})}
+      >
+        {showDropdown && (
+          <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+            <View style={[s.dragHandle, { marginBottom: 0 }]} />
+          </View>
+        )}
         <View style={s.searchContainer}>
           <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
           <TextInput 
@@ -266,8 +517,10 @@ export default function CarteScreen({ onOpenDrawer }: { onOpenDrawer: () => void
         {selectedResto && (
           <View>
             <TouchableOpacity style={s.closeArea} onPress={closeBottomSheet} />
-            <View style={s.sheetContent}>
-              <View style={s.dragHandle} />
+            <View style={s.sheetContent} {...sheetPanResponder.panHandlers}>
+              <View style={{ paddingBottom: 20, alignItems: 'center' }}>
+                <View style={[s.dragHandle, { marginBottom: 0 }]} />
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={s.sheetThumb}>
                   <Text style={{ fontSize: 40 }}>{selectedResto.logo || selectedResto.emoji || '🍽️'}</Text>
@@ -333,10 +586,10 @@ const s = StyleSheet.create({
     borderRightColor: 'transparent',
     marginTop: -2,
   },
-  locationBtn: { position: 'absolute', bottom: 120, right: 20, width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5, zIndex: 10 },
+  locationBtn: { position: 'absolute', bottom: 190, right: 20, width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5, zIndex: 10 },
   bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 200 },
   closeArea: { height: height, width: '100%', position: 'absolute', bottom: 200 },
-  sheetContent: { backgroundColor: Colors.bg.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 15 },
+  sheetContent: { backgroundColor: Colors.bg.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 110, shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 15 },
   dragHandle: { width: 40, height: 5, backgroundColor: Colors.border.default, borderRadius: 2.5, alignSelf: 'center', marginBottom: 20 },
   sheetThumb: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: Colors.client.primary + '22', justifyContent: 'center', alignItems: 'center' },
   sheetTitle: { ...Typography.h2, fontSize: 20 },
@@ -349,7 +602,7 @@ const s = StyleSheet.create({
     bottom: 0, left: 0, right: 0,
     backgroundColor: Colors.bg.surface,
     padding: 15,
-    paddingBottom: 30,
+    paddingBottom: 110, // Avoid TabBar overlap
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 15,

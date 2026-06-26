@@ -16,15 +16,12 @@ export default function RestaurantWorkspace() {
   const loadData = () => {
     setLoading(true);
     Promise.all([
-      restaurantWorkspaceService.getWorkspace().catch(() => ({ data: { nom: 'Mon Restaurant', isOuvert: true, logo: '🍽️' } })),
-      restaurantWorkspaceService.getCommandes().catch(() => ({ data: [
-        { id: 101, total: 4500, statut: 'en_attente', client: { prenom: 'Marc', nom: 'D.' }, tempsRestant: 20 },
-        { id: 102, total: 3000, statut: 'en_preparation', client: { prenom: 'Sophie', nom: 'L.' }, tempsRestant: 10 }
-      ] })),
-      restaurantWorkspaceService.getStatistiques().catch(() => ({ data: { revenusJournaliers: 25000, commandesEnCours: 5, noteMoyenne: 4.8 } }))
+      restaurantWorkspaceService.getWorkspace().catch(() => ({})),
+      restaurantWorkspaceService.getCommandes().catch(() => []),
+      restaurantWorkspaceService.getStatistiques().catch(() => ({}))
     ]).then(([wsRes, cmdRes, statRes]) => {
       setWorkspace(wsRes.data || wsRes);
-      setCommandes(cmdRes.data || cmdRes);
+      setCommandes(Array.isArray(cmdRes) ? cmdRes : (cmdRes.data || []));
       setStats(statRes.data || statRes);
     }).finally(() => setLoading(false));
   };

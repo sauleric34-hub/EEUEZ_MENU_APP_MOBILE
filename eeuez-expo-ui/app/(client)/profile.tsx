@@ -53,13 +53,13 @@ export default function ProfileScreen() {
                         <View style={s.langRow}>
                             <TouchableOpacity
                                 onPress={() => setLanguage('fr')}
-                                style={[s.langBtn, language === 'fr' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                                <Text style={[s.langText, language === 'fr' && { color: '#FFF' }]}>{t('francais')}</Text>
+                                style={[s.langBtn, { borderColor: colors.border.default }, language === 'fr' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                                <Text style={[s.langText, { color: colors.text.primary }, language === 'fr' && { color: '#FFF' }]}>{t('francais')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setLanguage('en')}
-                                style={[s.langBtn, language === 'en' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                                <Text style={[s.langText, language === 'en' && { color: '#FFF' }]}>{t('anglais')}</Text>
+                                style={[s.langBtn, { borderColor: colors.border.default }, language === 'en' && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                                <Text style={[s.langText, { color: colors.text.primary }, language === 'en' && { color: '#FFF' }]}>{t('anglais')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

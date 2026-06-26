@@ -5,10 +5,10 @@
     "version": "1.0.0",
     "scheme": "eeuez",
     "orientation": "portrait",
-    "icon": "./logo.jpg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./logo.jpg",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#1A0B05"
     },
@@ -19,12 +19,12 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#1A0B05",
-        "foregroundImage": "./logo.jpg"
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "package": "com.eeuez.menu"
     },
     "web": {
-      "favicon": "./logo.jpg"
+      "favicon": "./assets/favicon.png"
     }
   }
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { PressableScale, ConfettiBurst } from '../../components/Animations';
 import { Colors, Typography, Spacing, Radius, glow } from '../../constants/theme';
 import { useAppContext, CartItem } from '../../context/AppContext';
+import { commandeService } from '../../services/apiService';
 
 function ProcessingModal({ visible, onComplete }: { visible: boolean, onComplete: () => void }) {
   const [step, setStep] = useState(0);
@@ -58,7 +59,7 @@ function ProcessingModal({ visible, onComplete }: { visible: boolean, onComplete
 }
 
 export default function PanierScreen() {
-  const { cart, removeFromCart, addToCart, clearCart, setActiveOrder, addPastOrder } = useAppContext();
+  const { cart, removeFromCart, addToCart, clearCart, addActiveOrder } = useAppContext();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -71,24 +72,43 @@ export default function PanierScreen() {
     setIsProcessing(true);
   };
 
-  const handleCheckoutComplete = () => {
+  const handleCheckoutComplete = async () => {
     setIsProcessing(false);
     
-    // Créer la vraie commande dans l'état global
-    const newOrderId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
-    const orderData = {
-      id: newOrderId,
-      status: 'en_preparation',
-      total: total,
-      items: [...cart],
-      date: new Date().toISOString()
-    };
-    
-    setActiveOrder(orderData);
-    addPastOrder(orderData); // On l'ajoute aussi à l'historique direct pour la démo
-    clearCart();
-    
-    router.replace(`/tracking/${newOrderId}`);
+    if (cart.length === 0) return;
+
+    try {
+      const body = {
+        restaurant: cart[0].restaurantId,
+        adresse_livraison: 'Ma position GPS',
+        notes: '',
+        items: cart.map(item => ({ plat_id: item.id, quantite: item.quantite }))
+      };
+
+      const res = await commandeService.passer(body).catch((err) => {
+        console.log("Backend hors-ligne, simulation de commande réussie");
+        return {
+          id: 'CMD-' + Math.floor(Math.random() * 10000),
+          statut: 'en_preparation',
+          montant_total: cart.reduce((sum, i) => sum + i.prix * i.quantite, 0) + 500
+        };
+      });
+
+      const orderData = {
+        id: res.id,
+        status: res.statut,
+        total: res.montant_total,
+        items: [...cart],
+        date: new Date().toISOString()
+      };
+      
+      addActiveOrder(orderData);
+      clearCart();
+      
+      router.replace({ pathname: '/(client)', params: { screen: 'carte' } });
+    } catch (err: any) {
+      alert("Erreur lors de la commande : " + err.message);
+    }
   };
 
   const updateQuantite = (item: CartItem, delta: number) => {
@@ -220,7 +240,7 @@ const s = StyleSheet.create({
   summaryTotalLabel: { ...Typography.h3 },
   summaryTotalValue: { ...Typography.h2, color: Colors.client.primary },
   paymentMethod: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bg.elevated, padding: Spacing.md, borderRadius: Radius.md },
-  bottomFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.md, paddingBottom: 30, backgroundColor: Colors.bg.surface, borderTopWidth: 1, borderTopColor: Colors.border.default },
+  bottomFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.md, paddingBottom: 110, backgroundColor: Colors.bg.surface, borderTopWidth: 1, borderTopColor: Colors.border.default },
   btnPrimary: { backgroundColor: Colors.client.primary, paddingVertical: 16, borderRadius: Radius.lg, alignItems: 'center' },
   btnPrimaryText: { ...Typography.bodyBold, color: '#FFF', fontSize: 16 },
   

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { Typography, Radius, Spacing, glow } from '../constants/theme';
 import { Fingerprint } from 'lucide-react-native';
 import { PressableScale } from '../components/Animations';
@@ -12,8 +13,17 @@ const { height, width } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, language, setLanguage } = useTranslation();
+  const { isLoggedIn, user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (isLoggedIn && user) {
+      if (user.role === 'restaurant') router.replace('/(restaurant)');
+      else if (user.role === 'livreur') router.replace('/(livreur)');
+      else router.replace('/(client)');
+    }
+  }, [isLoggedIn, user]);
 
   const logoAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -47,6 +57,16 @@ export default function WelcomeScreen() {
     <View style={[s.container, { backgroundColor: '#FCF9F2' }]}>
       <StatusBar barStyle="light-content" />
 
+      {/* Bouton de langue en haut à droite */}
+      <SafeAreaView style={{ position: 'absolute', top: 10, right: 20, zIndex: 100 }}>
+        <TouchableOpacity
+          onPress={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
+          style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }}
+        >
+          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{language.toUpperCase()}</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+
       {/* Header Orange avec ombres */}
       <View style={[s.headerCurve, { backgroundColor: colors.primary }]}>
         <View style={[s.bubble, { width: 160, height: 160, top: -40, left: -50, opacity: 0.15 }]} />
@@ -65,7 +85,7 @@ export default function WelcomeScreen() {
             <View style={s.logoShadowWrapper}>
               <View style={s.logoCard}>
                 <Image
-                  source={require('../logo.jpg')}
+                  source={require('../assets/icon.png')}
                   style={s.logo}
                   resizeMode="contain"
                 />
@@ -98,15 +118,15 @@ export default function WelcomeScreen() {
 
         <Animated.View style={[s.content, { opacity: contentAnim, transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
           <View style={s.textWrapper}>
-            <Text style={[s.title, { color: colors.primary }]}>Welcome to <Text style={{ color: '#1B5E20' }}>MENU</Text></Text>
+            <Text style={[s.title, { color: colors.primary }]}>{t('welcome')} <Text style={{ color: '#1B5E20' }}>MENU</Text></Text>
           </View>
 
           <Text style={[s.description, { color: colors.text.secondary }]}>
-            Découvrez les meilleures recettes de plus de 1 000 restaurants et profitez d'une livraison rapide à votre porte.
+            {t('subtitle') || "Découvrez les meilleures recettes de plus de 1 000 restaurants et profitez d'une livraison rapide à votre porte."}
           </Text>
 
           <View style={s.btnRow}>
-            <PressableScale style={s.btnFull} onPress={() => router.push('/(client)')}>
+            <PressableScale style={s.btnFull} onPress={() => router.push('/login')}>
               <View style={[s.loginBtn, { backgroundColor: colors.primary }]}>
                 <Text style={s.loginText}>{t('login') || 'Connexion'}</Text>
               </View>
@@ -114,7 +134,7 @@ export default function WelcomeScreen() {
 
             <PressableScale style={s.btnFull} onPress={() => router.push('/register')}>
               <View style={[s.registerBtn, { borderColor: colors.primary }]}>
-                <Text style={[s.registerText, { color: colors.primary }]}>{t('create_account') || 'Créer un compte'}</Text>
+                <Text style={[s.registerText, { color: colors.primary }]}>{t('register') || 'Créer un compte'}</Text>
               </View>
             </PressableScale>
           </View>

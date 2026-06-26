@@ -66,10 +66,11 @@ Avant de commencer, assurez-vous d'avoir installé sur votre machine :
 git clone https://github.com/sauleric34-hub/EEUEZ_MENU_APP_MOBILE.git
 ```
 
-### Étape 2 — Naviguer dans le projet
+### Étape 2 — Naviguer dans le projet et changer de branche
 
 ```bash
 cd EEUEZ_MENU_APP_MOBILE
+git checkout isoprod
 ```
 
 ### Étape 3 — Installer les dépendances
