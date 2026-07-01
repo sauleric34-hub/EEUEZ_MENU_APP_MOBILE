@@ -6,13 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Radius, Spacing, glow } from '../constants/theme';
+import { ShoppingBag, Store, Bike } from 'lucide-react-native';
 
 const ROLES = [
   {
     key: 'client',
     label: 'Client',
     sub: 'Parcourir, commander\nsuivre votre livraison',
-    emoji: '🛍️',
+    icon: ShoppingBag,
     color: Colors.client.primary,
     glow: Colors.client.glow,
     bg: Colors.client.bg,
@@ -22,7 +23,7 @@ const ROLES = [
     key: 'restaurant',
     label: 'Restaurant',
     sub: 'Gérer le menu, les commandes\net les livraisons',
-    emoji: '🏪',
+    icon: Store,
     color: Colors.restaurant.primary,
     glow: Colors.restaurant.glow,
     bg: Colors.restaurant.bg,
@@ -32,7 +33,7 @@ const ROLES = [
     key: 'livreur',
     label: 'Livreur',
     sub: 'Accepter des missions\net suivre vos gains',
-    emoji: '🛵',
+    icon: Bike,
     color: Colors.livreur.primary,
     glow: Colors.livreur.glow,
     bg: Colors.livreur.bg,
@@ -88,7 +89,7 @@ export default function WelcomeScreen() {
           transform: [{ translateY: logoAnim.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }) }]
         }]}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>EEUEZ</Text>
+            <Text style={styles.logoText}>Menu</Text>
             <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>MENU</Text></View>
           </View>
           <Animated.Text style={[styles.tagline, { opacity: subtitleAnim }]}>
@@ -120,7 +121,7 @@ export default function WelcomeScreen() {
                 <View style={[styles.roleCardAccent, { backgroundColor: role.bg }]} />
 
                 <View style={[styles.roleIconBg, { backgroundColor: role.bg, ...glow(role.color, 10) }]}>
-                  <Text style={styles.roleEmoji}>{role.emoji}</Text>
+                  <role.icon size={28} color={role.color} />
                 </View>
 
                 <View style={styles.roleText}>
@@ -136,7 +137,7 @@ export default function WelcomeScreen() {
 
         {/* Footer */}
         <Text style={styles.footer}>
-          Cameroun 🇨🇲 — Version 1.0 Bêta
+          Cameroun — Version 1.0 Bêta
         </Text>
       </SafeAreaView>
     </View>

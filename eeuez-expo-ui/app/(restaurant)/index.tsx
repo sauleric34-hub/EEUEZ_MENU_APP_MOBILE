@@ -51,9 +51,11 @@ function OpenToggle({ isOuvert, onToggle }: { isOuvert: boolean; onToggle: () =>
 // ─── STAT PILL (stat du toggle) ────────────────────────────────────────────
 function StatutPill({ statut }: { statut: string }) {
   const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
+  const Icon = cfg.icon;
   return (
-    <View style={[s.pill, { backgroundColor: cfg.bg }]}>
-      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.emoji} {cfg.label}</Text>
+    <View style={[s.pill, { backgroundColor: cfg.bg, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+      {Icon && <Icon size={12} color={cfg.color} />}
+      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.label}</Text>
     </View>
   );
 }

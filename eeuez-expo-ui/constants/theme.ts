@@ -1,9 +1,12 @@
 // ═══════════════════════════════════════════════════════════
-//  EEUEZ MENU — SYSTÈME DE DESIGN CENTRALISÉ
+//  MENU — SYSTÈME DE DESIGN CENTRALISÉ
 //  Toutes les constantes visuelles de l'application
 // ═══════════════════════════════════════════════════════════
 
 import { StyleSheet, Dimensions } from 'react-native';
+import {
+  Clock, CheckCircle2, ChefHat, Utensils, Bike, Package, MapPin, PartyPopper, XCircle, Ban, Bell
+} from 'lucide-react-native';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -166,15 +169,15 @@ export const glowSubtle = (color: string) => ({
 });
 
 // ─── STATUT COMMANDE ─────────────────────────────────────────
-export const StatutConfig: Record<string, { label: string; color: string; bg: string; emoji: string }> = {
-  en_attente:      { label: 'En attente',     color: Colors.warning,    bg: Colors.warningBg,   emoji: '⏳' },
-  acceptee:        { label: 'Acceptée',       color: Colors.client.primary, bg: Colors.client.bg, emoji: '✅' },
-  en_preparation:  { label: 'En préparation', color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '👨‍🍳' },
-  prete:           { label: 'Prête',          color: Colors.success,    bg: Colors.successBg,   emoji: '🍽️' },
-  livreur_assigne: { label: 'Livreur assigné',color: Colors.client.primary, bg: Colors.client.bg, emoji: '🛵' },
-  en_collecte:     { label: 'En collecte',    color: Colors.livreur.primary, bg: Colors.livreur.bg, emoji: '📦' },
-  en_livraison:    { label: 'En livraison',   color: Colors.restaurant.primary, bg: Colors.restaurant.bg, emoji: '🛵' },
-  livree:          { label: 'Livrée ✓',       color: Colors.success,    bg: Colors.successBg,   emoji: '🎉' },
-  refusee:         { label: 'Refusée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '❌' },
-  annulee:         { label: 'Annulée',        color: Colors.danger,     bg: Colors.dangerBg,    emoji: '🚫' },
+export const StatutConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+  en_attente:      { label: 'En attente',     color: Colors.warning,    bg: Colors.warningBg,   icon: Clock },
+  acceptee:        { label: 'Acceptée',       color: Colors.client.primary, bg: Colors.client.bg, icon: CheckCircle2 },
+  en_preparation:  { label: 'En préparation', color: Colors.livreur.primary, bg: Colors.livreur.bg, icon: ChefHat },
+  prete:           { label: 'Prête',          color: Colors.success,    bg: Colors.successBg,   icon: Utensils },
+  livreur_assigne: { label: 'Livreur assigné',color: Colors.client.primary, bg: Colors.client.bg, icon: Bike },
+  en_collecte:     { label: 'En collecte',    color: Colors.livreur.primary, bg: Colors.livreur.bg, icon: Package },
+  en_livraison:    { label: 'En livraison',   color: Colors.restaurant.primary, bg: Colors.restaurant.bg, icon: Bike },
+  livree:          { label: 'Livrée ✓',       color: Colors.success,    bg: Colors.successBg,   icon: PartyPopper },
+  refusee:         { label: 'Refusée',        color: Colors.danger,     bg: Colors.dangerBg,    icon: XCircle },
+  annulee:         { label: 'Annulée',        color: Colors.danger,     bg: Colors.dangerBg,    icon: Ban },
 };

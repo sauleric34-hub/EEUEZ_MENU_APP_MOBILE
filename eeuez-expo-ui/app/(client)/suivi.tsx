@@ -10,6 +10,10 @@ import { Colors, Typography, Spacing, Radius, glow, glowSubtle } from '../../con
 import { PressableScale, ConfettiBurst, EmojiPop, useButtonPress } from '../../components/Animations';
 import { useAppContext } from '../../context/AppContext';
 import { commandeService } from '../../services/apiService';
+import {
+  MailX, RefreshCw, Home, Bike, UserCircle2, PartyPopper,
+  TriangleAlert, Phone, MessageCircle, ChevronLeft
+} from 'lucide-react-native';
 
 // Fonction Haversine pour calculer la distance en km
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -76,7 +80,7 @@ export default function SuiviScreen() {
   if (simulatedDeliveries.length === 0 && !selectedOrderId) {
     return (
       <View style={[s.screen, { justifyContent: 'center', alignItems: 'center', padding: Spacing.xl }]}>
-        <Text style={{ fontSize: 60, marginBottom: 20 }}>📭</Text>
+        <MailX size={64} color={Colors.text.muted} style={{ marginBottom: 20 }} />
         <Text style={[Typography.h3, { textAlign: 'center', color: Colors.text.primary }]}>Aucune commande en cours</Text>
         <Text style={[Typography.body, { textAlign: 'center', color: Colors.text.secondary, marginTop: 10, marginBottom: 30 }]}>
           Passez une commande pour suivre sa livraison en temps réel.
@@ -94,7 +98,7 @@ export default function SuiviScreen() {
     return (
       <View style={[s.screen, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar barStyle="dark-content" backgroundColor={Colors.bg.app} />
-        <Text style={{ fontSize: 40 }}>🔄</Text>
+        <RefreshCw size={44} color={Colors.client.primary} style={{ marginBottom: 12 }} />
         <Text style={[Typography.h3, { marginTop: 10, color: Colors.text.primary }]}>Synchronisation...</Text>
         <Text style={[Typography.body, { color: Colors.text.muted, marginTop: 5 }]}>Recherche de votre commande...</Text>
       </View>
@@ -135,8 +139,8 @@ export default function SuiviScreen() {
     { label: 'Commande reçue',       heure: '12:05', acteur: 'Client' },
     { label: 'Acceptée',             heure: '12:07', acteur: 'Restaurant' },
     { label: 'En préparation',       heure: '12:08', acteur: 'Cuisine' },
-    { label: 'Livreur assigné',      heure: '12:26', acteur: 'EEUEZ' },
-    { label: 'En route vers vous',   heure: '12:28', acteur: 'Paul N. 🛵' },
+    { label: 'Livreur assigné',      heure: '12:26', acteur: 'Menu' },
+    { label: 'En route vers vous',   heure: '12:28', acteur: 'Paul N.' },
     { label: 'Livraison effectuée',  heure: 'Maint.', acteur: '' },
   ];
 
@@ -171,7 +175,7 @@ export default function SuiviScreen() {
         {/* Header simple */}
         <View style={s.header}>
           <PressableScale onPress={() => router.back()}>
-            <View style={s.backBtn}><Text style={s.backArrow}>←</Text></View>
+            <View style={s.backBtn}><ChevronLeft size={24} color={Colors.text.primary} /></View>
           </PressableScale>
           <Text style={s.headerTitle}>Suivi en direct</Text>
           <View style={s.headerRight} />
@@ -196,13 +200,15 @@ export default function SuiviScreen() {
               )}
               
               <Marker coordinate={clientPos} title="Vous êtes ici">
-                <View style={s.homeMarker}><Text style={{fontSize:20}}>🏠</Text></View>
+                <View style={s.homeMarker}>
+                  <Home size={20} color={Colors.client.primary} />
+                </View>
               </Marker>
 
               {livreurPos && currentStep >= 4 && (
                 <Marker coordinate={livreurPos} anchor={{x: 0.5, y: 0.5}}>
                   <Animated.View style={[s.livreurPin, { transform: [{ scale: pulseAnim }] }]}>
-                    <Text style={{ fontSize: 24 }}>🛵</Text>
+                    <Bike size={24} color={Colors.bg.surface} />
                   </Animated.View>
                 </Marker>
               )}
@@ -212,20 +218,24 @@ export default function SuiviScreen() {
           {/* Info livreur (Affiché dès que la commande est reçue, mais on simule que le livreur est assigné direct) */}
           <View style={s.livreurInfo}>
             <View style={s.livreurAvatarBox}>
-               <Text style={{fontSize: 24}}>👨🏽‍🚀</Text>
+               <UserCircle2 size={30} color={Colors.client.primary} />
             </View>
             <View style={s.livreurDetails}>
-              <Text style={s.livreurNom}>Paul N. (Livreur EEUEZ)</Text>
+              <Text style={s.livreurNom}>Paul N. (Livreur Menu)</Text>
               <Text style={s.livreurMoto}>Yamaha YZF-R3 · CM-842-A</Text>
               <View style={s.etaRow}>
                 <Text style={s.etaLabel}>{currentStep === 5 ? 'Livraison terminée' : 'Arrivée estimée'}</Text>
-                <Text style={[s.etaValue, { color: currentStep === 5 ? Colors.success : Colors.client.primary }]}>
-                  {currentStep === 5 ? 'Bravo 🎉' : `~${etaMinutes} minutes`}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {currentStep === 5 && <PartyPopper size={20} color={Colors.success} />}
+                  <Text style={[s.etaValue, { color: currentStep === 5 ? Colors.success : Colors.client.primary }]}>
+                    {currentStep === 5 ? 'Livré !' : `~${etaMinutes} minutes`}
+                  </Text>
+                </View>
               </View>
               {isRecalculating && (
-                <View style={{ backgroundColor: Colors.warning + '33', padding: 10, alignItems: 'center', marginTop: 10, borderRadius: 8 }}>
-                   <Text style={{ color: Colors.warning, fontWeight: 'bold' }}>⚠️ Détour détecté ! Recalcul...</Text>
+                <View style={{ backgroundColor: Colors.warning + '33', padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, borderRadius: 8 }}>
+                   <TriangleAlert size={16} color={Colors.warning} />
+                   <Text style={{ color: Colors.warning, fontWeight: 'bold' }}>Détour détecté ! Recalcul...</Text>
                 </View>
               )}
             </View>
@@ -258,13 +268,15 @@ export default function SuiviScreen() {
             {currentStep < 5 && (
                <View style={s.actionsRow}>
                  <PressableScale onPress={() => triggerSuccess('📞')}>
-                   <View style={s.contactBtn}>
-                     <Text style={s.contactBtnText}>📞 Appeler Paul</Text>
+                   <View style={[s.contactBtn, { flexDirection: 'row', gap: 8 }]}>
+                     <Phone size={16} color={Colors.bg.app} />
+                     <Text style={s.contactBtnText}>Appeler Paul</Text>
                    </View>
                  </PressableScale>
                  <PressableScale onPress={() => triggerSuccess('💬')}>
-                   <View style={[s.contactBtn, { backgroundColor: Colors.bg.surface, borderWidth: 1, borderColor: Colors.border.default }]}>
-                     <Text style={[s.contactBtnText, { color: Colors.text.primary }]}>💬 Message</Text>
+                   <View style={[s.contactBtn, { backgroundColor: Colors.bg.surface, borderWidth: 1, borderColor: Colors.border.default, flexDirection: 'row', gap: 8 }]}>
+                     <MessageCircle size={16} color={Colors.text.primary} />
+                     <Text style={[s.contactBtnText, { color: Colors.text.primary }]}>Message</Text>
                    </View>
                  </PressableScale>
                </View>

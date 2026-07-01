@@ -8,6 +8,7 @@ import { Colors, Typography, Spacing, Radius, glow, glowSubtle } from '../../con
 import { PressableScale, EmojiPop, useButtonPress } from '../../components/Animations';
 import { RESTAURANTS_LISTE } from '../../data/mockData';
 import { useAppContext } from '../../context/AppContext';
+import { Store, Star, Bike, Heart, HeartOff } from 'lucide-react-native';
 
 function FavCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
   const router = useRouter();
@@ -37,14 +38,20 @@ function FavCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
       <PressableScale onPress={() => router.push(`/(client)/restaurant/${resto.id}` as any)} style={{ flex: 1 }}>
         <View style={s.cardInner}>
           <View style={s.restoIcon}>
-            <Text style={{ fontSize: 34 }}>🏪</Text>
+            <Store size={28} color={Colors.client.primary} />
           </View>
           <View style={s.restoInfo}>
             <Text style={s.restoNom}>{resto.nom}</Text>
             <Text style={s.restoCat}>{resto.categorie} · {resto.temps} min</Text>
             <View style={s.metaRow}>
-              <Text style={s.note}>⭐ {resto.note}</Text>
-              <Text style={s.livraison}>🛵 {resto.frais} FCFA</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <Star size={11} color={Colors.livreur.primary} />
+                <Text style={s.note}>{resto.note}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <Bike size={11} color={Colors.text.secondary} />
+                <Text style={s.livraison}>{resto.frais} FCFA</Text>
+              </View>
               <View style={[s.badge, { backgroundColor: resto.isOuvert ? Colors.restaurant.bg : Colors.dangerBg }]}>
                 <Text style={{ fontSize: 10, fontWeight: '700', color: resto.isOuvert ? Colors.restaurant.primary : Colors.danger }}>
                   {resto.isOuvert ? 'Ouvert' : 'Fermé'}
@@ -53,7 +60,10 @@ function FavCard({ resto }: { resto: typeof RESTAURANTS_LISTE[0] }) {
             </View>
           </View>
           <PressableScale onPress={toggleFav}>
-            <Text style={{ fontSize: 24 }}>{isFav ? '❤️' : '🤍'}</Text>
+            {isFav
+              ? <Heart size={24} color={Colors.danger} />
+              : <HeartOff size={24} color={Colors.text.muted} />
+            }
           </PressableScale>
         </View>
       </PressableScale>
@@ -74,7 +84,10 @@ export default function FavoritesScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
       <SafeAreaView style={{ flex: 1 }}>
         <Animated.View style={[s.header, { opacity: fadeIn }]}>
-          <Text style={s.title}>❤️ Mes Favoris</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Heart size={22} color={Colors.danger} />
+            <Text style={s.title}>Mes Favoris</Text>
+          </View>
           <Text style={s.subtitle}>{followedRestaurants.length} restaurant(s) sauvegardé(s)</Text>
         </Animated.View>
 

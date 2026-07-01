@@ -1,5 +1,5 @@
 /**
- * EEUEZ — Composants d'animation d'interface
+ * MENU — Composants d'animation d'interface
  *
  * • PressableScale   — Rebond scale quand on appuie sur un bouton
  * • EmojiPop         — Emoji qui jaillit vers le haut et disparaît

@@ -4,13 +4,16 @@ import {
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius, glow } from '../constants/theme';
 import { PressableScale, PulseRing } from '../components/Animations';
+import {
+  CheckCircle2, ChefHat, Bike, MapPin, PartyPopper, Phone, X
+} from 'lucide-react-native';
 
 const ETAPES = [
-  { key: 'acceptee',        label: 'Commande acceptée',     emoji: '✅', done: true },
-  { key: 'en_preparation',  label: 'En préparation',        emoji: '👨‍🍳', done: true },
-  { key: 'livreur_assigne', label: 'Livreur assigné',       emoji: '🛵', done: false, active: true },
-  { key: 'en_livraison',    label: 'En chemin chez vous',   emoji: '📍', done: false },
-  { key: 'livree',          label: 'Livraison terminée',    emoji: '🎉', done: false },
+  { key: 'acceptee',        label: 'Commande acceptée',     icon: (c: string) => <CheckCircle2 size={16} color={c} />, done: true },
+  { key: 'en_preparation',  label: 'En préparation',        icon: (c: string) => <ChefHat size={16} color={c} />, done: true },
+  { key: 'livreur_assigne', label: 'Livreur assigné',       icon: (c: string) => <Bike size={16} color={c} />, done: false, active: true },
+  { key: 'en_livraison',    label: 'En chemin chez vous',   icon: (c: string) => <MapPin size={16} color={c} />, done: false },
+  { key: 'livree',          label: 'Livraison terminée',    icon: (c: string) => <PartyPopper size={16} color={c} />, done: false },
 ];
 
 interface Props {
@@ -55,9 +58,12 @@ export default function DeliveryTrackingModal({ visible, onClose, commandeId }: 
 
           {/* Header */}
           <View style={s.header}>
-            <Text style={s.title}>📍 Suivi de livraison</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MapPin size={22} color={Colors.text.primary} />
+              <Text style={s.title}>Suivi de livraison</Text>
+            </View>
             <PressableScale onPress={onClose}>
-              <View style={s.closeBtn}><Text style={s.closeText}>✕</Text></View>
+              <View style={s.closeBtn}><X size={18} color={Colors.text.secondary} /></View>
             </PressableScale>
           </View>
 
@@ -65,7 +71,7 @@ export default function DeliveryTrackingModal({ visible, onClose, commandeId }: 
           <View style={s.etaRow}>
             <PulseRing color={Colors.client.primary} size={70}>
               <Animated.View style={[s.etaCircle, { transform: [{ scale: pulseAnim }] }]}>
-                <Text style={{ fontSize: 28 }}>🛵</Text>
+                <Bike size={28} color={Colors.client.primary} />
               </Animated.View>
             </PulseRing>
             <View style={s.etaInfo}>
@@ -84,7 +90,7 @@ export default function DeliveryTrackingModal({ visible, onClose, commandeId }: 
                   etape.done && { backgroundColor: Colors.client.primary },
                   etape.active && { backgroundColor: Colors.livreur.primary, ...glow(Colors.livreur.glow, 6) },
                 ]}>
-                  <Text style={{ fontSize: 14 }}>{etape.emoji}</Text>
+                  {etape.icon(etape.done ? Colors.bg.app : etape.active ? Colors.bg.app : Colors.text.muted)}
                 </View>
                 <Text style={[
                   s.etapeLabel,
@@ -100,14 +106,16 @@ export default function DeliveryTrackingModal({ visible, onClose, commandeId }: 
 
           {/* Livreur */}
           <View style={s.livreurRow}>
-            <View style={s.livreurIcon}><Text style={{ fontSize: 24 }}>🛵</Text></View>
+            <View style={s.livreurIcon}>
+              <Bike size={24} color={Colors.bg.app} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={s.livreurNom}>Koffi Mensah</Text>
               <Text style={s.livreurInfo}>⭐ 4.9 · Yamaha YD-5678-A</Text>
             </View>
             <PressableScale onPress={() => {}}>
               <View style={[s.callBtn, glow(Colors.client.glow, 6)]}>
-                <Text style={s.callBtnText}>📞</Text>
+                <Phone size={20} color={Colors.bg.app} />
               </View>
             </PressableScale>
           </View>

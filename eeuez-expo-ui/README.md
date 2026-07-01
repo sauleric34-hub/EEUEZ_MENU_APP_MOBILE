@@ -1,8 +1,8 @@
-# 🍽️ EEUEZ Menu — Application Mobile
+# 🍽️ Menu — Application Mobile
 
 <div align="center">
 
-![EEUEZ Banner](https://img.shields.io/badge/EEUEZ-Menu%20App-FFB224?style=for-the-badge&logo=expo&logoColor=white)
+![EEUEZ Banner](https://img.shields.io/badge/Menu%20App-FFB224?style=for-the-badge&logo=expo&logoColor=white)
 ![Version](https://img.shields.io/badge/version-1.0--beta-blue?style=for-the-badge)
 ![Expo](https://img.shields.io/badge/Expo%20Go-v54-000020?style=for-the-badge&logo=expo)
 ![React Native](https://img.shields.io/badge/React%20Native-0.79-61DAFB?style=for-the-badge&logo=react)
@@ -16,7 +16,7 @@
 
 ## 📱 Présentation
 
-**EEUEZ Menu** est une application mobile de commande de repas en ligne développée avec **Expo / React Native**. Elle simule un écosystème complet de livraison de repas avec trois interfaces distinctes :
+**Menu** est une application mobile de commande de repas en ligne développée avec **Expo / React Native**. Elle simule un écosystème complet de livraison de repas avec trois interfaces distinctes :
 
 | 🛍️ Client | 🏪 Restaurant | 🛵 Livreur |
 |---|---|---|
@@ -205,6 +205,6 @@ Ce projet est sous licence **MIT**. Voir le fichier `LICENSE` pour plus de déta
 
 <div align="center">
 
-Made with ❤️ for **EEUEZ** · Yaoundé, Cameroun 🇨🇲
+Made with ❤️ for **Menu** · Yaoundé, Cameroun 🇨🇲
 
 </div>

@@ -119,7 +119,7 @@ function TableauDeBord({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
           {/* Statut qui change automatiquement */}
           <Animated.View style={[s.statutRow, { backgroundColor: statutCfg.bg, borderColor: statutCfg.color + '44' }, { transform: [{ scale: pulse }] }]}>
-            <Text style={s.statutEmoji}>{statutCfg.emoji}</Text>
+            {statutCfg.icon && <statutCfg.icon size={22} color={statutCfg.color} />}
             <Text style={[s.statutLabel, { color: statutCfg.color }]}>{statutCfg.label}</Text>
             <Text style={[s.etaText, { color: statutCfg.color }]}>~{etaMin} min</Text>
           </Animated.View>

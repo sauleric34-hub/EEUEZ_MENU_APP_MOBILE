@@ -10,6 +10,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DrawerMenu, { DrawerItem } from '../../components/DrawerMenu';
 import { PressableScale, ConfettiBurst, EmojiPop, FloatingReaction, PulseRing, useButtonPress } from '../../components/Animations';
 import { Colors, Typography, Spacing, Radius, glow, glowSubtle, StatutConfig } from '../../constants/theme';
+import {
+  Menu, MapPin, Bell, Search, SlidersHorizontal,
+  Store, Star, Clock, Heart, HeartOff, Megaphone,
+  Utensils, Flame, Sandwich, Pizza, GlassWater, Cake,
+} from 'lucide-react-native';
 
 const DRAWER_ITEMS: DrawerItem[] = [
   { key: 'accueil',       label: 'Accueil',              icon: '🏠', section: 'Découverte' },
@@ -30,9 +35,11 @@ const DRAWER_ITEMS: DrawerItem[] = [
 
 function StatutPill({ statut }: { statut: string }) {
   const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
+  const Icon = cfg.icon;
   return (
-    <View style={[s.pill, { backgroundColor: cfg.bg }]}>
-      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.emoji} {cfg.label}</Text>
+    <View style={[s.pill, { backgroundColor: cfg.bg, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+      {Icon && <Icon size={12} color={cfg.color} />}
+      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.label}</Text>
     </View>
   );
 }
@@ -68,7 +75,7 @@ function RestoCard({ resto }: { resto: any }) {
     }}>
       <PressableScale style={s.restoCard} scaleDown={0.97} onPress={() => router.push(`/(client)/restaurant/${resto.id}` as any)}>
         <View style={[s.restoThumb, { backgroundColor: Colors.bg.elevated }]}>
-          <Text style={{ fontSize: 38 }}>{resto.logo ? '🍽️' : '🏪'}</Text>
+          <Store size={32} color={Colors.text.muted} />
           {!resto.isOuvert && (
             <View style={s.fermeOverlay}>
               <Text style={s.fermeText}>Fermé</Text>
@@ -79,17 +86,26 @@ function RestoCard({ resto }: { resto: any }) {
           <Text style={s.restoName}>{resto.nom || resto.nomEtablissement}</Text>
           <Text style={s.restoCat}>Restaurant · {resto.distance ? resto.distance.toFixed(1) : '1.2'} km</Text>
           <View style={[s.row, { gap: 8, marginTop: 8, flexWrap: 'wrap' }]}>
-            <View style={s.metaChip}><Text style={s.metaText}>⭐ {resto.noteGlobale || resto.note || 4.5}</Text></View>
-            <View style={s.metaChip}><Text style={s.metaText}>🕐 {resto.tempsLivraisonMoyen || 30} min</Text></View>
+            <View style={s.metaChip}>
+              <Star size={11} color={Colors.livreur.primary} />
+              <Text style={s.metaText}>{resto.noteGlobale || resto.note || 4.5}</Text>
+            </View>
+            <View style={s.metaChip}>
+              <Clock size={11} color={Colors.text.secondary} />
+              <Text style={s.metaText}>{resto.tempsLivraisonMoyen || 30} min</Text>
+            </View>
             <View style={s.metaChip}><Text style={s.metaText}>{resto.fraisLivraison || 500}F livr.</Text></View>
           </View>
         </View>
-        {/* Bouton ❤️ favori avec animation */}
+        {/* Bouton favori avec animation */}
         <View style={{ position: 'relative' }}>
           <EmojiPop emoji="❤️" visible={emojiVisible} size={22} />
           <PressableScale onPress={handleFav} scaleDown={0.8}>
             <View style={[s.favBtn, { backgroundColor: isFav ? Colors.danger + '22' : Colors.bg.elevated }]}>
-              <Text style={{ fontSize: 18 }}>{isFav ? '❤️' : '🤍'}</Text>
+              {isFav
+                ? <Heart size={18} color={Colors.danger} />
+                : <HeartOff size={18} color={Colors.text.muted} />
+              }
             </View>
           </PressableScale>
         </View>
@@ -232,11 +248,11 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
          setHasUnreadNotif(true); // Statut changé = Nouvelle notification !
          
          // Enregistrer la notification en local
-         const cfg = StatutConfig[activeOrder.statut as keyof typeof StatutConfig] || { label: activeOrder.statut, emoji: '🔔', color: Colors.client.primary, bg: Colors.client.bg };
+         const cfg = StatutConfig[activeOrder.statut as keyof typeof StatutConfig] || { label: activeOrder.statut, icon: Bell, color: Colors.client.primary, bg: Colors.client.bg };
          const newNotif = {
            id: Date.now().toString(),
            title: `Commande #${activeOrder.id}`,
-           message: `Le statut de votre commande est maintenant : ${cfg.label} ${cfg.emoji}`,
+           message: `Le statut de votre commande est maintenant : ${cfg.label}`,
            time: new Date().toLocaleTimeString().slice(0, 5),
            color: cfg.color,
            bg: cfg.bg,
@@ -265,11 +281,14 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           {/* Header */}
           <View style={s.topBar}>
             <PressableScale onPress={onOpenDrawer}>
-              <View style={s.hamburger}><Text style={s.hamburgerText}>☰</Text></View>
+              <View style={s.hamburger}><Menu size={22} color={Colors.text.primary} /></View>
             </PressableScale>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
               <Text style={s.greeting}>Bonjour 👋</Text>
-              <Text style={s.locationText}>📍 {locationName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <MapPin size={12} color={Colors.text.secondary} />
+                <Text style={s.locationText}>{locationName}</Text>
+              </View>
             </View>
             <PressableScale scaleDown={0.85} onPress={() => {
               setHasUnreadNotif(false);
@@ -278,10 +297,10 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <View style={s.notifBtn}>
                 {hasUnreadNotif ? (
                   <PulseRing color={Colors.danger} size={36}>
-                    <Text style={{ fontSize: 20 }}>🔔</Text>
+                    <Bell size={20} color={Colors.text.primary} />
                   </PulseRing>
                 ) : (
-                  <Text style={{ fontSize: 20, padding: 8 }}>🔔</Text>
+                  <Bell size={20} color={Colors.text.primary} />
                 )}
               </View>
             </PressableScale>
@@ -289,7 +308,7 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 
           {/* Barre de recherche */}
           <View style={[s.searchBar, { paddingVertical: 0, paddingLeft: Spacing.md }]}>
-            <Text style={{ fontSize: 18 }}>🔍</Text>
+            <Search size={18} color={Colors.text.muted} />
             <TextInput
               placeholder="Rechercher un plat, un restaurant…"
               placeholderTextColor={Colors.text.muted}
@@ -297,7 +316,8 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               value={search}
               onChangeText={setSearch}
             />
-            <TouchableOpacity style={[s.filterBtn, { backgroundColor: Colors.client.bg }]}>
+            <TouchableOpacity style={[s.filterBtn, { backgroundColor: Colors.client.bg, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <SlidersHorizontal size={12} color={Colors.client.primary} />
               <Text style={[s.filterText, { color: Colors.client.primary }]}>Filtres</Text>
             </TouchableOpacity>
           </View>
@@ -321,7 +341,10 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
               <ConfettiBurst visible={confettiVisible} />
               <PressableScale onPress={handleSuivre} style={{ width: '100%' }}>
                 <View style={[s.liveSuiviBtn, glow(Colors.client.glow, 8)]}>
-                  <Text style={s.liveSuiviBtnText}>📍  Suivre en direct</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MapPin size={16} color={Colors.client.primary} />
+                    <Text style={s.liveSuiviBtnText}>Suivre en direct</Text>
+                  </View>
                 </View>
               </PressableScale>
             </View>
@@ -331,7 +354,10 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         {/* Bannière Promo */}
         <Animated.View style={[s.promoBanner, { opacity: fadeIn }]}>
           <View>
-            <Text style={s.promoTag}>🎉 OFFRE DU JOUR</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Megaphone size={12} color={Colors.restaurant.primary} />
+              <Text style={s.promoTag}>OFFRE DU JOUR</Text>
+            </View>
             <Text style={s.promoTitle}>Livraison offerte</Text>
             <Text style={s.promoSub}>Sur commande {'>'} 5 000 FCFA</Text>
           </View>
@@ -343,13 +369,13 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           <Text style={s.sectionTitle}>Catégories</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: 10 }}>
             {[
-              { e: '⭐', l: 'Populaire',  c: Colors.livreur.primary },
-              { e: '🍲', l: 'Tradition',  c: Colors.restaurant.primary },
-              { e: '🔥', l: 'Grillades', c: Colors.danger },
-              { e: '🍔', l: 'Fast Food', c: Colors.warning },
-              { e: '🍕', l: 'Pizza',     c: Colors.client.primary },
-              { e: '🍹', l: 'Boissons',  c: Colors.restaurant.light },
-              { e: '🍰', l: 'Desserts',  c: Colors.livreur.light },
+              { icon: <Star   size={20} color={Colors.livreur.primary} />,    l: 'Populaire', c: Colors.livreur.primary },
+              { icon: <Utensils size={20} color={Colors.restaurant.primary} />, l: 'Tradition', c: Colors.restaurant.primary },
+              { icon: <Flame  size={20} color={Colors.danger} />,             l: 'Grillades', c: Colors.danger },
+              { icon: <Sandwich size={20} color={Colors.warning} />,          l: 'Fast Food', c: Colors.warning },
+              { icon: <Pizza  size={20} color={Colors.client.primary} />,     l: 'Pizza',     c: Colors.client.primary },
+              { icon: <GlassWater size={20} color={Colors.restaurant.light} />, l: 'Boissons', c: Colors.restaurant.light },
+              { icon: <Cake   size={20} color={Colors.livreur.light} />,      l: 'Desserts',  c: Colors.livreur.light },
             ].map(cat => (
               <PressableScale
                 key={cat.l}
@@ -363,7 +389,7 @@ function AccueilScreen({ onOpenDrawer }: { onOpenDrawer: () => void }) {
                 scaleDown={0.9}
                 onPress={() => setSelectedCat(selectedCat === cat.l ? null : cat.l)}
               >
-                <Text style={{ fontSize: 22 }}>{cat.e}</Text>
+                {cat.icon}
                 <Text style={[
                   s.catLabel,
                   { color: selectedCat === cat.l ? '#FFF' : cat.c }
@@ -521,7 +547,7 @@ const s = StyleSheet.create({
   fermeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   restoName: { ...Typography.bodyBold, fontSize: 16 },
   restoCat: { ...Typography.small, marginTop: 3 },
-  metaChip: { backgroundColor: Colors.bg.elevated, paddingHorizontal: 7, paddingVertical: 3, borderRadius: Radius.sm },
+  metaChip: { backgroundColor: Colors.bg.elevated, paddingHorizontal: 7, paddingVertical: 3, borderRadius: Radius.sm, flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 11, color: Colors.text.secondary, fontWeight: '600' },
   favBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   // Track

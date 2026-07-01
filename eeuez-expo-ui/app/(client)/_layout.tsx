@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, glow } from '../../constants/theme';
+import { Home, ShoppingCart, Utensils, Heart, User } from 'lucide-react-native';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -33,12 +34,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           }
         };
 
-        let emoji = '🏠';
-        if (route.name === 'cart') emoji = '🛒';
-        else if (route.name === 'explore') emoji = '🍽️';
-        else if (route.name === 'favorites') emoji = '❤️';
-        else if (route.name === 'profile') emoji = '👤';
-        else if (route.name === 'index') emoji = '🏠';
+        let IconComp = Home;
+        if (route.name === 'cart') IconComp = ShoppingCart;
+        else if (route.name === 'explore') IconComp = Utensils;
+        else if (route.name === 'favorites') IconComp = Heart;
+        else if (route.name === 'profile') IconComp = User;
+        else if (route.name === 'index') IconComp = Home;
         else return null;
 
         return (
@@ -51,7 +52,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               s.iconContainer,
               isFocused && { backgroundColor: Colors.client.primary, ...glow(Colors.client.glow, 8) }
             ]}>
-              <Text style={{ fontSize: 24, opacity: isFocused ? 1 : 0.6 }}>{emoji}</Text>
+              <IconComp size={24} color={isFocused ? Colors.bg.app : Colors.text.primary} opacity={isFocused ? 1 : 0.6} />
             </View>
           </TouchableOpacity>
         );

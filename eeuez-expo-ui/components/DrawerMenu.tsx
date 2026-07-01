@@ -5,6 +5,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, glowSubtle } from '../constants/theme';
+import {
+  Home, Map, QrCode, ShoppingCart, ClipboardList, MapPin,
+  Heart, MapPinned, CreditCard, Star, Bell, User, MessageCircle,
+  DoorOpen, ShoppingBag, X, BarChart2, Package, Utensils, Users,
+  TrendingUp, CircleDollarSign, Gift, Clock, Store, Navigation,
+  Bike, FileText
+} from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.80;
@@ -19,6 +26,38 @@ export interface DrawerItem {
   section?: string;
   danger?: boolean;
 }
+
+const ICON_MAP: Record<string, (color: string) => React.ReactNode> = {
+  // Client
+  accueil:       (c) => <Home       size={18} color={c} />,
+  carte:         (c) => <Map        size={18} color={c} />,
+  scanner:       (c) => <QrCode     size={18} color={c} />,
+  panier:        (c) => <ShoppingCart size={18} color={c} />,
+  historique:    (c) => <ClipboardList size={18} color={c} />,
+  suivi:         (c) => <MapPin     size={18} color={c} />,
+  favoris:       (c) => <Heart      size={18} color={c} />,
+  adresses:      (c) => <MapPinned  size={18} color={c} />,
+  paiements:     (c) => <CreditCard size={18} color={c} />,
+  avis:          (c) => <Star       size={18} color={c} />,
+  notifications: (c) => <Bell       size={18} color={c} />,
+  profil:        (c) => <User       size={18} color={c} />,
+  aide:          (c) => <MessageCircle size={18} color={c} />,
+  deconnexion:   (c) => <DoorOpen   size={18} color={c} />,
+  // Restaurant & Livreur
+  tableau_bord:  (c) => <BarChart2  size={18} color={c} />,
+  commandes:     (c) => <Package    size={18} color={c} />,
+  menu:          (c) => <Utensils   size={18} color={c} />,
+  tables:        (c) => <Users      size={18} color={c} />,
+  livreurs:      (c) => <Bike       size={18} color={c} />,
+  statistiques:  (c) => <TrendingUp size={18} color={c} />,
+  revenus:       (c) => <CircleDollarSign size={18} color={c} />,
+  promotions:    (c) => <Gift       size={18} color={c} />,
+  horaires:      (c) => <Clock      size={18} color={c} />,
+  mission:       (c) => <Navigation size={18} color={c} />,
+  gains:         (c) => <CircleDollarSign size={18} color={c} />,
+  vehicule:      (c) => <Bike       size={18} color={c} />,
+  documents:     (c) => <FileText   size={18} color={c} />,
+};
 
 interface DrawerProps {
   isOpen: boolean;
@@ -83,6 +122,10 @@ export default function DrawerMenu({
         result.push(<Text key={`sec-${idx}`} style={styles.sectionLabel}>{item.section}</Text>);
       }
       const isActive = item.key === activeKey;
+      const iconColor = item.danger
+        ? Colors.danger
+        : isActive ? accentColor : Colors.text.secondary;
+      const iconNode = ICON_MAP[item.key]?.(iconColor);
       result.push(
         <TouchableOpacity
           key={item.key}
@@ -90,7 +133,9 @@ export default function DrawerMenu({
           onPress={() => handleNavigate(item.key)}
           activeOpacity={0.7}
         >
-          <Text style={styles.itemIcon}>{item.icon}</Text>
+          <View style={styles.itemIconBox}>
+            {iconNode ?? <Text style={styles.itemIcon}>{item.icon}</Text>}
+          </View>
           <Text style={[
             styles.itemLabel,
             isActive && { color: accentColor, fontWeight: '700' },
@@ -135,7 +180,7 @@ export default function DrawerMenu({
           {/* En-tête */}
           <View style={[styles.drawerHeader, { borderBottomColor: accentColor + '25' }]}>
             <View style={[styles.avatarCircle, { backgroundColor: accentBg }, glowSubtle(accentColor)]}>
-              <Text style={styles.avatarEmoji}>{headerEmoji}</Text>
+              <ShoppingBag size={22} color={accentColor} />
             </View>
             <View style={{ marginLeft: 14, flex: 1 }}>
               <Text style={styles.headerName} numberOfLines={1}>{headerTitle}</Text>
@@ -143,7 +188,7 @@ export default function DrawerMenu({
             </View>
             {/* Bouton fermeture */}
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-              <Text style={styles.closeBtnText}>✕</Text>
+              <X size={14} color={Colors.text.secondary} />
             </TouchableOpacity>
           </View>
 
@@ -154,7 +199,7 @@ export default function DrawerMenu({
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={[styles.footerLogo, { color: accentColor }]}>EEUEZ</Text>
+            <Text style={[styles.footerLogo, { color: accentColor }]}>Menu</Text>
             <Text style={styles.footerTag}>Menu · v1.0 Bêta</Text>
           </View>
         </SafeAreaView>
@@ -217,6 +262,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8, borderRadius: Radius.md, marginBottom: 2,
     position: 'relative',
   },
+  itemIconBox: { width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
   itemIcon: { fontSize: 18, width: 28 },
   itemLabel: { ...Typography.body, color: Colors.text.secondary, marginLeft: 12, flex: 1 },
   badge: {

@@ -8,6 +8,7 @@ import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { PressableScale } from '../../components/Animations';
 import { restaurantService } from '../../services/apiService';
 import { useAppContext } from '../../context/AppContext';
+import { Store, Bike, MapPin, Search, X, Truck, ChevronLeft } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -105,7 +106,7 @@ export default function ExploreScreen() {
             onPress={() => router.push(`/(client)/restaurant/${resto.id}` as any)}
           >
             <View style={s.markerPin}>
-              <Text style={{ fontSize: 20 }}>{resto.logo ? '🍽️' : '🏪'}</Text>
+              <Store size={18} color={Colors.client.primary} />
             </View>
           </Marker>
         ))}
@@ -142,7 +143,7 @@ export default function ExploreScreen() {
               />
               <Marker coordinate={pos} anchor={{x: 0.5, y: 0.5}}>
                 <View style={s.livreurPinSmall}>
-                  <Text style={{ fontSize: 24 }}>🛵</Text>
+                  <Bike size={20} color={Colors.client.primary} />
                 </View>
               </Marker>
             </React.Fragment>
@@ -154,10 +155,10 @@ export default function ExploreScreen() {
         {/* Floating Search Bar */}
         <View style={s.header}>
           <PressableScale onPress={() => router.back()}>
-            <View style={s.backBtn}><Text style={{fontSize: 20}}>←</Text></View>
+            <View style={s.backBtn}><ChevronLeft size={24} color={Colors.text.primary} /></View>
           </PressableScale>
           <View style={s.searchBar}>
-            <Text style={{ fontSize: 16 }}>🔎</Text>
+            <Search size={16} color={Colors.text.muted} />
             <TextInput
               placeholder="Rechercher un restaurant..."
               placeholderTextColor={Colors.text.muted}
@@ -167,7 +168,7 @@ export default function ExploreScreen() {
             />
             {query.length > 0 && (
               <PressableScale onPress={() => setQuery('')}>
-                <Text style={{ color: Colors.text.muted, fontSize: 18 }}>✕</Text>
+                <X size={18} color={Colors.text.muted} />
               </PressableScale>
             )}
           </View>
@@ -176,7 +177,7 @@ export default function ExploreScreen() {
         {simulatedDeliveries.length > 0 && (
           <PressableScale onPress={() => router.push('/(client)/suivi' as any)} scaleDown={0.98}>
             <View style={s.activeOrderBanner}>
-              <Text style={{ fontSize: 24 }}>🚚</Text>
+              <Truck size={24} color={Colors.client.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={s.activeOrderTitle}>
                   {simulatedDeliveries.length > 1 ? `${simulatedDeliveries.length} livraisons en cours !` : 'Livraison en cours !'}
@@ -196,7 +197,7 @@ export default function ExploreScreen() {
       </SafeAreaView>
       
       {/* My Location FAB */}
-      <PressableScale 
+      <PressableScale
         style={s.fab}
         scaleDown={0.9}
         onPress={() => {
@@ -210,7 +211,7 @@ export default function ExploreScreen() {
           }
         }}
       >
-        <Text style={{fontSize: 24}}>📍</Text>
+        <MapPin size={24} color={Colors.client.primary} />
       </PressableScale>
     </View>
   );

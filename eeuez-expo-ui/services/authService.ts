@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  EEUEZ MENU — Service d'authentification
+//  MENU — Service d'authentification
 //  Connecte le frontend React Native au backend Spring Boot
 // ═══════════════════════════════════════════════════════
 

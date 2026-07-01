@@ -7,23 +7,40 @@ import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, glow } from '../../constants/theme';
 import { PressableScale } from '../../components/Animations';
 import { MOCK_CLIENT } from '../../data/mockData';
+import {
+  User, MapPinned, CreditCard, Package, Star, Bell, Globe,
+  MessageCircle, FileText, DoorOpen, ChevronRight, Edit3,
+  ShoppingBag, DollarSign,
+} from 'lucide-react-native';
 
 const STATS = [
-  { label: 'Commandes', value: '42', emoji: '📦' },
-  { label: 'Avis donnés', value: '18', emoji: '⭐' },
-  { label: 'FCFA dépensés', value: '184 500', emoji: '💰' },
+  { label: 'Commandes', value: '42', icon: <Package size={22} color={Colors.client.primary} /> },
+  { label: 'Avis donnés', value: '18', icon: <Star size={22} color={Colors.livreur.primary} /> },
+  { label: 'FCFA dépensés', value: '184 500', icon: <DollarSign size={22} color={Colors.restaurant.primary} /> },
 ];
 
+const MENU_ICON_MAP: Record<string, React.ReactNode> = {
+  adresses:      <MapPinned   size={22} color={Colors.text.secondary} />,
+  paiements:     <CreditCard  size={22} color={Colors.text.secondary} />,
+  commandes:     <Package     size={22} color={Colors.text.secondary} />,
+  avis:          <Star        size={22} color={Colors.text.secondary} />,
+  notifications: <Bell        size={22} color={Colors.text.secondary} />,
+  langue:        <Globe       size={22} color={Colors.text.secondary} />,
+  aide:          <MessageCircle size={22} color={Colors.text.secondary} />,
+  cgu:           <FileText    size={22} color={Colors.text.secondary} />,
+  deconnexion:   <DoorOpen   size={22} color={Colors.danger} />,
+};
+
 const MENU_ITEMS = [
-  { key: 'adresses',      label: 'Mes adresses',        emoji: '📌', section: 'Mon compte' },
-  { key: 'paiements',     label: 'Méthodes de paiement',emoji: '💳' },
-  { key: 'commandes',     label: 'Historique commandes', emoji: '📦', section: 'Activité' },
-  { key: 'avis',          label: 'Mes avis',             emoji: '⭐' },
-  { key: 'notifications', label: 'Notifications',        emoji: '🔔', section: 'Préférences' },
-  { key: 'langue',        label: 'Langue',               emoji: '🌍' },
-  { key: 'aide',          label: 'Aide & Support',       emoji: '💬', section: 'Support' },
-  { key: 'cgu',           label: 'CGU & Confidentialité',emoji: '📄' },
-  { key: 'deconnexion',   label: 'Se déconnecter',       emoji: '🚪', danger: true },
+  { key: 'adresses',      label: 'Mes adresses',        section: 'Mon compte' },
+  { key: 'paiements',     label: 'Méthodes de paiement' },
+  { key: 'commandes',     label: 'Historique commandes', section: 'Activité' },
+  { key: 'avis',          label: 'Mes avis' },
+  { key: 'notifications', label: 'Notifications',        section: 'Préférences' },
+  { key: 'langue',        label: 'Langue' },
+  { key: 'aide',          label: 'Aide & Support',       section: 'Support' },
+  { key: 'cgu',           label: 'CGU & Confidentialité' },
+  { key: 'deconnexion',   label: 'Se déconnecter',       danger: true },
 ];
 
 export default function ProfileScreen() {
@@ -55,14 +72,15 @@ export default function ProfileScreen() {
           {/* Avatar + infos */}
           <Animated.View style={[s.hero, { opacity: fadeIn, transform: [{ translateY: slideIn }] }]}>
             <View style={s.avatar}>
-              <Text style={{ fontSize: 40 }}>👤</Text>
+              <User size={40} color={Colors.client.primary} />
             </View>
             <Text style={s.userName}>{MOCK_CLIENT.prenom} {MOCK_CLIENT.nom}</Text>
             <Text style={s.userEmail}>{MOCK_CLIENT.email}</Text>
             <Text style={s.userPhone}>{MOCK_CLIENT.telephone}</Text>
             <PressableScale onPress={() => {}}>
-              <View style={[s.editBtn, { borderColor: Colors.client.primary }]}>
-                <Text style={[s.editBtnText, { color: Colors.client.primary }]}>✏️ Modifier le profil</Text>
+              <View style={[s.editBtn, { borderColor: Colors.client.primary, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                <Edit3 size={14} color={Colors.client.primary} />
+                <Text style={[s.editBtnText, { color: Colors.client.primary }]}>Modifier le profil</Text>
               </View>
             </PressableScale>
           </Animated.View>
@@ -74,7 +92,7 @@ export default function ProfileScreen() {
                 opacity: statsAnim[i],
                 transform: [{ scale: statsAnim[i].interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }]
               }]}>
-                <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
+                {stat.icon}
                 <Text style={s.statVal}>{stat.value}</Text>
                 <Text style={s.statLabel}>{stat.label}</Text>
               </Animated.View>
@@ -85,14 +103,15 @@ export default function ProfileScreen() {
           {MENU_ITEMS.map(item => {
             const showSection = item.section && item.section !== lastSection;
             if (showSection) lastSection = item.section!;
+            const iconNode = MENU_ICON_MAP[item.key];
             return (
               <React.Fragment key={item.key}>
                 {showSection && <Text style={s.sectionTitle}>{item.section}</Text>}
                 <PressableScale onPress={() => item.key === 'deconnexion' ? router.push('/') : null}>
-                  <View style={[s.menuItem, item.danger && { borderColor: Colors.danger + '33' }]}>
-                    <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
-                    <Text style={[s.menuLabel, item.danger && { color: Colors.danger }]}>{item.label}</Text>
-                    <Text style={s.menuArrow}>›</Text>
+                  <View style={[s.menuItem, (item as any).danger && { borderColor: Colors.danger + '33' }]}>
+                    {iconNode}
+                    <Text style={[s.menuLabel, (item as any).danger && { color: Colors.danger }]}>{item.label}</Text>
+                    <ChevronRight size={18} color={Colors.text.muted} />
                   </View>
                 </PressableScale>
               </React.Fragment>

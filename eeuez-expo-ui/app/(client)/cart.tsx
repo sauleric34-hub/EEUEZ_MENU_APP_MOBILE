@@ -7,6 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, glow } from '../../constants/theme';
 import { PressableScale } from '../../components/Animations';
+import {
+  ShoppingCart, Utensils, Trash2, Store, Bike, Clock, CheckCircle,
+} from 'lucide-react-native';
 
 // ─── DONNÉES MOCK PANIER ───────────────────────────────────────────────────
 const MOCK_PANIER = [
@@ -89,18 +92,23 @@ export default function CartScreen() {
               <Text style={s.backArrow}>←</Text>
             </View>
           </PressableScale>
-          <Text style={s.title}>🛒 Mon Panier</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ShoppingCart size={22} color={Colors.text.primary} />
+            <Text style={s.title}>Mon Panier</Text>
+          </View>
           <View style={{ width: 44 }} />
         </View>
 
         {cart.length === 0 ? (
           <View style={s.emptyContainer}>
-            <Text style={{ fontSize: 72 }}>🛒</Text>
+            <View style={s.emptyIconBox}>
+              <ShoppingCart size={56} color={Colors.text.muted} />
+            </View>
             <Text style={s.emptyTitle}>Panier vide</Text>
             <Text style={s.emptySubtitle}>Ajoutez des plats depuis l'accueil</Text>
             <PressableScale onPress={() => router.push('/(client)')}>
               <View style={[s.shopBtn, glow(Colors.client.glow, 10)]}>
-                <Text style={s.shopBtnText}>🏠 Retour à l'accueil</Text>
+                <Text style={s.shopBtnText}>Retour à l'accueil</Text>
               </View>
             </PressableScale>
           </View>
@@ -109,13 +117,14 @@ export default function CartScreen() {
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.md }}>
               {/* Groupement restaurant */}
               <View style={s.restaurantBadge}>
-                <Text style={s.restaurantBadgeText}>🏪 Restaurant</Text>
+                <Store size={13} color={Colors.client.primary} />
+                <Text style={s.restaurantBadgeText}>Restaurant</Text>
               </View>
 
               {cart.map(item => (
                 <View key={item.id} style={s.cartItem}>
                   <View style={s.emojiBox}>
-                    <Text style={{ fontSize: 32 }}>🍽️</Text>
+                    <Utensils size={28} color={Colors.client.primary} />
                   </View>
                   <View style={s.itemInfo}>
                     <Text style={s.itemNom}>{item.nom}</Text>
@@ -132,7 +141,7 @@ export default function CartScreen() {
                       </View>
                     </PressableScale>
                     <PressableScale onPress={() => remove(item.id)}>
-                      <View style={s.deleteBtn}><Text style={{ fontSize: 16 }}>🗑️</Text></View>
+                      <View style={s.deleteBtn}><Trash2 size={18} color={Colors.danger} /></View>
                     </PressableScale>
                   </View>
                 </View>
@@ -146,7 +155,10 @@ export default function CartScreen() {
                 <Text style={s.footerVal}>{sousTotal.toLocaleString()} FCFA</Text>
               </View>
               <View style={s.footerRow}>
-                <Text style={s.footerLabel}>🛵 Livraison</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Bike size={14} color={Colors.livreur.primary} />
+                  <Text style={s.footerLabel}>Livraison</Text>
+                </View>
                 <Text style={[s.footerVal, { color: Colors.livreur.primary }]}>{FRAIS_LIVRAISON.toLocaleString()} FCFA</Text>
               </View>
               <View style={[s.footerRow, s.totalRow]}>
@@ -155,7 +167,13 @@ export default function CartScreen() {
               </View>
               <PressableScale onPress={handleCheckout} disabled={isLoading}>
                 <View style={[s.checkoutBtn, glow(Colors.client.glow, 12), isLoading && { opacity: 0.6 }]}>
-                  <Text style={s.checkoutText}>{isLoading ? '⏳ Traitement...' : '✓ Commander maintenant'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {isLoading
+                      ? <Clock size={18} color={Colors.bg.app} />
+                      : <CheckCircle size={18} color={Colors.bg.app} />
+                    }
+                    <Text style={s.checkoutText}>{isLoading ? 'Traitement...' : 'Commander maintenant'}</Text>
+                  </View>
                 </View>
               </PressableScale>
             </View>
@@ -172,7 +190,7 @@ const s = StyleSheet.create({
   backBtn:           { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.glass.bg, justifyContent: 'center', alignItems: 'center' },
   backArrow:         { fontSize: 22, color: Colors.text.primary },
   title:             { ...Typography.h3, fontSize: 20 },
-  restaurantBadge:   { marginHorizontal: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.client.bg, borderRadius: Radius.md, alignSelf: 'flex-start' },
+  restaurantBadge:   { marginHorizontal: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.client.bg, borderRadius: Radius.md, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6 },
   restaurantBadgeText: { ...Typography.small, color: Colors.client.primary, fontWeight: '700' },
   cartItem:          { flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: 12, backgroundColor: Colors.bg.surface, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border.default, gap: 12 },
   emojiBox:          { width: 56, height: 56, borderRadius: 16, backgroundColor: Colors.bg.elevated, justifyContent: 'center', alignItems: 'center' },
@@ -194,6 +212,7 @@ const s = StyleSheet.create({
   checkoutBtn:       { marginTop: 14, backgroundColor: Colors.client.primary, borderRadius: Radius.xl, paddingVertical: 16, alignItems: 'center' },
   checkoutText:      { color: Colors.bg.app, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
   emptyContainer:    { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.xl },
+  emptyIconBox:      { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.border.default },
   emptyTitle:        { ...Typography.h2 },
   emptySubtitle:     { ...Typography.body, textAlign: 'center' },
   shopBtn:           { backgroundColor: Colors.client.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: Radius.xl, marginTop: 8 },

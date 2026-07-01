@@ -4,6 +4,9 @@ import {
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius, glow } from '../constants/theme';
 import { PressableScale, ConfettiBurst, EmojiPop, useButtonPress } from '../components/Animations';
+import {
+  Utensils, Star, Clock, Leaf, ShoppingCart, X, CheckCircle, ChefHat
+} from 'lucide-react-native';
 
 interface Plat {
   id: string;
@@ -76,19 +79,22 @@ export default function ProductDetailModal({ visible, onClose, plat, onAddToCart
           <View style={s.sheetHeader}>
             <View />
             <PressableScale onPress={onClose}>
-              <View style={s.closeBtn}><Text style={s.closeText}>✕</Text></View>
+              <View style={s.closeBtn}><X size={18} color={Colors.text.secondary} /></View>
             </PressableScale>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Hero emoji */}
+            {/* Hero icon */}
             <View style={s.platHero}>
               <View style={s.platEmojiBox}>
-                <Text style={{ fontSize: 64 }}>🍽️</Text>
+                <Utensils size={56} color={Colors.restaurant.primary} />
               </View>
               {plat.isPopulaire && (
                 <View style={s.popularBadge}>
-                  <Text style={s.popularText}>⭐ Plat populaire</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Star size={12} color={Colors.livreur.primary} fill={Colors.livreur.primary} />
+                    <Text style={s.popularText}>Plat populaire</Text>
+                  </View>
                 </View>
               )}
             </View>
@@ -98,10 +104,16 @@ export default function ProductDetailModal({ visible, onClose, plat, onAddToCart
               <Text style={s.platNom}>{plat.nom}</Text>
               <View style={s.metaRow}>
                 {plat.tempsPreparation && (
-                  <View style={s.metaChip}><Text style={s.metaText}>⏱ {plat.tempsPreparation} min</Text></View>
+                  <View style={s.metaChip}>
+                    <Clock size={12} color={Colors.text.secondary} />
+                    <Text style={s.metaText}>{plat.tempsPreparation} min</Text>
+                  </View>
                 )}
                 {plat.isVegetarien && (
-                  <View style={s.metaChip}><Text style={s.metaText}>🥦 Végétarien</Text></View>
+                  <View style={s.metaChip}>
+                    <Leaf size={12} color={Colors.restaurant.primary} />
+                    <Text style={s.metaText}>Végétarien</Text>
+                  </View>
                 )}
               </View>
               {plat.description && <Text style={s.platDesc}>{plat.description}</Text>}
@@ -109,11 +121,14 @@ export default function ProductDetailModal({ visible, onClose, plat, onAddToCart
 
             {/* Avis */}
             <View style={s.avisBox}>
-              <Text style={s.avisTitle}>⭐ Votre avis</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Star size={16} color={Colors.livreur.primary} fill={Colors.livreur.primary} />
+                <Text style={s.avisTitle}>Votre avis</Text>
+              </View>
               <View style={s.starsRow}>
                 {[1, 2, 3, 4, 5].map(n => (
                   <PressableScale key={n} onPress={() => setRating(n)}>
-                    <Text style={{ fontSize: 28 }}>{n <= rating ? '⭐' : '☆'}</Text>
+                    <Star size={28} color={n <= rating ? Colors.livreur.primary : Colors.text.muted} fill={n <= rating ? Colors.livreur.primary : 'none'} />
                   </PressableScale>
                 ))}
               </View>
@@ -137,9 +152,12 @@ export default function ProductDetailModal({ visible, onClose, plat, onAddToCart
             </View>
             <PressableScale onPress={handleAdd} style={{ flex: 1 }}>
               <View style={[s.addBtn, glow(Colors.client.glow, 12)]}>
-                <Text style={s.addBtnText}>
-                  🛒 Ajouter — {((plat.prix ?? 0) * qty).toLocaleString()} FCFA
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ShoppingCart size={18} color={Colors.bg.app} />
+                  <Text style={s.addBtnText}>
+                    Ajouter — {((plat.prix ?? 0) * qty).toLocaleString()} FCFA
+                  </Text>
+                </View>
               </View>
             </PressableScale>
           </View>
@@ -163,7 +181,7 @@ const s = StyleSheet.create({
   infoBox:      { paddingHorizontal: Spacing.lg, gap: 8, marginBottom: Spacing.md },
   platNom:      { ...Typography.h2 },
   metaRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metaChip:     { backgroundColor: Colors.bg.elevated, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border.default },
+  metaChip:     { backgroundColor: Colors.bg.elevated, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border.default, flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText:     { ...Typography.small, fontWeight: '700' },
   platDesc:     { ...Typography.body, lineHeight: 22 },
   avisBox:      { paddingHorizontal: Spacing.lg, gap: 10, marginBottom: Spacing.md },

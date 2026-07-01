@@ -1,4 +1,4 @@
-// === MODÈLE DE DONNÉES EEUEZ ===
+// === MODÈLE DE DONNÉES MENU ===
 // Centralise tous les types, attributs et interfaces du domaine
 
 // ─── AUTH & USER BASE ───────────────────────────────────────────

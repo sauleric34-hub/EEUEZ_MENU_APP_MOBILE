@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  EEUEZ MENU — Service API (client HTTP générique)
+//  MENU — Service API (client HTTP générique)
 //  Toutes les requêtes authentifiées passent par ici
 // ═══════════════════════════════════════════════════════
 

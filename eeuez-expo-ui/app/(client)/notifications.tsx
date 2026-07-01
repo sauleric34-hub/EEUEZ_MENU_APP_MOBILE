@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { PressableScale } from '../../components/Animations';
+import { Bell, BellOff, Utensils, Bike } from 'lucide-react-native';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -45,7 +46,9 @@ export default function NotificationsScreen() {
 
         {notifs.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14 }}>
-            <Text style={{ fontSize: 64 }}>🔔</Text>
+            <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: Colors.bg.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.border.default }}>
+              <BellOff size={40} color={Colors.text.muted} />
+            </View>
             <Text style={s.greeting}>Aucune notification</Text>
             <Text style={[s.locationText, { textAlign: 'center', paddingHorizontal: 40 }]}>
               Vous recevrez ici les mises à jour de vos commandes et promos.
@@ -56,7 +59,12 @@ export default function NotificationsScreen() {
             {notifs.map((n: any, idx: number) => (
               <View key={n.id || idx} style={[s.notifCard, !n.read && s.unreadCard]}>
                  <View style={[s.iconBox, { backgroundColor: n.bg || Colors.client.bg }]}>
-                    <Text style={{ fontSize: 24 }}>{n.message.includes('Prêt') ? '🍽️' : n.message.includes('route') ? '🛵' : '🔔'}</Text>
+                    {n.message.includes('Prêt') || n.message.includes('prêt')
+                      ? <Utensils size={22} color={n.color || Colors.client.primary} />
+                      : n.message.includes('route') || n.message.includes('livraison')
+                      ? <Bike size={22} color={n.color || Colors.client.primary} />
+                      : <Bell size={22} color={n.color || Colors.client.primary} />
+                    }
                  </View>
                  <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>

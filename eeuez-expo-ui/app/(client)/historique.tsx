@@ -7,12 +7,15 @@ import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, glow, StatutConfig } from '../../constants/theme';
 import { PressableScale, ConfettiBurst, EmojiPop, useButtonPress } from '../../components/Animations';
 import { commandeService } from '../../services/apiService';
+import { Package, Store, MapPin } from 'lucide-react-native';
 
 function StatutPill({ statut }: { statut: string }) {
   const cfg = StatutConfig[statut] ?? StatutConfig.en_attente;
+  const Icon = cfg.icon;
   return (
-    <View style={[s.pill, { backgroundColor: cfg.bg }]}>
-      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.emoji} {cfg.label}</Text>
+    <View style={[s.pill, { backgroundColor: cfg.bg, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+      {Icon && <Icon size={12} color={cfg.color} />}
+      <Text style={[s.pillText, { color: cfg.color }]}>{cfg.label}</Text>
     </View>
   );
 }
@@ -40,14 +43,19 @@ function CommandeCard({ cmd }: { cmd: any }) {
         <Text style={s.cmdId}>#{cmd.id.toString().slice(0, 6)}</Text>
         <StatutPill statut={cmd.statut} />
       </View>
-      <Text style={s.cmdRestoNom}>🏪 {cmd.restaurant_details?.nom ?? 'Restaurant inconnu'}</Text>
+      <Text style={s.cmdRestoNom}>
+        <Store size={11} color={Colors.text.secondary} />{' '}{cmd.restaurant_details?.nom ?? 'Restaurant inconnu'}
+      </Text>
       <Text style={s.cmdPlats}>{cmd.lignes?.map((p: any) => `${p.quantite}x ${p.nom_plat}`).join(', ') ?? 'Plats variés'}</Text>
       <View style={s.cmdFooter}>
         <Text style={s.cmdMontant}>{cmd.total?.toLocaleString() ?? '8 500'} FCFA</Text>
         {(cmd.statut === 'en_livraison' || cmd.statut === 'en_preparation') && (
           <PressableScale onPress={() => { triggerSuccess('📍'); router.push(`/(client)/suivi?order_id=${cmd.id}` as any); }}>
             <View style={[s.trackBtn, glow(Colors.client.glow, 8)]}>
-              <Text style={s.trackBtnText}>📍 Suivre</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MapPin size={13} color={Colors.bg.app} />
+                <Text style={s.trackBtnText}>Suivre</Text>
+              </View>
             </View>
           </PressableScale>
         )}
@@ -80,7 +88,10 @@ export default function HistoriqueScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
       <SafeAreaView style={{ flex: 1 }}>
         <Animated.View style={[s.header, { opacity: fadeIn }]}>
-          <Text style={s.title}>📦 Mes Commandes</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Package size={22} color={Colors.text.primary} />
+            <Text style={s.title}>Mes Commandes</Text>
+          </View>
           <Text style={s.subtitle}>{commandes.length} commande(s)</Text>
         </Animated.View>
 

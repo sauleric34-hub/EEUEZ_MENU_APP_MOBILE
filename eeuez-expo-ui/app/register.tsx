@@ -6,11 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, glow } from '../constants/theme';
 import { PressableScale } from '../components/Animations';
+import { ShoppingBag, Store, Bike, User, Mail, Phone, ChevronLeft, UserPlus, PenLine, Check } from 'lucide-react-native';
 
 const ROLES = [
-  { key: 'client',      label: 'Client',      emoji: '🛍️', desc: 'Créer un compte pour commander' },
-  { key: 'restaurant',  label: 'Restaurant',  emoji: '🏪', desc: 'Enregistrer votre restaurant' },
-  { key: 'livreur',     label: 'Livreur',     emoji: '🛵', desc: 'Rejoindre notre flotte' },
+  { key: 'client',      label: 'Client',      icon: ShoppingBag, desc: 'Créer un compte pour commander' },
+  { key: 'restaurant',  label: 'Restaurant',  icon: Store, desc: 'Enregistrer votre restaurant' },
+  { key: 'livreur',     label: 'Livreur',     icon: Bike, desc: 'Rejoindre notre flotte' },
 ];
 
 export default function RegisterScreen() {
@@ -55,13 +56,16 @@ export default function RegisterScreen() {
           {/* Header */}
           <Animated.View style={[s.header, { opacity: fadeIn, transform: [{ translateY: slideIn }] }]}>
             <PressableScale onPress={() => step === 'form' ? setStep('role') : router.back()}>
-              <View style={s.backBtn}><Text style={s.backArrow}>←</Text></View>
+              <View style={s.backBtn}><ChevronLeft size={22} color={Colors.text.primary} /></View>
             </PressableScale>
             <View style={s.logoRow}>
-              <Text style={s.logoText}>EEUEZ</Text>
+              <Text style={s.logoText}>Menu</Text>
               <View style={s.logoBadge}><Text style={s.logoBadgeText}>MENU</Text></View>
             </View>
-            <Text style={s.title}>{step === 'role' ? '👋 Créer un compte' : `✏️ Inscription ${ROLES.find(r => r.key === role)?.label}`}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {step === 'role' ? <UserPlus size={24} color={Colors.text.primary} /> : <PenLine size={24} color={Colors.text.primary} />}
+              <Text style={s.title}>{step === 'role' ? 'Créer un compte' : `Inscription ${ROLES.find(r => r.key === role)?.label}`}</Text>
+            </View>
             <Text style={s.subtitle}>{step === 'role' ? 'Choisissez votre rôle' : 'Remplissez vos informations'}</Text>
           </Animated.View>
 
@@ -74,7 +78,7 @@ export default function RegisterScreen() {
                 }}>
                   <PressableScale onPress={() => selectRole(r.key)}>
                     <View style={s.roleCard}>
-                      <View style={s.roleIconBg}><Text style={{ fontSize: 28 }}>{r.emoji}</Text></View>
+                      <View style={s.roleIconBg}><r.icon size={28} color={Colors.client.primary} /></View>
                       <View style={s.roleText}>
                         <Text style={s.roleLabel}>{r.label}</Text>
                         <Text style={s.roleDesc}>{r.desc}</Text>
@@ -88,13 +92,16 @@ export default function RegisterScreen() {
           ) : (
             <Animated.View style={[s.form, { opacity: fadeIn }]}>
               {[
-                { label: 'Prénom', value: prenom, onChange: setPrenom, placeholder: 'Jean', emoji: '👤' },
-                { label: 'Nom',    value: nom,    onChange: setNom,    placeholder: 'Kamga', emoji: '👤' },
-                { label: 'Email',  value: email,  onChange: setEmail,  placeholder: 'jean@example.cm', emoji: '✉️' },
-                { label: 'Téléphone', value: tel, onChange: setTel,  placeholder: '+237 6XX XXX XXX', emoji: '📱' },
+                { label: 'Prénom', value: prenom, onChange: setPrenom, placeholder: 'Jean', icon: User },
+                { label: 'Nom',    value: nom,    onChange: setNom,    placeholder: 'Kamga', icon: User },
+                { label: 'Email',  value: email,  onChange: setEmail,  placeholder: 'jean@example.cm', icon: Mail },
+                { label: 'Téléphone', value: tel, onChange: setTel,  placeholder: '+237 6XX XXX XXX', icon: Phone },
               ].map(field => (
                 <View key={field.label} style={s.fieldBox}>
-                  <Text style={s.fieldLabel}>{field.emoji} {field.label}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <field.icon size={16} color={Colors.text.muted} />
+                    <Text style={[s.fieldLabel, { marginBottom: 0 }]}>{field.label}</Text>
+                  </View>
                   <View style={s.inputBox}>
                     <TextInput
                       style={s.input}
@@ -109,7 +116,10 @@ export default function RegisterScreen() {
 
               <PressableScale onPress={submit}>
                 <View style={[s.submitBtn, glow(Colors.client.glow, 12)]}>
-                  <Text style={s.submitText}>✓ Créer mon compte</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Check size={20} color={Colors.bg.app} />
+                    <Text style={s.submitText}>Créer mon compte</Text>
+                  </View>
                 </View>
               </PressableScale>
 

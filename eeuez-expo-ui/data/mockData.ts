@@ -59,9 +59,9 @@ export const MOCK_RESTAURANT_USER: Restaurant = {
     }
   ],
   tables: [
-    { id: 't1', numero: 1, capacite: 2, qrCode: 'EEUEZ-R1-T1-2024', isOccupee: false },
-    { id: 't2', numero: 2, capacite: 4, qrCode: 'EEUEZ-R1-T2-2024', isOccupee: true },
-    { id: 't3', numero: 3, capacite: 6, qrCode: 'EEUEZ-R1-T3-2024', isOccupee: false },
+    { id: 't1', numero: 1, capacite: 2, qrCode: 'MENU-R1-T1-2024', isOccupee: false },
+    { id: 't2', numero: 2, capacite: 4, qrCode: 'MENU-R1-T2-2024', isOccupee: true },
+    { id: 't3', numero: 3, capacite: 6, qrCode: 'MENU-R1-T3-2024', isOccupee: false },
   ],
   commandes: [],
   livreurs: ['l1'],
@@ -98,7 +98,7 @@ export const MOCK_CLIENT: Client = {
   commandes: ['cmd1', 'cmd2'],
   panier: [],
   favoris: ['r1'],
-  historiqueQR: ['EEUEZ-R1-T2-2024']
+  historiqueQR: ['MENU-R1-T2-2024']
 };
 
 export const MOCK_LIVREUR: Livreur = {
@@ -106,7 +106,7 @@ export const MOCK_LIVREUR: Livreur = {
   role: 'livreur',
   nom: 'Nkolo',
   prenom: 'Paul',
-  email: 'paul.nkolo@eeuez.cm',
+  email: 'paul.nkolo@menu.cm',
   telephone: '+237 677 234 567',
   dateInscription: new Date('2024-03-01'),
   isActive: true,
