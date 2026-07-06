@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 import json
 
-from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis
+from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis, Transaction
 from .serializers import (
     UserSerializer, RestaurantProfileSerializer, PlatSerializer, 
     CommandeSerializer, LivraisonSerializer
@@ -23,7 +23,8 @@ def get_tokens_for_user(user):
 # --- AUTH ---
 class LoginView(views.APIView):
     permission_classes = [permissions.AllowAny]
-    
+    throttle_scope = 'auth'
+
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
@@ -34,12 +35,13 @@ class LoginView(views.APIView):
         if user:
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
-            return Response({'token': tokens['access'], 'user': user_data})
+            return Response({'token': tokens['access'], 'refresh': tokens['refresh'], 'user': user_data})
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class RegisterView(views.APIView):
     permission_classes = [permissions.AllowAny]
-    
+    throttle_scope = 'auth'
+
     def post(self, request, role):
         if role not in ['client', 'restaurant', 'livreur']:
             return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
@@ -66,7 +68,10 @@ class RegisterView(views.APIView):
             )
             
         tokens = get_tokens_for_user(user)
-        return Response({'token': tokens['access'], 'user': UserSerializer(user).data}, status=status.HTTP_201_CREATED)
+        return Response(
+            {'token': tokens['access'], 'refresh': tokens['refresh'], 'user': UserSerializer(user).data},
+            status=status.HTTP_201_CREATED,
+        )
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
@@ -99,61 +104,73 @@ def nearby_restaurants(request):
     return Response(results)
 
 class ClientCommandeViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.AllowAny] # Bypass pour tester le frontend sans login
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = CommandeSerializer
-    
+
     def get_queryset(self):
-        user = self.request.user
-        if user.is_anonymous:
-            user = User.objects.filter(role='client').first()
-        if not user:
-            return Commande.objects.none()
-        return Commande.objects.filter(client=user)
-        
+        return Commande.objects.filter(client=self.request.user).order_by('-created_at')
+
     def create(self, request, *args, **kwargs):
         user = request.user
-        if user.is_anonymous:
-            user = User.objects.filter(role='client').first()
-            if not user:
-                return Response({"error": "Aucun client trouvé dans la base pour tester"}, status=400)
-                
         data = request.data
         restaurant_id = data.get('restaurant')
         try:
             restaurant = RestaurantProfile.objects.get(id=restaurant_id)
         except RestaurantProfile.DoesNotExist:
             return Response({"error": "Restaurant introuvable"}, status=status.HTTP_404_NOT_FOUND)
-            
+
         if not restaurant.is_open:
             return Response({"error": "Le restaurant est fermé"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+        items = data.get('items', [])
+        if not items:
+            return Response({"error": "Le panier est vide"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mode de paiement (par défaut : espèces à la livraison)
+        VALID_MODES = {'especes', 'mtn_money', 'orange_money', 'carte'}
+        mode_paiement = data.get('mode_paiement', 'especes')
+        if mode_paiement not in VALID_MODES:
+            mode_paiement = 'especes'
+
         commande = Commande.objects.create(
             client=user,
             restaurant=restaurant,
             adresse_livraison=data.get('adresse_livraison', ''),
             notes=data.get('notes', ''),
             statut='en_attente',
-            delai_estime=restaurant.temps_livraison_moyen
+            delai_estime=restaurant.temps_livraison_moyen,
         )
-        
+
         sous_total = 0
-        items = data.get('items', [])
         for item in items:
-            plat = Plat.objects.get(id=item['plat_id'])
-            qte = int(item.get('quantite', 1))
+            try:
+                plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
+            except (Plat.DoesNotExist, KeyError):
+                continue
+            qte = max(1, int(item.get('quantite', 1)))
             prix = plat.prix
             LigneCommande.objects.create(
-                commande=commande,
-                plat=plat,
-                quantite=qte,
-                prix_unitaire=prix
+                commande=commande, plat=plat, quantite=qte, prix_unitaire=prix,
             )
             sous_total += float(prix) * qte
-            
+
+        if sous_total == 0:
+            commande.delete()
+            return Response({"error": "Aucun plat valide dans la commande"}, status=status.HTTP_400_BAD_REQUEST)
+
         frais_liv = float(restaurant.frais_livraison)
         commande.montant_total = sous_total + frais_liv
         commande.save()
-        
+
+        # Trace du paiement (espèces = à encaisser à la livraison)
+        Transaction.objects.create(
+            commande=commande,
+            type='paiement_client',
+            montant=commande.montant_total,
+            mode_paiement=mode_paiement,
+            statut='complete' if mode_paiement == 'especes' else 'en_attente',
+        )
+
         return Response(CommandeSerializer(commande).data, status=status.HTTP_201_CREATED)
 
 # --- RESTAURANT ---

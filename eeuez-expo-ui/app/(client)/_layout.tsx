@@ -1,60 +1,67 @@
+// ═══════════════════════════════════════════════════════════
+//  Layout client — barre de navigation personnalisée (6 onglets)
+// ═══════════════════════════════════════════════════════════
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Radius, glow } from '../../constants/theme';
-import { Home, ShoppingCart, Utensils, Heart, User } from 'lucide-react-native';
+import {
+  House, UtensilsCrossed, Navigation, ShoppingCart, Heart, User,
+  type LucideIcon,
+} from 'lucide-react-native';
+import { Brand, Radius } from '../../constants/theme';
+import { useApp } from '../../context/AppContext';
+import { PressableScale, bodyFont } from '../../components/ui';
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+interface NavDef { route: string; label: string; Icon: LucideIcon; }
+const NAV: NavDef[] = [
+  { route: 'index',   label: 'Accueil', Icon: House },
+  { route: 'plats',   label: 'Plats',   Icon: UtensilsCrossed },
+  { route: 'carte',   label: 'Carte',   Icon: Navigation },
+  { route: 'panier',  label: 'Panier',  Icon: ShoppingCart },
+  { route: 'favoris', label: 'Favoris', Icon: Heart },
+  { route: 'profil',  label: 'Profil',  Icon: User },
+];
+// L'onglet Accueil reste actif sur les sous-écrans plat/resto
+const HOME_GROUP = new Set(['index', 'dish', 'resto']);
+
+function BottomNav({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-
-  const ALLOWED_ROUTES = ['index', 'cart', 'explore', 'favorites', 'profile'];
-  const visibleRoutes = state.routes.filter((route: any) => ALLOWED_ROUTES.includes(route.name));
+  const { colors, cartCount } = useApp();
+  const current = state.routes[state.index]?.name ?? 'index';
 
   return (
     <View style={[
-      s.tabBar,
+      styles.bar,
       {
-        paddingBottom: Math.max(insets.bottom, 20),
-        height: 70 + Math.max(insets.bottom, 20)
-      }
+        backgroundColor: colors.nav,
+        borderTopColor: colors.navBorder,
+        paddingBottom: Math.max(insets.bottom, 12),
+        height: 66 + Math.max(insets.bottom, 12),
+      },
     ]}>
-      {visibleRoutes.map((route: any, index: number) => {
-        const { options } = descriptors[route.key];
-        const isFocused = state.index === state.routes.findIndex((r: any) => r.key === route.key);
-
+      {NAV.map(({ route, label, Icon }) => {
+        const active = current === route || (route === 'index' && HOME_GROUP.has(current));
         const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPreventDefault) {
-            navigation.navigate(route.name);
-          }
+          const event = navigation.emit({ type: 'tabPress', target: route, canPreventDefault: true });
+          if (!event.defaultPrevented) navigation.navigate(route);
         };
-
-        let IconComp = Home;
-        if (route.name === 'cart') IconComp = ShoppingCart;
-        else if (route.name === 'explore') IconComp = Utensils;
-        else if (route.name === 'favorites') IconComp = Heart;
-        else if (route.name === 'profile') IconComp = User;
-        else if (route.name === 'index') IconComp = Home;
-        else return null;
-
+        const showBadge = route === 'panier' && cartCount > 0;
         return (
-          <TouchableOpacity
-            key={route.key}
-            onPress={onPress}
-            style={s.tabItem}
-          >
-            <View style={[
-              s.iconContainer,
-              isFocused && { backgroundColor: Colors.client.primary, ...glow(Colors.client.glow, 8) }
-            ]}>
-              <IconComp size={24} color={isFocused ? Colors.bg.app : Colors.text.primary} opacity={isFocused ? 1 : 0.6} />
+          <PressableScale key={route} onPress={onPress} style={styles.item} scaleTo={0.88}>
+            <View style={[styles.pill, active && { backgroundColor: Brand.accent + '22' }]}>
+              <Icon size={21} color={active ? Brand.accentLight : colors.faint} strokeWidth={active ? 2.5 : 2} />
+              {showBadge && (
+                <View style={[styles.badge, { borderColor: colors.nav }]}>
+                  <Text style={styles.badgeTxt}>{cartCount}</Text>
+                </View>
+              )}
             </View>
-          </TouchableOpacity>
+            <Text style={[bodyFont(10, active ? '800' : '600'), { color: active ? Brand.accentLight : colors.faint }]}>
+              {label}
+            </Text>
+          </PressableScale>
         );
       })}
     </View>
@@ -63,42 +70,35 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
 export default function ClientLayout() {
   return (
-    <Tabs
-      tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
-      <Tabs.Screen name="cart" options={{ title: 'Panier' }} />
-      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-      <Tabs.Screen name="favorites" options={{ title: 'Favoris' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
-      <Tabs.Screen name="map" options={{ href: null }} />
+    <Tabs tabBar={props => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="plats" />
+      <Tabs.Screen name="carte" />
+      <Tabs.Screen name="panier" />
+      <Tabs.Screen name="favoris" />
+      <Tabs.Screen name="profil" />
     </Tabs>
   );
 }
 
-const s = StyleSheet.create({
-  tabBar: {
+const styles = StyleSheet.create({
+  bar: {
     flexDirection: 'row',
-    height: 80,
-    paddingBottom: 25,
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'space-around',
+    paddingTop: 9,
     borderTopWidth: 1,
-    backgroundColor: Colors.bg.surface,
-    borderTopColor: Colors.border.default,
   },
-  tabItem: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  item: { alignItems: 'center', gap: 3, flex: 1 },
+  pill: {
+    width: 46, height: 32, borderRadius: Radius.pill,
+    alignItems: 'center', justifyContent: 'center',
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  }
+  badge: {
+    position: 'absolute', top: -3, right: 4,
+    minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8,
+    backgroundColor: Brand.accent, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badgeTxt: { color: '#fff', fontSize: 9.5, fontWeight: '800' },
 });

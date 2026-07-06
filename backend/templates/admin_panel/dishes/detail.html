@@ -39,11 +39,21 @@
     <div class="stat-row"><span class="stat-row-label">Ajouté le</span><span class="stat-row-value">{{ plat.created_at|date:"d/m/Y" }}</span></div>
     {% if plat.description %}
     <div class="divider"></div>
+    <div class="form-label">Description</div>
     <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">{{ plat.description }}</p>
     {% endif %}
-    {% if plat.ingredients %}
+    {% if composition %}
     <div style="margin-top:12px;">
-      <div class="form-label">Ingrédients</div>
+      <div class="form-label">Composition</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        {% for ingredient in composition %}
+        <span style="padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--bg-tertiary);font-size:0.78rem;color:var(--text-primary);">{{ ingredient }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% elif plat.ingredients %}
+    <div style="margin-top:12px;">
+      <div class="form-label">Composition</div>
       <p style="font-size:0.8rem;color:var(--text-secondary);">{{ plat.ingredients }}</p>
     </div>
     {% endif %}

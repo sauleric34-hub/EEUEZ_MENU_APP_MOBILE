@@ -197,6 +197,36 @@ class Avis(models.Model):
         return f"Avis {self.note}/5 — {self.restaurant}"
 
 
+class Favori(models.Model):
+    """Plat mis en favori par un client."""
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favoris')
+    plat = models.ForeignKey(Plat, on_delete=models.CASCADE, related_name='favoris')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Favori'
+        verbose_name_plural = 'Favoris'
+        unique_together = ('client', 'plat')
+
+    def __str__(self):
+        return f"{self.client} ♥ {self.plat}"
+
+
+class Abonnement(models.Model):
+    """Client abonné à un restaurant."""
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='abonnements')
+    restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='abonnes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Abonnement'
+        verbose_name_plural = 'Abonnements'
+        unique_together = ('client', 'restaurant')
+
+    def __str__(self):
+        return f"{self.client} → {self.restaurant}"
+
+
 MODE_PAIEMENT_CHOICES = [
     ('mtn_money', 'MTN Money'),
     ('orange_money', 'Orange Money'),

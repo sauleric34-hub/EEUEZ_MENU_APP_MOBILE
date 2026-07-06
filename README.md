@@ -54,9 +54,9 @@ Nous avons créé un moteur de simulation complet dans `AppContext.tsx` pour l'i
   * Au bout du délai, un **nouveau calcul** du plus court chemin OSRM est fait à partir de la position *actuelle* du livreur vers la destination.
   * L'ancien chemin disparaît et la nouvelle ligne "snappe" organiquement sans aucune téléportation du livreur.
 
-### 3. Connexion Backend (Django / Spring Boot)
+### 3. Connexion Backend (Django)
 * Mise en place des appels asynchrones vers le serveur.
-* Adressage IP dynamique pour permettre à l'application tournant sur un téléphone physique (via Expo Go) de communiquer avec le backend local (`192.168.1.187:8088`).
+* Adressage IP dynamique pour permettre à l'application tournant sur un téléphone physique (via Expo Go) de communiquer avec le backend local.
 
 ---
 
@@ -64,7 +64,7 @@ Nous avons créé un moteur de simulation complet dans `AppContext.tsx` pour l'i
 
 * **Front-end** : React Native, Expo Router, React Native Maps
 * **Styling** : StyleSheet (Custom design system avec effets *glow*)
-* **Back-end** : API REST (Django / Spring Boot)
+* **Back-end** : API REST (Django / Django REST Framework)
 * **Routing GPS** : API OSRM (Project-OSRM)
 
 ## 🚀 Comment lancer le projet ?
@@ -80,7 +80,15 @@ npm run start
 3. Scannez le QR Code avec **Expo Go** sur votre smartphone.
 
 ### Back-end (API)
-Lancez votre serveur local sur le port 8088 pour que l'app mobile puisse interagir avec la base de données.
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+Le serveur démarre par défaut sur `http://localhost:8000` pour que l'app mobile puisse interagir avec la base de données.
 
 ---
 *Projet propulsé et structuré avec amour et du code robuste. ❤️*

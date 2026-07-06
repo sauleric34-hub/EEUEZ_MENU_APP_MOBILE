@@ -6,6 +6,10 @@ from core.models import Plat, Categorie, AuditLog
 from .dashboard import admin_required
 
 
+def _split_composition(raw):
+    return [part.strip() for part in (raw or '').replace(';', ',').split(',') if part.strip()]
+
+
 @admin_required
 def dish_list(request):
     qs = Plat.objects.select_related('restaurant', 'categorie')
@@ -43,6 +47,7 @@ def dish_detail(request, pk):
     nb_commandes = plat.lignecommande_set.count()
     return render(request, 'admin_panel/dishes/detail.html', {
         'plat': plat,
+        'composition': _split_composition(plat.ingredients),
         'nb_commandes': nb_commandes,
         'active_page': 'dishes',
     })

@@ -1,210 +1,119 @@
-# 🍽️ Menu — Application Mobile
+# 🍽️ Menu — Application mobile (client)
 
-<div align="center">
+App **client** de commande & livraison, Expo / React Native.
+Design « Menu App v2 » : thème africain (orange / vert / or), mode clair & sombre,
+icônes vectorielles ([lucide-react-native](https://lucide.dev)) — **aucun emoji**.
 
-![EEUEZ Banner](https://img.shields.io/badge/Menu%20App-FFB224?style=for-the-badge&logo=expo&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0--beta-blue?style=for-the-badge)
-![Expo](https://img.shields.io/badge/Expo%20Go-v54-000020?style=for-the-badge&logo=expo)
-![React Native](https://img.shields.io/badge/React%20Native-0.79-61DAFB?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript)
+> L'app mobile ne contient que l'expérience **client**. La gestion restaurant/livreur
+> et l'administration se font côté back-office (Django).
 
-**Application mobile de commande de repas · 3 rôles · Design Dark Glassmorphism**
-
-</div>
-
----
-
-## 📱 Présentation
-
-**Menu** est une application mobile de commande de repas en ligne développée avec **Expo / React Native**. Elle simule un écosystème complet de livraison de repas avec trois interfaces distinctes :
-
-| 🛍️ Client | 🏪 Restaurant | 🛵 Livreur |
-|---|---|---|
-| Parcourir les restaurants | Gérer les commandes | Accepter des missions |
-| Passer des commandes | Contrôler la disponibilité des plats | Suivre son trajet GPS |
-| Suivre la livraison en temps réel | Consulter les statistiques | Gérer ses gains |
-| Scanner les QR codes de table | Assigner des livreurs | Activer son mode en ligne |
-
-### ✨ Points Forts
-
-- 🎨 **Design Dark Glassmorphism** — Thème sombre premium avec effets de lueur (glow)
-- 🎬 **Animations riches** — Confettis, émojis flottants, rebonds, pulsations, transitions fluides
-- 🔄 **Cas d'utilisation croisés (UC-X)** — Simulation des interactions temps réel entre les 3 rôles
-- 📱 **Compatible Expo Go v54** — Aucune configuration native requise, animations 100% `Animated` natif
-
----
-
-## 🛠️ Stack Technique
-
-- **Framework** : [Expo](https://expo.dev/) v54 avec Expo Router v3
-- **Langage** : TypeScript
-- **Navigation** : Expo Router (groupes de routes `(client)`, `(restaurant)`, `(livreur)`)
-- **Animations** : `Animated` natif de React Native (pas de Reanimated)
-- **Design System** : `constants/theme.ts` — palette centralisée, glassmorphism, tokens
-
----
-
-## 🚀 Installation et Test
-
-### Prérequis
-
-Avant de commencer, assurez-vous d'avoir installé sur votre machine :
-
-| Outil | Version Minimale | Lien |
-|---|---|---|
-| **Node.js** | 18.x ou supérieur | [nodejs.org](https://nodejs.org/) |
-| **Git** | Toute version récente | [git-scm.com](https://git-scm.com/) |
-| **Expo Go** (sur téléphone) | v54 | [Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent) / [App Store](https://apps.apple.com/app/expo-go/id982107779) |
-
-> ⚠️ **Important** : Votre téléphone et votre ordinateur doivent être connectés au **même réseau Wi-Fi**.
-
----
-
-### Étape 1 — Cloner le dépôt
-
-```bash
-git clone https://github.com/sauleric34-hub/EEUEZ_MENU_APP_MOBILE.git
-```
-
-### Étape 2 — Naviguer dans le projet
-
-```bash
-cd EEUEZ_MENU_APP_MOBILE
-```
-
-### Étape 3 — Installer les dépendances
+## 🚀 Lancer
 
 ```bash
 npm install
+npm run start      # puis scanner le QR avec Expo Go
+# ou : npm run android  /  npm run ios
 ```
 
-> ⏳ Cette étape peut prendre quelques minutes selon votre connexion.
+## 🧭 Écrans
 
-### Étape 4 — Lancer le serveur de développement
+| Route | Écran |
+|-------|-------|
+| `app/index.tsx` | Splash / Connexion |
+| `app/(client)/index.tsx` | Accueil (recherche, catégories, populaires, restaurants) |
+| `app/(client)/plats.tsx` | Tous les plats (grille + filtres) |
+| `app/(client)/carte.tsx` | Carte des restaurants + fiche |
+| `app/(client)/panier.tsx` | Panier & récapitulatif |
+| `app/(client)/favoris.tsx` | Favoris |
+| `app/(client)/profil.tsx` | Profil, commandes, allergies |
+| `app/dish/[id].tsx` | Détail d'un plat |
+| `app/resto/[id].tsx` | Profil restaurant |
+| `app/tracking.tsx` | Suivi de livraison en direct |
+
+Les onglets (barre du bas, 6 entrées) sont dans `app/(client)/_layout.tsx`.
+Le détail plat, le profil resto et le suivi sont hors onglets (plein écran).
+
+## 🏗️ Structure
+
+```
+constants/theme.ts     — palette (clair/sombre), kente, polices, rayons, ombres
+context/AppContext.tsx — état partagé : thème, panier, favoris, abonnements, suivi
+data/menuData.ts       — données mock (restos, plats, catégories) + icônes lucide
+components/
+  ui.tsx        — primitives (PressableScale, DishTile, AccentButton, IconButton…)
+  cards.tsx     — cartes plat (large/grille) & restaurant
+  ScreenBg.tsx  — fond dégradé + halos
+  Logo.tsx      — logo de marque
+  ChatSheet.tsx — bottom sheet de discussion
+services/, constants/api.ts — base pour brancher l'API Django (non câblée)
+```
+
+## 🎨 Polices (optionnel)
+
+Le design d'origine utilise **Bricolage Grotesque** (titres) et **Manrope** (corps).
+Par défaut on retombe sur la police système. Pour activer les vraies polices :
 
 ```bash
-npx expo start -c
+npx expo install @expo-google-fonts/bricolage-grotesque @expo-google-fonts/manrope expo-font
 ```
 
-> Le flag `-c` vide le cache Metro Bundler pour éviter tout conflit.
+puis charger via `useFonts` et renseigner `Fonts.display` / `Fonts.body` dans
+`constants/theme.ts`.
 
-### Étape 5 — Scanner le QR Code
+## 🔌 Backend (Django) — connexion réelle
 
-Une fois le serveur lancé, un **QR code** apparaît dans le terminal.
+L'app est **entièrement branchée** sur l'API Django : authentification JWT,
+catalogue (restaurants / plats / catégories), favoris, abonnements, panier →
+commande, liste des commandes, suivi de livraison — tout communique avec la base.
 
-- **Android** → Ouvrez **Expo Go**, puis scannez le QR code depuis l'onglet "Scan QR Code".
-- **iOS** → Ouvrez l'**application Appareil Photo**, scannez le QR code, puis appuyez sur la notification.
+### 1. Lancer le serveur (accessible depuis le téléphone)
 
----
-
-## 🗂️ Structure du Projet
-
-```
-eeuez-expo-ui/
-├── app/
-│   ├── index.tsx               # Écran d'accueil (sélection du rôle)
-│   ├── _layout.tsx             # Navigation racine
-│   ├── (client)/
-│   │   ├── _layout.tsx
-│   │   └── index.tsx           # Interface Client
-│   ├── (restaurant)/
-│   │   ├── _layout.tsx
-│   │   └── index.tsx           # Interface Restaurant
-│   └── (livreur)/
-│       ├── _layout.tsx
-│       └── index.tsx           # Interface Livreur
-├── components/
-│   ├── DrawerMenu.tsx          # Menu latéral animé (compatible Android/iOS)
-│   └── Animations.tsx          # Bibliothèque d'animations (Confetti, EmojiPop, etc.)
-├── constants/
-│   └── theme.ts                # Design system centralisé (couleurs, typographie, glassmorphism)
-├── data/
-│   └── mockData.ts             # Données simulées (restaurants, commandes, utilisateurs)
-└── types/
-    └── models.ts               # Types TypeScript du domaine métier
+```bash
+cd ../backend
+venv\Scripts\activate
+python manage.py runserver 0.0.0.0:8000      # 0.0.0.0 = accessible sur le LAN
 ```
 
----
+### 2. Pointer l'app vers votre machine
 
-## 🎮 Fonctionnalités à Tester
+Dans [`constants/api.ts`](constants/api.ts), régler `API_BASE_URL` :
 
-### Interface Client
-- [ ] Parcourir la liste des restaurants
-- [ ] Ajouter un restaurant en favori (animation ❤️ + confettis)
-- [ ] Appuyer sur "Suivre en direct" (FloatingReaction 🛵 + confettis)
-- [ ] Observer la timeline de commande qui progresse automatiquement
-- [ ] Ouvrir/fermer le drawer (menu latéral)
+| Contexte | Valeur |
+|----------|--------|
+| Émulateur Android | `http://10.0.2.2:8000/api` |
+| Téléphone (Expo Go, même Wi-Fi) | `http://VOTRE_IP_LOCALE:8000/api` |
+| Simulateur iOS | `http://localhost:8000/api` |
 
-### Interface Restaurant
-- [ ] Observer les stats qui apparaissent en cascade (stagger animation)
-- [ ] Appuyer sur **"Accepter"** une commande → confettis 🎉 + statut qui change automatiquement
-- [ ] Appuyer sur **"Refuser"** une commande → la carte disparaît
-- [ ] Toggler la disponibilité d'un plat (UC-X2)
-- [ ] Appuyer sur les cartes "Top Ventes" (rebond)
+> Trouvez votre IP locale avec `ipconfig` (Windows) → « Adresse IPv4 ».
 
-### Interface Livreur
-- [ ] Toggler le bouton En ligne / Hors ligne → confettis + alerte UC-X9
-- [ ] Observer le statut de mission qui change après 5 secondes
-- [ ] Appuyer sur "Naviguer" (FloatingReaction 🗺️)
-- [ ] Appuyer sur "Scanner QR" (EmojiPop 📷)
-- [ ] Naviguer vers "Mes Gains" depuis le drawer
+### 3. Compte de démonstration
 
----
+Un client de test est déjà présent en base :
 
-## 🔄 Cas d'Utilisation Croisés (UC-X)
+```
+Email    : client@menu.cm
+Mot de passe : client123
+```
 
-Ces scénarios simulent les interactions entre les 3 acteurs :
+Le bouton **« Connexion démo »** de l'écran d'accueil s'y connecte directement.
+L'inscription (« Créer un compte ») crée un vrai client via `POST /api/auth/register/client`.
 
-| ID | Scénario | Acteurs |
-|---|---|---|
-| **UC-X1** | Scan QR code de table | Client → Restaurant |
-| **UC-X2** | Disponibilité plat visible immédiatement | Restaurant → Clients |
-| **UC-X3** | Accepter commande → assignation livreur | Restaurant + Système + Livreur |
-| **UC-X4** | Suivi GPS temps réel | Livreur → Client |
-| **UC-X5** | Notation post-livraison | Client → Restaurant + Livreur |
-| **UC-X6** | Annulation de commande | Client ↔ Restaurant |
-| **UC-X7** | Promotions ciblées | Restaurant → Clients |
-| **UC-X8** | Signalement de problème | Client + Livreur + Restaurant |
-| **UC-X9** | Livreur passe hors ligne | Livreur → Restaurant + Système |
+### Architecture de la couche réseau
 
----
+```
+services/http.ts   — fetch + JWT Bearer + timeout + gestion d'erreurs
+services/auth.ts   — login / register / logout / profil (token dans AsyncStorage)
+services/menu.ts   — catalogue, favoris, abonnements, commandes, avis
+services/dto.ts    — types des réponses API
+data/menuData.ts   — mapping DTO → modèles UI (icône/dégradé dérivés côté client)
+context/AppContext — hub : charge le catalogue, synchronise favoris/abonnements,
+                     panier local, checkout → commande, suivi depuis le statut réel
+```
 
-## 🎨 Bibliothèque d'Animations
+### Endpoints consommés
 
-Toutes les animations sont dans [`components/Animations.tsx`](./components/Animations.tsx) et utilisent exclusivement l'API `Animated` native :
-
-| Composant | Description |
-|---|---|
-| `PressableScale` | Rebond scale (0.92) avec spring sur tout bouton |
-| `ConfettiBurst` | Explosion de 24 particules colorées |
-| `EmojiPop` | Emoji qui jaillit vers le haut et disparaît |
-| `FloatingReaction` | Emoji qui monte en flottant (style "Like" réseaux sociaux) |
-| `PulseRing` | Anneaux concentriques pulsants (indicateur "live") |
-| `ShakeAnimation` | Secousse horizontale (retour d'erreur) |
-| `useButtonPress()` | Hook combinant confetti + emoji en un seul appel |
-
----
-
-## 🤝 Contribution
-
-Ce projet est en phase bêta. Les contributions sont les bienvenues !
-
-1. Forkez le dépôt
-2. Créez une branche : `git checkout -b feature/ma-fonctionnalite`
-3. Committez : `git commit -m 'feat: ajout de ma fonctionnalité'`
-4. Pushez : `git push origin feature/ma-fonctionnalite`
-5. Ouvrez une Pull Request
-
----
-
-## 📄 Licence
-
-Ce projet est sous licence **MIT**. Voir le fichier `LICENSE` pour plus de détails.
-
----
-
-<div align="center">
-
-Made with ❤️ for **Menu** · Yaoundé, Cameroun 🇨🇲
-
-</div>
+`POST /auth/login` · `POST /auth/register/client` · `GET /client/profile` ·
+`GET /client/categories` · `GET /client/restaurants[/<id>]` ·
+`GET /client/plats[/<id>]` · `GET|POST /client/favoris` ·
+`GET|POST /client/abonnements` · `GET|POST /client/commandes/` ·
+`POST /client/commandes/<id>/avis`
