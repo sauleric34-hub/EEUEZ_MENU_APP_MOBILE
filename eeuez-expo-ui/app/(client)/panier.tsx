@@ -68,7 +68,7 @@ export default function PanierScreen() {
               <View style={{ gap: 13, marginTop: 20 }}>
                 {cartLines.map(({ dish, qty }) => (
                   <View key={dish.id} style={[styles.line, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <DishTile Icon={dish.icon} grad={dish.grad} size={64} iconSize={28} radius={16} />
+                    <DishTile Icon={dish.icon} grad={dish.grad} image={dish.image} size={64} iconSize={28} radius={16} />
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text }]}>{dish.name}</Text>
                       <Text style={[displayFont(14, '800'), { color: Brand.accentLight, marginTop: 4 }]}>{formatPrice(dish.price)}</Text>

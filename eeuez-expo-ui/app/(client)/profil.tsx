@@ -117,7 +117,7 @@ export default function ProfilScreen() {
               {favList.map(d => (
                 <PressableScale key={d.id} onPress={() => router.push(`/dish/${d.id}`)}>
                   <View style={[styles.favMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <DishTile Icon={d.icon} grad={d.grad} iconSize={30} radius={0} style={{ height: 76 }} />
+                    <DishTile Icon={d.icon} grad={d.grad} image={d.image} iconSize={30} radius={0} style={{ height: 76 }} />
                     <Text numberOfLines={1} style={[displayFont(12.5, '700'), { color: colors.text, padding: 10 }]}>{d.name}</Text>
                   </View>
                 </PressableScale>

@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -64,8 +64,17 @@ export default function DishDetail() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
         {/* Hero */}
         <LinearGradient colors={dish.grad} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.hero}>
+          {dish.image ? <Image source={{ uri: dish.image }} style={styles.heroImage} resizeMode="cover" /> : null}
+          {dish.image ? (
+            <LinearGradient
+              colors={['rgba(11,16,13,0.18)', 'rgba(11,16,13,0.58)']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.heroShade}
+            />
+          ) : null}
           <KenteStripe height={8} style={styles.heroStripe} />
-          <dish.icon size={110} color="#fff" strokeWidth={1.7} />
+          {!dish.image ? <dish.icon size={110} color="#fff" strokeWidth={1.7} /> : null}
           <PressableScale onPress={() => router.back()}>
             <View style={styles.heroBtn}><ChevronLeft size={22} color="#fff" /></View>
           </PressableScale>
@@ -168,6 +177,8 @@ export default function DishDetail() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   hero: { height: 262, alignItems: 'center', justifyContent: 'center' },
+  heroImage: { ...StyleSheet.absoluteFillObject },
+  heroShade: { ...StyleSheet.absoluteFillObject },
   heroStripe: { position: 'absolute', top: 0, left: 0, right: 0 },
   heroBtn: {
     position: 'absolute', top: 52, left: 18, width: 42, height: 42, borderRadius: 21,
