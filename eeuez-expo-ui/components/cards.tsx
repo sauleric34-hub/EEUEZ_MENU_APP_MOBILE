@@ -2,10 +2,11 @@
 //  Cartes réutilisables : plat (large & grille) et restaurant
 // ═══════════════════════════════════════════════════════════
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Heart, Flame, Star, Plus, ChevronRight, MapPin } from 'lucide-react-native';
+import { Heart, Flame, Star, Plus, Check, ChevronRight, MapPin } from 'lucide-react-native';
 import { Brand, Radius, cardShadow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { formatPrice, formatKm, type Dish, type Resto } from '../data/menuData';
@@ -88,12 +89,34 @@ export function DishCardGrid({ dish }: { dish: Dish }) {
   );
 }
 
-// ─── Bouton « + » ajouter au panier ──────────────────────────
+// ─── Bouton « + » ajouter au panier (pop + coche éphémère) ───
 export function AddButton({ dishId }: { dishId: number }) {
   const { addToCart } = useApp();
+  const pop = useRef(new Animated.Value(1)).current;
+  const [justAdded, setJustAdded] = React.useState(false);
+
+  const onAdd = () => {
+    addToCart(dishId, 1);
+    setJustAdded(true);
+    Animated.sequence([
+      Animated.spring(pop, { toValue: 1.35, useNativeDriver: true, speed: 50, bounciness: 16 }),
+      Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start();
+    setTimeout(() => setJustAdded(false), 900);
+  };
+
   return (
-    <PressableScale onPress={() => addToCart(dishId, 1)}>
-      <View style={s.add}><Plus size={17} color="#fff" strokeWidth={3} /></View>
+    <PressableScale onPress={onAdd}>
+      <Animated.View style={{ transform: [{ scale: pop }] }}>
+        <LinearGradient
+          colors={justAdded ? [Brand.green, Brand.greenDark] : [Brand.accentTop, Brand.accentBot]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.add}
+        >
+          {justAdded
+            ? <Check size={16} color="#fff" strokeWidth={3.2} />
+            : <Plus size={17} color="#fff" strokeWidth={3} />}
+        </LinearGradient>
+      </Animated.View>
     </PressableScale>
   );
 }
@@ -144,7 +167,6 @@ const s = StyleSheet.create({
   gridTile: { height: 108, borderRadius: 0 },
   add: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Brand.accent,
     alignItems: 'center', justifyContent: 'center',
   },
   restoRow: {

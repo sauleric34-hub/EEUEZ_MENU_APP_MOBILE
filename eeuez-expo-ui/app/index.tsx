@@ -18,13 +18,11 @@ import { AccentButton, PressableScale, displayFont, bodyFont } from '../componen
 const DEMO = { email: 'client@menu.cm', password: 'client123' };
 
 export default function SplashScreen() {
-  const { colors, user, authReady, signIn, register } = useApp();
+  const { colors, user, authReady, signIn } = useApp();
   const router = useRouter();
 
-  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState(DEMO.email);
   const [password, setPassword] = useState(DEMO.password);
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,10 +45,8 @@ export default function SplashScreen() {
   const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 
   const validate = (): string | null => {
-    const mail = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return 'Adresse email invalide.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Adresse email invalide.';
     if (password.length < 6) return 'Le mot de passe doit faire au moins 6 caractères.';
-    if (mode === 'register' && !name.trim()) return 'Veuillez saisir votre nom.';
     return null;
   };
 
@@ -60,11 +56,7 @@ export default function SplashScreen() {
     setBusy(true);
     setError(null);
     try {
-      if (mode === 'login') {
-        await signIn(email.trim(), password);
-      } else {
-        await register({ email: email.trim(), password, first_name: name.trim() });
-      }
+      await signIn(email.trim(), password);
       router.replace('/(client)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec de la connexion');
@@ -84,7 +76,6 @@ export default function SplashScreen() {
     } finally { setBusy(false); }
   };
 
-  const isLogin = mode === 'login';
 
   return (
     <ScreenBg>
@@ -101,13 +92,6 @@ export default function SplashScreen() {
           </Animated.View>
 
           <View style={styles.form}>
-            {!isLogin && (
-              <TextInput
-                value={name} onChangeText={setName}
-                placeholder="Votre nom" placeholderTextColor={colors.faint}
-                style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-              />
-            )}
             <TextInput
               value={email} onChangeText={setEmail}
               placeholder="Email" placeholderTextColor={colors.faint}
@@ -132,12 +116,12 @@ export default function SplashScreen() {
                 <ActivityIndicator color="#fff" />
               </View>
             ) : (
-              <AccentButton label={isLogin ? 'Connexion' : 'Créer un compte'} onPress={submit} style={{ marginTop: 4 }} />
+              <AccentButton label="Connexion" onPress={submit} style={{ marginTop: 4 }} />
             )}
 
-            <PressableScale onPress={() => { setError(null); setMode(isLogin ? 'register' : 'login'); }}>
+            <PressableScale onPress={() => { setError(null); router.push('/register'); }}>
               <Text style={[bodyFont(13, '700'), { color: Brand.accentLight, textAlign: 'center', marginTop: 16 }]}>
-                {isLogin ? 'Pas de compte ? Créer un compte' : 'Déjà inscrit ? Se connecter'}
+                Pas de compte ? Créer un compte
               </Text>
             </PressableScale>
 

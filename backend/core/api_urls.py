@@ -29,6 +29,15 @@ urlpatterns = [
     path('client/plats/<int:id>', client_views.plat_detail, name='api-client-plat-detail'),
     path('client/categories', client_views.categories_list, name='api-client-categories'),
     path('client/recommandations', client_views.recommandations, name='api-client-recommandations'),
+    path('client/plats/<int:id>/noter', client_views.noter_plat, name='api-client-noter-plat'),
+
+    # Client — messagerie
+    path('client/conversations', client_views.conversations, name='api-client-conversations'),
+    path('client/conversations/<int:id>/messages', client_views.conversation_messages, name='api-client-conversation-messages'),
+
+    # Client — adresses de livraison enregistrées
+    path('client/adresses', client_views.adresses, name='api-client-adresses'),
+    path('client/adresses/<int:id>', client_views.adresse_detail, name='api-client-adresse-detail'),
 
     # Client — favoris & abonnements
     path('client/favoris', client_views.favoris, name='api-client-favoris'),

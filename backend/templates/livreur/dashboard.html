@@ -1,0 +1,149 @@
+{% extends 'livreur_base.html' %}
+{% block title %}Mes Missions — Menu Livreur{% endblock %}
+{% block topbar_title %}Mes Missions{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Bonjour, {{ livreur.first_name|default:livreur.username }} 🛵</h1>
+    <p class="page-subtitle">
+      {% if nb_actives %}{{ nb_actives }} mission{{ nb_actives|pluralize }} en cours — bonne route !
+      {% else %}Aucune mission en cours — restez disponible.{% endif %}
+    </p>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-color:var(--accent-blue);--kpi-bg:var(--accent-blue-dim);--kpi-glow:var(--glow-blue);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+    <div class="kpi-value {% if nb_actives %}status-live{% endif %}" data-count="{{ nb_actives }}">0</div>
+    <div class="kpi-label">Missions en cours</div>
+    <div class="kpi-sub">{{ livrees_jour }} livrée{{ livrees_jour|pluralize }} aujourd'hui</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-green);--kpi-bg:var(--accent-green-dim);--kpi-glow:var(--glow-green);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="kpi-value" data-count="{{ gains_jour }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Gains du jour</div>
+    <div class="kpi-sub">70 % des frais de livraison</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);--kpi-bg:var(--accent-amber-dim);--kpi-glow:var(--glow-amber);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div class="kpi-value" data-count="{{ gain_total }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Gains cumulés</div>
+    <div class="kpi-sub">{{ nb_total }} livraison{{ nb_total|pluralize }} au total</div>
+  </div>
+</div>
+
+<!-- Missions actives -->
+{% if actives %}
+<div class="page-header anim-fade-up" style="margin-top:8px;">
+  <div><h2 class="chart-title" style="font-size:1.05rem;">Missions en cours</h2></div>
+</div>
+
+{% for liv in actives %}
+{% with c=liv.commande %}
+<div class="glass-card anim-fade-up" style="padding:22px;margin-bottom:16px;border-left:4px solid {% if liv.statut == 'assignee' %}var(--accent-amber){% elif liv.statut == 'en_collecte' %}var(--accent-blue){% else %}var(--accent-green){% endif %};">
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start;">
+
+    <!-- Infos commande -->
+    <div style="flex:1;min-width:260px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-weight:800;font-size:1.1rem;">Commande #{{ c.pk }}</span>
+        <span class="badge badge-{{ liv.statut }}">{{ liv.get_statut_display }}</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:0.85rem;">
+        <span style="color:var(--text-muted);">🏪 Restaurant</span>
+        <span style="font-weight:600;">{{ c.restaurant.nom|default:'—' }} — {{ c.restaurant.adresse|default:'' }}</span>
+
+        <span style="color:var(--text-muted);">👤 Client</span>
+        <span style="font-weight:600;">
+          {{ c.client.get_full_name|default:c.client.username|default:'—' }}
+          {% if c.client.telephone %} · <a href="tel:{{ c.client.telephone }}" style="color:var(--accent-amber);">📞 {{ c.client.telephone }}</a>{% endif %}
+        </span>
+
+        <span style="color:var(--text-muted);">📍 Adresse de livraison</span>
+        <span style="font-weight:600;">{{ c.adresse_livraison|default:'—' }}</span>
+
+        <span style="color:var(--text-muted);">💰 À encaisser (espèces)</span>
+        <span style="font-weight:800;color:var(--accent-green);">{{ c.montant_total }} F</span>
+      </div>
+
+      <div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:12px;">
+        <div style="font-size:0.72rem;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:4px;">CONTENU DE LA COMMANDE</div>
+        {% for l in c.lignes.all %}
+        <div style="font-size:0.83rem;">{{ l.quantite }}× {{ l.plat.nom|default:'Plat' }} — {{ l.prix_unitaire }} F</div>
+        {% endfor %}
+        {% if c.notes %}<div style="font-size:0.78rem;color:var(--accent-amber);margin-top:6px;">📝 {{ c.notes }}</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Étapes + action -->
+    <div style="min-width:220px;">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;{% if liv.statut != 'assignee' %}color:var(--accent-green);{% endif %}">
+          <span>{% if liv.statut != 'assignee' %}✓{% else %}①{% endif %}</span> Mission acceptée
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;{% if liv.statut == 'en_livraison' %}color:var(--accent-green);{% elif liv.statut == 'assignee' %}color:var(--text-muted);{% endif %}">
+          <span>{% if liv.statut == 'en_livraison' %}✓{% else %}②{% endif %}</span> Commande récupérée
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-muted);">
+          <span>③</span> Livrée au client
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'core:livreur_livraison_action' liv.pk %}">
+        {% csrf_token %}
+        {% if liv.statut == 'assignee' %}
+          <input type="hidden" name="action" value="demarrer">
+          <button type="submit" class="btn btn-primary" style="width:100%;">🛵 Démarrer la mission</button>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Direction le restaurant pour récupérer la commande.</p>
+        {% elif liv.statut == 'en_collecte' %}
+          <input type="hidden" name="action" value="collecte">
+          <button type="submit" class="btn btn-primary" style="width:100%;">📦 Commande récupérée — en route</button>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Le client verra « En route » dans son suivi en direct.</p>
+        {% elif liv.statut == 'en_livraison' %}
+          <input type="hidden" name="action" value="livree">
+          <button type="submit" class="btn btn-primary" style="width:100%;">✓ Marquer comme livrée</button>
+          <p style="font-size:0.72rem;color:var(--accent-green);margin-top:8px;">+{{ c.restaurant.frais_livraison|floatformat:0 }} F × 70 % de gains à la validation.</p>
+        {% endif %}
+      </form>
+
+      <!-- Contacter le client + carte -->
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        {% if c.client.telephone %}
+        <a href="tel:{{ c.client.telephone }}" class="btn btn-secondary btn-sm" style="flex:1;text-align:center;">📞 Appeler le client</a>
+        {% endif %}
+        <a href="{% url 'core:livreur_carte' %}" class="btn btn-secondary btn-sm" style="flex:1;text-align:center;">🗺 Carte</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+{% endif %}
+
+<!-- Historique -->
+<div class="chart-card anim-fade-up" style="margin-top:8px;">
+  <div class="chart-card-header">
+    <div><div class="chart-title">Historique des livraisons</div><div class="chart-subtitle">15 dernières livraisons terminées</div></div>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>#</th><th>Restaurant</th><th>Client</th><th>Montant</th><th>Livrée le</th></tr></thead>
+    <tbody>
+      {% for liv in historique %}
+      <tr>
+        <td>#{{ liv.commande.pk }}</td>
+        <td>{{ liv.commande.restaurant.nom|default:'—' }}</td>
+        <td>{{ liv.commande.client.get_full_name|default:liv.commande.client.username|default:'—' }}</td>
+        <td>{{ liv.commande.montant_total }} F</td>
+        <td style="font-size:0.82rem;">{{ liv.delivered_at|date:'d M Y · H:i' }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:30px;">Aucune livraison terminée pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

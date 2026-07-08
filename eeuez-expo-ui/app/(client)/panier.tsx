@@ -3,11 +3,11 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone } from 'lucide-react-native';
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
@@ -22,18 +22,17 @@ const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = 
 ];
 
 export default function PanierScreen() {
-  const { colors, cartLines, cartInc, cartDec, cartRemove, subtotal, deliveryFee, total, cartCount, checkout } = useApp();
+  const { colors, cartLines, cartInc, cartDec, cartRemove, subtotal, deliveryFee, total, cartCount, checkout, deliveryAddress } = useApp();
   const router = useRouter();
-  const [adresse, setAdresse] = useState('Akwa, Douala');
   const [mode, setMode] = useState<PaymentMode>('especes');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (!adresse.trim()) { setError('Veuillez saisir une adresse de livraison.'); return; }
+    if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
     setBusy(true); setError(null);
     try {
-      await checkout(adresse.trim(), mode);
+      await checkout(mode);
       router.push('/tracking');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La commande a échoué.');
@@ -89,15 +88,40 @@ export default function PanierScreen() {
                 ))}
               </View>
 
-              {/* Adresse de livraison */}
-              <View style={[styles.addrRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <MapPin size={18} color={Brand.accentLight} strokeWidth={2.3} />
-                <TextInput
-                  value={adresse} onChangeText={setAdresse}
-                  placeholder="Adresse de livraison" placeholderTextColor={colors.faint}
-                  style={[styles.addrInput, { color: colors.text }]}
-                />
-              </View>
+              {/* Lieu de livraison (GPS précis) */}
+              <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 22, marginBottom: 10 }]}>Lieu de livraison</Text>
+              <PressableScale onPress={() => router.push('/location-picker')}>
+                <View style={[styles.addrRow, { backgroundColor: colors.surface, borderColor: deliveryAddress ? Brand.accent + '55' : colors.border }]}>
+                  <View style={[styles.addrPin, { backgroundColor: Brand.accent + '1f' }]}>
+                    <MapPin size={18} color={Brand.accentLight} strokeWidth={2.3} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {deliveryAddress ? (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text numberOfLines={1} style={[bodyFont(13.5, '800'), { color: colors.text, flexShrink: 1 }]}>
+                            {deliveryAddress.label || 'Adresse choisie'}
+                          </Text>
+                          {deliveryAddress.savedId != null && (
+                            <Star size={12} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
+                          )}
+                        </View>
+                        <Text numberOfLines={1} style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 2 }]}>
+                          {deliveryAddress.adresse}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Choisir un lieu</Text>
+                        <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 2 }]}>
+                          Ma position, une recherche ou un lieu enregistré
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                  <ChevronRight size={20} color={colors.faint} strokeWidth={2.4} />
+                </View>
+              </PressableScale>
 
               {/* Mode de paiement */}
               <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 20, marginBottom: 10 }]}>Paiement</Text>
@@ -173,10 +197,10 @@ const styles = StyleSheet.create({
   stepBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   trash: { width: 38, height: 38, borderRadius: 19, backgroundColor: Brand.danger + '14', alignItems: 'center', justifyContent: 'center' },
   addrRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18,
-    paddingHorizontal: 16, paddingVertical: 4, borderRadius: Radius.md, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 13, borderRadius: Radius.md, borderWidth: 1,
   },
-  addrInput: { flex: 1, fontSize: 14, fontWeight: '600', paddingVertical: 12 },
+  addrPin: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   payRow: { flexDirection: 'row', gap: 8 },
   payChip: {
     alignItems: 'center', justifyContent: 'center', gap: 5,

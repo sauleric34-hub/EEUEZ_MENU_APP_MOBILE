@@ -1,0 +1,72 @@
+{% extends 'resto_base.html' %}
+{% block title %}Mes Plats — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Mes Plats{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Mes Plats</h1>
+    <p class="page-subtitle">{{ plats|length }} plat{{ plats|length|pluralize }} · publiez, modifiez, activez</p>
+  </div>
+  <a href="{% url 'core:resto_plat_create' %}" class="btn btn-primary" style="margin-left:auto;">+ Publier un plat</a>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:0;overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr><th>Plat</th><th>Catégorie</th><th>Prix</th><th>Commandés</th><th>Likes</th><th>Statut</th><th style="min-width:340px;">Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for p in plats %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:12px;">
+            {% if p.image %}
+              <img src="{{ p.image.url }}" alt="{{ p.nom }}" style="width:46px;height:46px;border-radius:12px;object-fit:cover;">
+            {% else %}
+              <div style="width:46px;height:46px;border-radius:12px;background:var(--accent-amber-dim);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🍽</div>
+            {% endif %}
+            <div>
+              <div style="font-weight:700;">{{ p.nom }}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);">{{ p.description|truncatechars:50 }}</div>
+            </div>
+          </div>
+        </td>
+        <td>{{ p.categorie.nom|default:'—' }}</td>
+        <td style="font-weight:700;color:var(--accent-green);">{{ p.prix }} F</td>
+        <td>{{ p.vol|default:0 }}</td>
+        <td>❤ {{ p.nb_likes }}</td>
+        <td>
+          {% if p.is_available %}<span class="badge badge-green">Disponible</span>
+          {% else %}<span class="badge badge-red">Indisponible</span>{% endif %}
+          {% if p.is_popular %}<span class="badge badge-amber">Populaire</span>{% endif %}
+          {% if p.plat_du_jour_le == today %}<span class="badge badge-amber">★ Plat du jour</span>{% endif %}
+        </td>
+        <td>
+          <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+            <form method="post" action="{% url 'core:resto_plat_du_jour' p.pk %}">{% csrf_token %}
+              <button class="btn {% if p.plat_du_jour_le == today %}btn-amber{% else %}btn-secondary{% endif %} btn-sm" title="Se réinitialise à minuit">
+                {% if p.plat_du_jour_le == today %}★ Retirer du jour{% else %}☆ Plat du jour{% endif %}
+              </button>
+            </form>
+            <a href="{% url 'core:resto_plat_edit' p.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
+            <form method="post" action="{% url 'core:resto_plat_toggle' p.pk %}">{% csrf_token %}
+              <button class="btn {% if p.is_available %}btn-secondary{% else %}btn-amber{% endif %} btn-sm">
+                {% if p.is_available %}Désactiver{% else %}Activer{% endif %}
+              </button>
+            </form>
+            <form method="post" action="{% url 'core:resto_plat_delete' p.pk %}" onsubmit="return confirm('Supprimer définitivement « {{ p.nom|escapejs }} » ?');">{% csrf_token %}
+              <button class="btn btn-danger btn-sm">Supprimer</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">
+        Aucun plat publié — <a href="{% url 'core:resto_plat_create' %}" style="color:var(--accent-amber);">publiez votre premier plat</a>.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

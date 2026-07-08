@@ -67,7 +67,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.headerBtns}>
               <IconButton Icon={mode === 'dark' ? Sun : Moon} onPress={toggleTheme} colors={colors} />
-              <IconButton Icon={Bell} colors={colors} color={Brand.accentLight} dot />
+              <IconButton Icon={Bell} onPress={() => router.push('/notifications')} colors={colors} color={Brand.accentLight} dot />
             </View>
           </View>
 
@@ -122,7 +122,7 @@ export default function HomeScreen() {
             {restoList.map(r => (
               <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
                 <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <DishTile Icon={r.icon} grad={r.grad} iconSize={34} radius={16} style={{ height: 80 }} />
+                  <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
                   <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
                   <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
                     <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />

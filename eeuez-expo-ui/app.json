@@ -21,7 +21,8 @@
         "backgroundColor": "#080c09",
         "foregroundImage": "./assets/icon.png"
       },
-      "package": "com.app.menu"
+      "package": "com.app.menu",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,6 +33,12 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Menu utilise votre position pour vous recommander les meilleurs plats et restaurants les plus proches, et réduire vos frais de livraison."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Menu accède à vos photos pour joindre une image à vos messages avec les restaurants."
         }
       ]
     ]

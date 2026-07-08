@@ -6,10 +6,16 @@ from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from .models import RestaurantProfile, Plat, Categorie, Commande, Favori, Abonnement, Avis
+from django.db.models import Avg
+
+from .models import (
+    RestaurantProfile, Plat, Categorie, Commande, Favori, Abonnement, Avis,
+    PlatNote, Conversation, Message, AdresseLivraison,
+)
 from .serializers import (
     RestaurantProfileSerializer, PlatSerializer, CategorieSerializer,
     FavoriSerializer, AbonnementSerializer, AvisSerializer,
+    ConversationSerializer, MessageSerializer, AdresseLivraisonSerializer,
 )
 from . import recommendation
 from .utils import geo
@@ -42,7 +48,7 @@ def restaurant_detail(request, id):
         return Response({'error': 'Restaurant introuvable'}, status=status.HTTP_404_NOT_FOUND)
     data = RestaurantProfileSerializer(r).data
     plats = Plat.objects.filter(restaurant=r, is_available=True, is_visible=True)
-    data['plats'] = PlatSerializer(plats, many=True).data
+    data['plats'] = PlatSerializer(plats, many=True, context={'request': request}).data
     return Response(data)
 
 
@@ -63,7 +69,7 @@ def plats_list(request):
         qs = qs.filter(is_popular=True)
     if q:
         qs = qs.filter(nom__icontains=q)
-    return Response(PlatSerializer(qs.order_by('-id'), many=True).data)
+    return Response(PlatSerializer(qs.order_by('-id'), many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -73,7 +79,7 @@ def plat_detail(request, id):
         p = Plat.objects.select_related('restaurant', 'categorie').get(id=id)
     except Plat.DoesNotExist:
         return Response({'error': 'Plat introuvable'}, status=status.HTTP_404_NOT_FOUND)
-    return Response(PlatSerializer(p).data)
+    return Response(PlatSerializer(p, context={'request': request}).data)
 
 
 # ─── CATÉGORIES ──────────────────────────────────────────────
@@ -135,6 +141,144 @@ def abonnements(request):
         following = True
     ids = list(Abonnement.objects.filter(client=request.user).values_list('restaurant_id', flat=True))
     return Response({'following': following, 'restaurant': resto.id, 'abonnements': ids})
+
+
+# ─── ADRESSES DE LIVRAISON ENREGISTRÉES ──────────────────────
+def _to_coord(v):
+    try:
+        return round(float(v), 6)
+    except (TypeError, ValueError):
+        return None
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def adresses(request):
+    """GET : mes lieux enregistrés. POST : enregistrer un nouveau lieu (GPS)."""
+    if request.method == 'GET':
+        qs = AdresseLivraison.objects.filter(client=request.user)
+        return Response(AdresseLivraisonSerializer(qs, many=True).data)
+
+    lat = _to_coord(request.data.get('latitude'))
+    lon = _to_coord(request.data.get('longitude'))
+    adresse = (request.data.get('adresse') or '').strip()
+    if lat is None or lon is None or not adresse:
+        return Response({'error': 'Adresse et coordonnées GPS requises.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    is_default = str(request.data.get('is_default', '')).lower() in ('1', 'true', 'on')
+    # Première adresse du client → défaut d'office
+    if not AdresseLivraison.objects.filter(client=request.user).exists():
+        is_default = True
+    if is_default:
+        AdresseLivraison.objects.filter(client=request.user).update(is_default=False)
+
+    adr = AdresseLivraison.objects.create(
+        client=request.user, label=(request.data.get('label') or '').strip(),
+        adresse=adresse, details=(request.data.get('details') or '').strip(),
+        latitude=lat, longitude=lon, is_default=is_default,
+    )
+    return Response(AdresseLivraisonSerializer(adr).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE', 'PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def adresse_detail(request, id):
+    """DELETE : supprimer. PATCH : définir comme adresse par défaut."""
+    try:
+        adr = AdresseLivraison.objects.get(id=id, client=request.user)
+    except AdresseLivraison.DoesNotExist:
+        return Response({'error': 'Adresse introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'DELETE':
+        adr.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    AdresseLivraison.objects.filter(client=request.user).update(is_default=False)
+    adr.is_default = True
+    adr.save(update_fields=['is_default'])
+    return Response(AdresseLivraisonSerializer(adr).data)
+
+
+# ─── NOTATION D'UN PLAT ──────────────────────────────────────
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def noter_plat(request, id):
+    """POST {note: 1..5} — crée ou met à jour la note du client pour ce plat."""
+    try:
+        plat = Plat.objects.get(id=id)
+    except Plat.DoesNotExist:
+        return Response({'error': 'Plat introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        note = int(request.data.get('note'))
+    except (TypeError, ValueError):
+        return Response({'error': 'note invalide'}, status=status.HTTP_400_BAD_REQUEST)
+    note = max(1, min(5, note))
+
+    PlatNote.objects.update_or_create(
+        client=request.user, plat=plat, defaults={'note': note},
+    )
+    avg = plat.notes.aggregate(a=Avg('note'))['a'] or note
+    return Response({
+        'ma_note': note,
+        'note': round(avg, 1),
+        'nombre_notes': plat.notes.count(),
+    })
+
+
+# ─── MESSAGERIE CLIENT ↔ RESTAURANT ──────────────────────────
+WELCOME_TEXT = "Bonjour ! Merci de votre intérêt pour « {plat} ». Comment pouvons-nous vous aider ?"
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def conversations(request):
+    """GET : mes conversations. POST {plat} : ouvre (ou retrouve) la discussion sur ce plat."""
+    if request.method == 'GET':
+        qs = Conversation.objects.filter(client=request.user).select_related('plat', 'restaurant')
+        return Response(ConversationSerializer(qs, many=True, context={'request': request}).data)
+
+    plat_id = request.data.get('plat')
+    try:
+        plat = Plat.objects.select_related('restaurant').get(id=plat_id)
+    except (Plat.DoesNotExist, ValueError, TypeError):
+        return Response({'error': 'Plat introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    conv, created = Conversation.objects.get_or_create(
+        client=request.user, plat=plat,
+        defaults={'restaurant': plat.restaurant},
+    )
+    if created:
+        Message.objects.create(
+            conversation=conv, sender='restaurant',
+            texte=WELCOME_TEXT.format(plat=plat.nom),
+        )
+    return Response(
+        ConversationSerializer(conv, context={'request': request}).data,
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def conversation_messages(request, id):
+    """GET : messages (marque les réponses resto comme lues). POST {texte} : envoie."""
+    try:
+        conv = Conversation.objects.get(id=id, client=request.user)
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        conv.messages.filter(sender='restaurant', is_read=False).update(is_read=True)
+        return Response(MessageSerializer(conv.messages.all(), many=True).data)
+
+    texte = (request.data.get('texte') or '').strip()
+    image = request.FILES.get('image')
+    if not texte and not image:
+        return Response({'error': 'Message vide'}, status=status.HTTP_400_BAD_REQUEST)
+    msg = Message.objects.create(conversation=conv, sender='client', texte=texte, image=image)
+    conv.save(update_fields=['updated_at'])
+    return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
 
 # ─── RECOMMANDATIONS PERSONNALISÉES ──────────────────────────

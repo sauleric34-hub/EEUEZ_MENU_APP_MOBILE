@@ -1,0 +1,77 @@
+{% extends 'resto_base.html' %}
+{% block title %}Communauté — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Communauté{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Votre communauté</h1>
+    <p class="page-subtitle">{{ abonnes|length }} abonné{{ abonnes|length|pluralize }} · {{ total_likes }} like{{ total_likes|pluralize }} sur vos plats</p>
+  </div>
+</div>
+
+<div class="charts-grid charts-grid-2">
+  <!-- Abonnés -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Abonnés</div><div class="chart-subtitle">Clients qui suivent votre restaurant</div></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Client</th><th>Contact</th><th>Abonné depuis</th></tr></thead>
+      <tbody>
+        {% for a in abonnes %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-green-dim);color:var(--accent-green);display:flex;align-items:center;justify-content:center;font-weight:700;">
+                {{ a.client.first_name|first|upper|default:'C' }}
+              </div>
+              <span style="font-weight:600;">{{ a.client.get_full_name|default:a.client.username }}</span>
+            </div>
+          </td>
+          <td style="font-size:0.82rem;color:var(--text-muted);">{{ a.client.telephone|default:a.client.email }}</td>
+          <td style="font-size:0.82rem;">{{ a.created_at|date:'d M Y' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:var(--text-muted);padding:30px;text-align:center;">Aucun abonné pour l'instant — publiez des plats attractifs !</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Likes par plat -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Likes par plat</div><div class="chart-subtitle">Vos plats préférés des clients</div></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Plat</th><th>Prix</th><th>Likes</th></tr></thead>
+      <tbody>
+        {% for p in plats_likes %}
+        <tr>
+          <td style="font-weight:600;">{{ p.nom }}</td>
+          <td>{{ p.prix }} F</td>
+          <td><span class="badge badge-red">❤ {{ p.nb_likes }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:var(--text-muted);padding:30px;text-align:center;">Aucun like pour l'instant.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if derniers_likes %}
+    <div class="chart-card-header" style="margin-top:18px;">
+      <div><div class="chart-title" style="font-size:0.9rem;">Activité récente</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      {% for f in derniers_likes %}
+      <div style="font-size:0.8rem;color:var(--text-muted);">
+        ❤ <strong style="color:var(--text-primary,inherit);">{{ f.client.get_full_name|default:f.client.username }}</strong>
+        a aimé « {{ f.plat.nom }} » · {{ f.created_at|date:'d M · H:i' }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

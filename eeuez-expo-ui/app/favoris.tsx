@@ -6,11 +6,11 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HeartOff } from 'lucide-react-native';
-import { Brand } from '../../constants/theme';
-import { useApp } from '../../context/AppContext';
-import { ScreenBg } from '../../components/ScreenBg';
-import { displayFont, bodyFont } from '../../components/ui';
-import { DishCardGrid } from '../../components/cards';
+import { Brand } from '../constants/theme';
+import { useApp } from '../context/AppContext';
+import { ScreenBg } from '../components/ScreenBg';
+import { displayFont, bodyFont } from '../components/ui';
+import { DishCardGrid } from '../components/cards';
 
 export default function FavorisScreen() {
   const { colors, favList } = useApp();

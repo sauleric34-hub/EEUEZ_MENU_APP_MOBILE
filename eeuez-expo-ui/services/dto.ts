@@ -8,6 +8,7 @@ export interface UserDTO {
   last_name: string;
   role: string;
   telephone?: string;
+  allergies?: string;
   avatar?: string | null;
 }
 
@@ -33,14 +34,54 @@ export interface PlatDTO {
   description: string;
   prix: string;
   image: string | null;
+  images: string[];
   is_available: boolean;
   is_popular: boolean;
   allergies: string;
   ingredients: string;
   composition: string[];
   note: number;
+  nombre_notes: number;
+  ma_note: number | null;
   nombre_commandes: number;
   nombre_likes: number;
+}
+
+export interface MessageDTO {
+  id: number;
+  sender: 'client' | 'restaurant';
+  texte: string;
+  image: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ConversationDTO {
+  id: number;
+  plat: number;
+  plat_details: PlatDTO;
+  restaurant: number;
+  restaurant_nom: string | null;
+  dernier_message: MessageDTO | null;
+  non_lus: number;
+  updated_at: string;
+}
+
+export interface NoteResultDTO {
+  ma_note: number;
+  note: number;
+  nombre_notes: number;
+}
+
+export interface AdresseDTO {
+  id: number;
+  label: string;
+  adresse: string;
+  details: string;
+  latitude: string;
+  longitude: string;
+  is_default: boolean;
+  created_at: string;
 }
 
 export interface RestoDTO {
@@ -59,6 +100,7 @@ export interface RestoDTO {
   frais_livraison: string;
   nombre_plats: number;
   nombre_abonnes: number;
+  plat_du_jour?: number | null;
   plats?: PlatDTO[];
 }
 

@@ -7,7 +7,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  House, UtensilsCrossed, Navigation, ShoppingCart, Heart, User,
+  House, UtensilsCrossed, Navigation, ShoppingCart, MessageCircle, User,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../../constants/theme';
@@ -19,9 +19,9 @@ const NAV: NavDef[] = [
   { route: 'index',   label: 'Accueil', Icon: House },
   { route: 'plats',   label: 'Plats',   Icon: UtensilsCrossed },
   { route: 'carte',   label: 'Carte',   Icon: Navigation },
-  { route: 'panier',  label: 'Panier',  Icon: ShoppingCart },
-  { route: 'favoris', label: 'Favoris', Icon: Heart },
-  { route: 'profil',  label: 'Profil',  Icon: User },
+  { route: 'panier',   label: 'Panier',   Icon: ShoppingCart },
+  { route: 'messages', label: 'Messages', Icon: MessageCircle },
+  { route: 'profil',   label: 'Profil',   Icon: User },
 ];
 // L'onglet Accueil reste actif sur les sous-écrans plat/resto
 const HOME_GROUP = new Set(['index', 'dish', 'resto']);
@@ -75,7 +75,7 @@ export default function ClientLayout() {
       <Tabs.Screen name="plats" />
       <Tabs.Screen name="carte" />
       <Tabs.Screen name="panier" />
-      <Tabs.Screen name="favoris" />
+      <Tabs.Screen name="messages" />
       <Tabs.Screen name="profil" />
     </Tabs>
   );

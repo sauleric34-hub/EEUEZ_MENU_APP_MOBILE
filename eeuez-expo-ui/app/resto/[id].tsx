@@ -2,18 +2,17 @@
 //  Profil d'un restaurant
 // ═══════════════════════════════════════════════════════════
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Animated, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Star, Check, Plus, MessageCircle } from 'lucide-react-native';
-import { Brand, Radius, cardShadow } from '../../constants/theme';
+import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing } from 'lucide-react-native';
+import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { mapResto, mapPlat, type Resto, type Dish } from '../../data/menuData';
-import { fetchRestaurant } from '../../services/menu';
+import { fetchRestaurant, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
-import { ChatSheet } from '../../components/ChatSheet';
 
 function Stat({ value, label, color, colors }: { value: string; label: string; color: string; colors: any }) {
   return (
@@ -33,7 +32,8 @@ export default function RestoProfile() {
   const cachedDishes = dishesOfResto(nid);
   const [fetchedResto, setFetchedResto] = useState<Resto | null>(null);
   const [fetchedDishes, setFetchedDishes] = useState<Dish[] | null>(null);
-  const [chat, setChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
+  const followPop = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!cachedResto || cachedDishes.length === 0) {
@@ -50,11 +50,35 @@ export default function RestoProfile() {
   }
   const following = !!follows[resto.id];
 
+  // Petit « pop » du bouton à chaque bascule d'abonnement
+  const onFollow = () => {
+    Animated.sequence([
+      Animated.spring(followPop, { toValue: 1.08, useNativeDriver: true, speed: 40, bounciness: 12 }),
+      Animated.spring(followPop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start();
+    toggleFollow(resto.id);
+  };
+
+  // Ouvre la discussion sur le plat du jour (premier plat du resto)
+  const discuss = async () => {
+    const first = dishes[0];
+    if (!first || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const conv = await openConversation(first.id);
+      router.push(`/chat/${conv.id}`);
+    } catch { /* non connecté ou hors-ligne */ }
+    finally { setOpeningChat(false); }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Bannière */}
+        {/* Bannière (image de couverture réelle si disponible) */}
         <LinearGradient colors={resto.grad} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.banner}>
+          {resto.cover && (
+            <Image source={{ uri: resto.cover }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          )}
           <KenteStripe height={8} style={styles.bannerStripe} />
           <PressableScale onPress={() => router.back()}>
             <View style={styles.backBtn}><ChevronLeft size={22} color="#fff" /></View>
@@ -63,7 +87,11 @@ export default function RestoProfile() {
 
         <View style={{ paddingHorizontal: 20, marginTop: -46 }}>
           <LinearGradient colors={resto.grad} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.avatar, { borderColor: colors.page }, cardShadow(colors.shadow)]}>
-            <resto.icon size={40} color="#fff" strokeWidth={1.9} />
+            {resto.image ? (
+              <Image source={{ uri: resto.image }} style={styles.avatarImg} resizeMode="cover" />
+            ) : (
+              <resto.icon size={40} color="#fff" strokeWidth={1.9} />
+            )}
           </LinearGradient>
           <Text style={[displayFont(24, '800'), { color: colors.text, marginTop: 14 }]}>{resto.name}</Text>
           <Text style={[bodyFont(13, '500'), { color: colors.muted, marginTop: 4 }]}>{resto.bio}</Text>
@@ -75,22 +103,29 @@ export default function RestoProfile() {
           </View>
 
           <View style={styles.followRow}>
-            <PressableScale onPress={() => toggleFollow(resto.id)} style={{ flex: 1 }}>
-              {following ? (
-                <View style={[styles.followBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
-                  <Check size={17} color={colors.text} strokeWidth={2.6} />
-                  <Text style={[bodyFont(14.5, '800'), { color: colors.text }]}>Abonné</Text>
-                </View>
-              ) : (
-                <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.followBtn}>
-                  <Plus size={17} color="#fff" strokeWidth={2.8} />
-                  <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Suivre</Text>
-                </LinearGradient>
-              )}
-            </PressableScale>
-            <PressableScale onPress={() => setChat(true)}>
-              <View style={[styles.chatBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <MessageCircle size={20} color={colors.text} strokeWidth={2.2} />
+            <Animated.View style={{ flex: 1, transform: [{ scale: followPop }] }}>
+              <PressableScale onPress={onFollow}>
+                {following ? (
+                  <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.followBtn, glow(Brand.green, 14)]}>
+                    <View style={styles.followIcon}>
+                      <BellRing size={14} color={Brand.green} strokeWidth={2.6} />
+                    </View>
+                    <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Abonné</Text>
+                    <Check size={17} color="#fff" strokeWidth={3} />
+                  </LinearGradient>
+                ) : (
+                  <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.followBtn, glow(Brand.accent, 18)]}>
+                    <View style={styles.followIcon}>
+                      <Plus size={15} color={Brand.accent} strokeWidth={3} />
+                    </View>
+                    <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Suivre ce restaurant</Text>
+                  </LinearGradient>
+                )}
+              </PressableScale>
+            </Animated.View>
+            <PressableScale onPress={discuss}>
+              <View style={[styles.chatBtn, { backgroundColor: Brand.accent + '14', borderColor: Brand.accent + '55' }]}>
+                <MessageCircle size={20} color={Brand.accentLight} strokeWidth={2.2} />
               </View>
             </PressableScale>
           </View>
@@ -103,23 +138,26 @@ export default function RestoProfile() {
           </View>
         </View>
       </ScrollView>
-
-      <ChatSheet visible={chat} onClose={() => setChat(false)} restoName={resto.name} Icon={resto.icon} grad={resto.grad} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  banner: { height: 180 },
+  banner: { height: 180, overflow: 'hidden' },
   bannerStripe: { position: 'absolute', top: 0, left: 0, right: 0 },
   backBtn: {
-    position: 'absolute', top: 52, left: 18, width: 42, height: 42, borderRadius: 21,
+    position: 'absolute', top: 40, left: 18, width: 42, height: 42, borderRadius: 21,
     backgroundColor: 'rgba(11,16,13,0.8)', alignItems: 'center', justifyContent: 'center',
   },
-  avatar: { width: 88, height: 88, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 4 },
+  avatar: { width: 88, height: 88, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 4, overflow: 'hidden' },
+  avatarImg: { width: '100%', height: '100%' },
   statsRow: { flexDirection: 'row', gap: 9, marginTop: 16 },
   stat: { flex: 1, paddingVertical: 12, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
   followRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  followIcon: {
+    width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+  },
   followBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: Radius.pill,

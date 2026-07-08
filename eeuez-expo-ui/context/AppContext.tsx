@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getPalette, type Palette, type ThemeMode } from '../constants/theme';
 import {
@@ -13,10 +14,21 @@ import {
 } from '../data/menuData';
 import * as authService from '../services/auth';
 import * as menu from '../services/menu';
+import * as addr from '../services/addresses';
 import type { PaymentMode } from '../services/menu';
-import type { UserDTO, CommandeDTO } from '../services/dto';
+import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
 
 export interface CartLine { dish: Dish; qty: number; }
+
+/** Lieu de livraison choisi pour la commande en cours. */
+export interface DeliveryTarget {
+  adresse: string;
+  details?: string;
+  latitude: number | null;
+  longitude: number | null;
+  label?: string;
+  savedId?: number;
+}
 
 interface AppContextValue {
   // thème
@@ -24,12 +36,28 @@ interface AppContextValue {
   colors: Palette;
   toggleTheme: () => void;
 
+  // préférences (persistées)
+  notifsEnabled: boolean;
+  setNotifsEnabled: (v: boolean) => void;
+  promoEnabled: boolean;
+  setPromoEnabled: (v: boolean) => void;
+
   // auth
   user: UserDTO | null;
   authReady: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   register: (p: authService.RegisterParams) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUser: (p: authService.ProfileUpdate) => Promise<void>;
+
+  // adresses de livraison enregistrées
+  addresses: AdresseDTO[];
+  reloadAddresses: () => Promise<void>;
+  addAddress: (a: addr.NewAddress) => Promise<AdresseDTO>;
+  removeAddress: (id: number) => Promise<void>;
+  makeDefaultAddress: (id: number) => Promise<void>;
+  deliveryAddress: DeliveryTarget | null;
+  setDeliveryAddress: (a: DeliveryTarget | null) => void;
 
   // catalogue
   categories: Category[];
@@ -75,15 +103,37 @@ interface AppContextValue {
   // commandes / suivi
   orders: CommandeDTO[];
   reloadOrders: () => Promise<void>;
-  checkout: (adresse: string, mode?: PaymentMode) => Promise<CommandeDTO>;
+  checkout: (mode?: PaymentMode) => Promise<CommandeDTO>;
   activeOrder: CommandeDTO | null;
   trackStep: number;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+const PREFS_KEY = '@menu_prefs';
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>('dark');
+  const [notifsEnabled, setNotifsEnabledState] = useState(true);
+  const [promoEnabled, setPromoEnabledState] = useState(true);
+
+  // Charge / persiste les préférences
+  useEffect(() => {
+    AsyncStorage.getItem(PREFS_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const p = JSON.parse(raw);
+        if (p.mode === 'light' || p.mode === 'dark') setMode(p.mode);
+        if (typeof p.notifs === 'boolean') setNotifsEnabledState(p.notifs);
+        if (typeof p.promo === 'boolean') setPromoEnabledState(p.promo);
+      } catch { /* préférences corrompues : on repart des défauts */ }
+    });
+  }, []);
+  const persistPrefs = (patch: Record<string, unknown>) => {
+    AsyncStorage.mergeItem(PREFS_KEY, JSON.stringify(patch)).catch(() => {});
+  };
+  const setNotifsEnabled = (v: boolean) => { setNotifsEnabledState(v); persistPrefs({ notifs: v }); };
+  const setPromoEnabled = (v: boolean) => { setPromoEnabledState(v); persistPrefs({ promo: v }); };
 
   // auth
   const [user, setUser] = useState<UserDTO | null>(null);
@@ -101,6 +151,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [follows, setFollows] = useState<Record<number, boolean>>({});
   const [cart, setCart] = useState<Record<number, number>>({});
   const [orders, setOrders] = useState<CommandeDTO[]>([]);
+  const [addresses, setAddresses] = useState<AdresseDTO[]>([]);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryTarget | null>(null);
 
   // géolocalisation & recommandations
   const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
@@ -179,6 +231,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // ─── Adresses de livraison ─────────────────────────────────
+  const reloadAddresses = useCallback(async () => {
+    try {
+      const list = await addr.fetchAddresses();
+      setAddresses(list);
+      // Sélectionne l'adresse par défaut si aucune n'est encore choisie
+      setDeliveryAddress(cur => {
+        if (cur) return cur;
+        const def = list.find(a => a.is_default) ?? list[0];
+        return def
+          ? { adresse: def.adresse, details: def.details, latitude: Number(def.latitude), longitude: Number(def.longitude), label: def.label, savedId: def.id }
+          : null;
+      });
+    } catch {
+      setAddresses([]);
+    }
+  }, []);
+
+  const addAddress = useCallback(async (a: addr.NewAddress) => {
+    const created = await addr.createAddress(a);
+    await reloadAddresses();
+    return created;
+  }, [reloadAddresses]);
+
+  const removeAddress = useCallback(async (id: number) => {
+    await addr.deleteAddress(id);
+    setDeliveryAddress(cur => (cur?.savedId === id ? null : cur));
+    await reloadAddresses();
+  }, [reloadAddresses]);
+
+  const makeDefaultAddress = useCallback(async (id: number) => {
+    await addr.setDefaultAddress(id);
+    await reloadAddresses();
+  }, [reloadAddresses]);
+
   useEffect(() => {
     (async () => {
       const stored = await authService.getStoredUser();
@@ -189,6 +276,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (stored) {
         await loadUserState();
         await reloadOrders();
+        await reloadAddresses();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,11 +288,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
     await loadUserState();
     await reloadOrders();
+    await reloadAddresses();
   };
   const register = async (p: authService.RegisterParams) => {
     const u = await authService.registerClient(p);
     setUser(u);
     await reloadOrders();
+    await reloadAddresses();
+  };
+  const updateUser = async (p: authService.ProfileUpdate) => {
+    const u = await authService.updateProfile(p);
+    setUser(u);
   };
   const signOut = async () => {
     await authService.logout();
@@ -213,10 +307,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setFollows({});
     setCart({});
     setOrders([]);
+    setAddresses([]);
+    setDeliveryAddress(null);
   };
 
   // ─── Thème ─────────────────────────────────────────────────
-  const toggleTheme = () => setMode(m => (m === 'dark' ? 'light' : 'dark'));
+  const toggleTheme = () => setMode(m => {
+    const next = m === 'dark' ? 'light' : 'dark';
+    persistPrefs({ mode: next });
+    return next;
+  });
 
   // ─── Caches de lookup ──────────────────────────────────────
   const restoMap = useMemo(() => new Map(restaurants.map(r => [r.id, r])), [restaurants]);
@@ -265,13 +365,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cartLines, restoMap]);
 
   // ─── Commandes / suivi ─────────────────────────────────────
-  const checkout = async (adresse: string, mode: PaymentMode = 'especes'): Promise<CommandeDTO> => {
+  const checkout = async (mode: PaymentMode = 'especes'): Promise<CommandeDTO> => {
     if (!cartLines.length) throw new Error('Panier vide');
+    if (!deliveryAddress || !deliveryAddress.adresse) {
+      throw new Error('Choisissez un lieu de livraison.');
+    }
     const restaurant = cartLines[0].dish.restoId;
     const items = cartLines
       .filter(l => l.dish.restoId === restaurant)
       .map(l => ({ plat_id: l.dish.id, quantite: l.qty }));
-    const order = await menu.createOrder({ restaurant, adresse_livraison: adresse, items, mode_paiement: mode });
+    const adresseText = [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ');
+    const order = await menu.createOrder({
+      restaurant, adresse_livraison: adresseText, items, mode_paiement: mode,
+      // Coordonnées GPS précises du lieu de livraison → carte du livreur + suivi
+      latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
+      longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
+    });
     setCart({});
     await reloadOrders();
     return order;
@@ -290,7 +399,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value: AppContextValue = {
     mode, colors, toggleTheme,
-    user, authReady, signIn, register, signOut,
+    notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
+    user, authReady, signIn, register, signOut, updateUser,
+    addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
     categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
     userLoc, recommended, recoRestos, positionUsed, reloadRecommendations,
     restoById, dishById, dishesOfResto,

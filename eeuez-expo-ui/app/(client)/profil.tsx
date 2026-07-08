@@ -81,7 +81,7 @@ export default function ProfilScreen() {
             <Text style={[displayFont(24, '800'), { color: colors.text }]}>Profil</Text>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <IconButton Icon={mode === 'dark' ? Sun : Moon} onPress={toggleTheme} colors={colors} />
-              <IconButton Icon={Settings} colors={colors} />
+              <IconButton Icon={Settings} onPress={() => router.push('/settings')} colors={colors} />
             </View>
           </View>
 
@@ -111,7 +111,7 @@ export default function ProfilScreen() {
           </View>
 
           {/* Favoris */}
-          <SectionTitle title="Mes favoris" colors={colors} action="Tout voir" onAction={() => router.push('/(client)/favoris')} />
+          <SectionTitle title="Mes favoris" colors={colors} action="Tout voir" onAction={() => router.push('/favoris')} />
           {favCount > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
               {favList.map(d => (
@@ -141,14 +141,18 @@ export default function ProfilScreen() {
             </View>
           )}
 
-          {/* Allergies */}
-          <View style={[styles.allergy, { backgroundColor: Brand.yellow + '0f', borderColor: Brand.yellow + '33' }]}>
-            <TriangleAlert size={22} color={Brand.yellow} strokeWidth={2.2} />
-            <View style={{ flex: 1 }}>
-              <Text style={[bodyFont(12, '800'), { color: Brand.yellow, letterSpacing: 0.6 }]}>ALLERGIES ENREGISTRÉES</Text>
-              <Text style={[bodyFont(13.5, '500'), { color: colors.text, marginTop: 4 }]}>Arachides · Gluten · Lactose</Text>
+          {/* Allergies (renseignées à l'inscription) */}
+          {!!user?.allergies && (
+            <View style={[styles.allergy, { backgroundColor: Brand.yellow + '0f', borderColor: Brand.yellow + '33' }]}>
+              <TriangleAlert size={22} color={Brand.yellow} strokeWidth={2.2} />
+              <View style={{ flex: 1 }}>
+                <Text style={[bodyFont(12, '800'), { color: Brand.yellow, letterSpacing: 0.6 }]}>ALLERGIES ENREGISTRÉES</Text>
+                <Text style={[bodyFont(13.5, '500'), { color: colors.text, marginTop: 4 }]}>
+                  {user.allergies.split(',').map(a => a.trim()).filter(Boolean).join(' · ')}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Déconnexion */}
           <PressableScale onPress={logout} style={{ marginTop: 20 }}>

@@ -113,3 +113,30 @@ export const apiGet = <T>(path: string, opts?: Omit<RequestOptions, 'method' | '
 
 export const apiPost = <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, 'method' | 'body'>) =>
   apiRequest<T>(path, { ...opts, method: 'POST', body });
+
+/**
+ * POST multipart/form-data (upload de fichier) avec JWT + refresh sur 401.
+ * On laisse fetch poser le Content-Type (avec le boundary) : ne pas le fixer.
+ */
+export async function apiUpload<T>(path: string, form: FormData, method: 'POST' | 'PATCH' | 'PUT' = 'POST'): Promise<T> {
+  const send = (token: string | null) => {
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return fetch(`${API_BASE_URL}${path}`, { method, headers, body: form });
+  };
+  try {
+    let token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    let res = await send(token);
+    if (res.status === 401) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) res = await send(refreshed);
+    }
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new ApiError(extractError(data, res.status), res.status);
+    return data as T;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Envoi impossible. Vérifiez votre connexion.', 0);
+  }
+}

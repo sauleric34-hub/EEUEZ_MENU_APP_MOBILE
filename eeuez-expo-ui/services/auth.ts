@@ -4,7 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, API_BASE_URL } from '../constants/api';
-import { apiPost, apiGet } from './http';
+import { apiPost, apiGet, apiUpload } from './http';
 import type { AuthDTO, UserDTO } from './dto';
 
 async function persist(auth: AuthDTO): Promise<void> {
@@ -25,6 +25,7 @@ export interface RegisterParams {
   first_name?: string;
   last_name?: string;
   telephone?: string;
+  allergies?: string;
 }
 
 export async function registerClient(params: RegisterParams): Promise<UserDTO> {
@@ -73,4 +74,30 @@ export async function refreshAccessToken(): Promise<string | null> {
 /** Récupère le profil courant depuis le serveur (valide le token). */
 export async function fetchProfile(): Promise<UserDTO> {
   return apiGet<UserDTO>('/client/profile', { auth: true });
+}
+
+export interface ProfileUpdate {
+  first_name?: string;
+  last_name?: string;
+  telephone?: string;
+  allergies?: string;
+  avatarUri?: string;  // uri locale d'une image à téléverser
+}
+
+/** Met à jour le profil (champs texte + photo). Persiste l'utilisateur mis à jour. */
+export async function updateProfile(data: ProfileUpdate): Promise<UserDTO> {
+  const form = new FormData();
+  if (data.first_name != null) form.append('first_name', data.first_name);
+  if (data.last_name != null) form.append('last_name', data.last_name);
+  if (data.telephone != null) form.append('telephone', data.telephone);
+  if (data.allergies != null) form.append('allergies', data.allergies);
+  if (data.avatarUri) {
+    const name = data.avatarUri.split('/').pop() || `avatar_${Date.now()}.jpg`;
+    const ext = (name.split('.').pop() || 'jpg').toLowerCase();
+    const type = ext === 'png' ? 'image/png' : 'image/jpeg';
+    form.append('avatar', { uri: data.avatarUri, name, type } as unknown as Blob);
+  }
+  const user = await apiUpload<UserDTO>('/client/profile', form, 'PATCH');
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
 }

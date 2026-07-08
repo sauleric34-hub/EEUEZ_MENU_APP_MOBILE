@@ -34,7 +34,7 @@ const DARK_MAP_STYLE = [
 ];
 
 export default function CarteScreen() {
-  const { colors, mode, toggleTheme, restaurants, recoRestos, dishesOfResto, userLoc } = useApp();
+  const { colors, mode, toggleTheme, restaurants, recoRestos, dishesOfResto, dishById, userLoc } = useApp();
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const [selId, setSelId] = useState<number | null>(null);
@@ -58,7 +58,10 @@ export default function CarteScreen() {
 
   const sel = selId != null ? located.find(r => r.id === selId) ?? null : null;
   const selReco = sel ? recoById.get(sel.id) : undefined;
-  const selDish = sel ? (dishesOfResto(sel.id)[0] ?? null) : null;
+  // Plat du jour réel du restaurant (défini dans le workspace), sinon 1er plat
+  const selDish = sel
+    ? ((sel.platDuJourId ? dishById(sel.platDuJourId) : undefined) ?? dishesOfResto(sel.id)[0] ?? null)
+    : null;
   const selDistance = selReco?.distanceKm ?? sel?.distanceKm ?? null;
   const selEta = selReco?.etaMin ?? (sel ? sel.tempsLivraison : null);
 

@@ -12,9 +12,14 @@ class User(AbstractUser):
     ]
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client')
     telephone = models.CharField(max_length=20, blank=True)
+    allergies = models.CharField(max_length=300, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     gain_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     nombre_livraisons = models.PositiveIntegerField(default=0)
+    # Livreur rattaché à un restaurant (compte créé par ce restaurant)
+    restaurant_attache = models.ForeignKey(
+        'RestaurantProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='livreurs',
+    )
 
     class Meta:
         verbose_name = 'Utilisateur'
@@ -91,9 +96,17 @@ class Plat(models.Model):
     is_popular = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
     is_visible = models.BooleanField(default=True)
+    # « Plat du jour » : valable uniquement le jour où il est défini.
+    # À minuit, la date change → le plat n'est plus plat du jour (reset auto).
+    plat_du_jour_le = models.DateField(null=True, blank=True)
     allergies = models.CharField(max_length=300, blank=True)
     ingredients = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def est_plat_du_jour(self):
+        from django.utils import timezone
+        return self.plat_du_jour_le == timezone.localdate()
 
     class Meta:
         verbose_name = 'Plat'
@@ -121,6 +134,8 @@ class Commande(models.Model):
     commission_eeuez = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     montant_restaurant = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     adresse_livraison = models.CharField(max_length=300, blank=True)
+    latitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     notes = models.TextField(blank=True)
     delai_estime = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -197,6 +212,94 @@ class Avis(models.Model):
         return f"Avis {self.note}/5 — {self.restaurant}"
 
 
+class PlatImage(models.Model):
+    """Photo supplémentaire d'un plat (galerie)."""
+    plat = models.ForeignKey(Plat, on_delete=models.CASCADE, related_name='photos')
+    image = models.ImageField(upload_to='plats/')
+    ordre = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Photo de plat'
+        verbose_name_plural = 'Photos de plats'
+        ordering = ['ordre', 'id']
+
+    def __str__(self):
+        return f"Photo #{self.pk} — {self.plat}"
+
+
+class PlatNote(models.Model):
+    """Note (1-5 étoiles) donnée par un client à un plat."""
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notes_plats')
+    plat = models.ForeignKey(Plat, on_delete=models.CASCADE, related_name='notes')
+    note = models.PositiveSmallIntegerField(choices=[(i, i) for i in range(1, 6)])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Note de plat'
+        verbose_name_plural = 'Notes de plats'
+        unique_together = ('client', 'plat')
+
+    def __str__(self):
+        return f"{self.client} → {self.plat} : {self.note}/5"
+
+
+class AdresseLivraison(models.Model):
+    """Lieu de livraison enregistré par un client (GPS précis)."""
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='adresses')
+    label = models.CharField(max_length=60, blank=True)  # « Maison », « Bureau »…
+    adresse = models.CharField(max_length=300)
+    details = models.CharField(max_length=200, blank=True)  # étage, porte, repère
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Adresse de livraison'
+        verbose_name_plural = 'Adresses de livraison'
+        ordering = ['-is_default', '-created_at']
+
+    def __str__(self):
+        return f"{self.label or self.adresse} ({self.client})"
+
+
+class Conversation(models.Model):
+    """Discussion client ↔ restaurant à propos d'un plat."""
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations')
+    restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='conversations')
+    plat = models.ForeignKey(Plat, on_delete=models.CASCADE, related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Conversation'
+        verbose_name_plural = 'Conversations'
+        unique_together = ('client', 'plat')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.client} ↔ {self.restaurant} ({self.plat})"
+
+
+class Message(models.Model):
+    SENDER_CHOICES = [('client', 'Client'), ('restaurant', 'Restaurant')]
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.CharField(max_length=12, choices=SENDER_CHOICES)
+    texte = models.TextField(blank=True)
+    image = models.ImageField(upload_to='messages/', blank=True, null=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Message'
+        verbose_name_plural = 'Messages'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[{self.sender}] {self.texte[:40]}"
+
+
 class Favori(models.Model):
     """Plat mis en favori par un client."""
     client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favoris')
@@ -262,6 +365,31 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.get_type_display()} — {self.montant} FCFA"
+
+
+class RetraitFonds(models.Model):
+    """Demande de retrait des gains d'un restaurant."""
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente'),
+        ('approuve', 'Approuvé'),
+        ('paye', 'Payé'),
+        ('refuse', 'Refusé'),
+    ]
+    restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='retraits')
+    montant = models.DecimalField(max_digits=12, decimal_places=0)
+    mode_paiement = models.CharField(max_length=20, choices=MODE_PAIEMENT_CHOICES, default='mtn_money')
+    numero_compte = models.CharField(max_length=50, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Retrait de fonds'
+        verbose_name_plural = 'Retraits de fonds'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Retrait {self.montant} F — {self.restaurant} ({self.statut})"
 
 
 class AuditLog(models.Model):

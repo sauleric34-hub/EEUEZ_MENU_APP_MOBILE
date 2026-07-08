@@ -1,0 +1,135 @@
+{% extends 'resto_base.html' %}
+{% block title %}Finances — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Finances{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Finances</h1>
+    <p class="page-subtitle">Vos revenus générés par les commandes et vos retraits</p>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-color:var(--accent-green);--kpi-bg:var(--accent-green-dim);--kpi-glow:var(--glow-green);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="kpi-value" data-count="{{ solde }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Solde disponible</div>
+    <div class="kpi-sub">Retirable dès maintenant</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-blue);--kpi-bg:var(--accent-blue-dim);--kpi-glow:var(--glow-blue);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div class="kpi-value" data-count="{{ gains_total }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Revenus cumulés</div>
+    <div class="kpi-sub">{{ nb_livrees }} commande{{ nb_livrees|pluralize }} livrée{{ nb_livrees|pluralize }}</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);--kpi-bg:var(--accent-amber-dim);--kpi-glow:var(--glow-amber);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+    <div class="kpi-value" data-count="{{ gains_mois }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Revenus ce mois</div>
+    <div class="kpi-sub">Mois en cours</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-purple);--kpi-bg:var(--accent-purple-dim);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+    <div class="kpi-value" data-count="{{ commission_total }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Commission plateforme</div>
+    <div class="kpi-sub">Taux : {{ commission_rate }} %</div>
+  </div>
+</div>
+
+<div class="charts-grid charts-grid-2" style="margin-bottom:20px;">
+  <!-- Graphique revenus -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Évolution des revenus</div><div class="chart-subtitle">6 derniers mois (FCFA)</div></div>
+    </div>
+    <div class="chart-container" style="height:240px;"><canvas id="revenusChart"></canvas></div>
+  </div>
+
+  <!-- Demande de retrait -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Retirer mes gains</div><div class="chart-subtitle">Versement sous 48 h ouvrées</div></div>
+    </div>
+    <form method="post" style="display:flex;flex-direction:column;gap:14px;">
+      {% csrf_token %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Montant (F) — max {{ solde }} F</label>
+        <input type="number" name="montant" class="input-field" required min="1000" max="{{ solde }}" step="500" placeholder="Ex : 25 000">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Mode de versement</label>
+        <select name="mode_paiement" class="input-field">
+          <option value="mtn_money">MTN Mobile Money</option>
+          <option value="orange_money">Orange Money</option>
+          <option value="carte">Virement bancaire</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Numéro de compte / téléphone</label>
+        <input type="text" name="numero_compte" class="input-field" required placeholder="Ex : 6 99 00 00 00">
+      </div>
+      <button type="submit" class="btn btn-primary" {% if solde < 1000 %}disabled title="Solde insuffisant (min. 1 000 F)"{% endif %}>
+        Demander le retrait
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="charts-grid charts-grid-2">
+  <!-- Historique des retraits -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Historique des retraits</div></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Montant</th><th>Mode</th><th>Statut</th></tr></thead>
+      <tbody>
+        {% for r in retraits %}
+        <tr>
+          <td style="font-size:0.82rem;">{{ r.created_at|date:'d M Y · H:i' }}</td>
+          <td style="font-weight:700;">{{ r.montant }} F</td>
+          <td style="font-size:0.82rem;">{{ r.get_mode_paiement_display }}</td>
+          <td><span class="badge badge-{{ r.statut }}">{{ r.get_statut_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="color:var(--text-muted);padding:30px;text-align:center;">Aucun retrait effectué.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Dernières commandes livrées -->
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Dernières commandes livrées</div><div class="chart-subtitle">Votre part après commission</div></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Date</th><th>Total client</th><th>Votre part</th></tr></thead>
+      <tbody>
+        {% for c in dernieres %}
+        <tr>
+          <td>#{{ c.pk }}</td>
+          <td style="font-size:0.82rem;">{{ c.created_at|date:'d M · H:i' }}</td>
+          <td>{{ c.montant_total }} F</td>
+          <td style="color:var(--accent-green);font-weight:700;">+{{ c.montant_restaurant }} F</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="color:var(--text-muted);padding:30px;text-align:center;">Aucune commande livrée.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  MENU.createLineChart('revenusChart', {{ chart_labels|safe }}, [
+    { label: 'Revenus (F)', data: {{ chart_values|safe }}, color: '#38A169' },
+  ]);
+});
+</script>
+{% endblock %}

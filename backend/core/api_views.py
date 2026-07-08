@@ -57,6 +57,8 @@ class RegisterView(views.APIView):
             password=data.get('password'),
             first_name=data.get('first_name', ''),
             last_name=data.get('last_name', ''),
+            telephone=data.get('telephone', ''),
+            allergies=data.get('allergies', ''),
             role=role
         )
         
@@ -81,8 +83,19 @@ def ping_view(request):
 # --- CLIENT ---
 class ClientProfileView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        user = request.user
+        for field in ('first_name', 'last_name', 'telephone', 'allergies'):
+            if field in request.data:
+                setattr(user, field, request.data.get(field) or '')
+        if 'avatar' in request.FILES:
+            user.avatar = request.FILES['avatar']
+        user.save()
+        return Response(UserSerializer(user).data)
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
@@ -132,10 +145,18 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         if mode_paiement not in VALID_MODES:
             mode_paiement = 'especes'
 
+        def _coord(v):
+            try:
+                return round(float(v), 6)
+            except (TypeError, ValueError):
+                return None
+
         commande = Commande.objects.create(
             client=user,
             restaurant=restaurant,
             adresse_livraison=data.get('adresse_livraison', ''),
+            latitude_livraison=_coord(data.get('latitude')),
+            longitude_livraison=_coord(data.get('longitude')),
             notes=data.get('notes', ''),
             statut='en_attente',
             delai_estime=restaurant.temps_livraison_moyen,

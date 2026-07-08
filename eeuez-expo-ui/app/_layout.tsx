@@ -20,7 +20,14 @@ export default function RootLayout() {
           <Stack.Screen name="(client)" options={{ animation: 'fade' }} />
           <Stack.Screen name="dish/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="resto/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="chat/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="tracking" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="favoris" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="register" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="edit-profile" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="location-picker" options={{ animation: 'slide_from_bottom' }} />
         </Stack>
       </AppProvider>
     </SafeAreaProvider>

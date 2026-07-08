@@ -490,6 +490,12 @@ section{position:relative;overflow:hidden}
 }
 .footer-bottom-right{display:flex;gap:20px}
 
+/* Menu mobile (déroulant sous la navbar) */
+.nav-mobile{display:none;flex-direction:column;gap:4px;padding:14px 24px 20px;background:var(--nav-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--border2);position:fixed;top:68px;left:0;right:0;z-index:899}
+.nav-mobile a{padding:12px 4px;font-size:0.95rem;color:var(--txt1);border-bottom:1px solid var(--border);text-decoration:none}
+.nav-mobile a:last-child{border-bottom:none}
+.nav-mobile .nav-cta{margin-top:10px;text-align:center;border-bottom:none}
+
 /* -------- RESPONSIVE -------- */
 @media(max-width:1024px){
   .hero-inner{grid-template-columns:1fr;text-align:center;gap:40px}
@@ -510,7 +516,8 @@ section{position:relative;overflow:hidden}
   .steps-grid{grid-template-columns:1fr}
   .steps-grid::before{display:none}
   .features-grid{grid-template-columns:1fr}
-  .feature-card.large{grid-column:auto}
+  .feature-card.large{grid-column:auto;grid-template-columns:1fr !important}
+  .nav-mobile.open{display:flex}
   .resto-grid{grid-template-columns:1fr}
   .menu-grid{grid-template-columns:1fr 1fr}
   .cta-card{padding:48px 24px}
@@ -554,10 +561,21 @@ section{position:relative;overflow:hidden}
     </button>
     <a href="#telechargement" class="nav-cta">Télécharger l'app</a>
   </div>
-  <button class="nav-hamburger" aria-label="Menu">
+  <button class="nav-hamburger" aria-label="Menu" aria-expanded="false"
+          onclick="var m=document.getElementById('navMobile');var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o);">
     <span></span><span></span><span></span>
   </button>
 </nav>
+
+<!-- Menu mobile -->
+<div class="nav-mobile" id="navMobile">
+  <a href="#comment" onclick="document.getElementById('navMobile').classList.remove('open')">Comment ça marche</a>
+  <a href="#restaurants" onclick="document.getElementById('navMobile').classList.remove('open')">Restaurants</a>
+  <a href="#menu" onclick="document.getElementById('navMobile').classList.remove('open')">Menu</a>
+  <a href="#fonctionnalites" onclick="document.getElementById('navMobile').classList.remove('open')">Fonctionnalités</a>
+  <a href="{% url 'core:login' %}">Espace Admin / Restaurant</a>
+  <a href="#telechargement" class="nav-cta" onclick="document.getElementById('navMobile').classList.remove('open')">Télécharger l'app</a>
+</div>
 
 <!-- ============================================================ HERO -->
 <section class="hero">

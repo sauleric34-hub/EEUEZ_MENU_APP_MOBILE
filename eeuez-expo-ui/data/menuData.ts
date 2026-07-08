@@ -29,7 +29,9 @@ export interface Resto {
   icon: LucideIcon;
   grad: Gradient;
   bio: string;
-  image?: string;
+  image?: string;   // logo du restaurant
+  cover?: string;   // image de couverture (bannière)
+  platDuJourId: number | null;
   latitude: number | null;
   longitude: number | null;
   fraisLivraison: number;
@@ -56,6 +58,9 @@ export interface Dish {
   isPopular: boolean;
   category: string | null;
   image?: string;
+  images: string[];
+  myRating: number | null;
+  ratingCount: number;
   /** Renseignés par le moteur de recommandation (si position connue) */
   distanceKm?: number | null;
   etaMin?: number | null;
@@ -144,6 +149,8 @@ export function mapResto(d: RestoDTO): Resto {
     grad: gradForId(d.id),
     bio: d.description || 'Restaurant partenaire',
     image: absMedia(d.logo),
+    cover: absMedia(d.cover_image),
+    platDuJourId: d.plat_du_jour ?? null,
     latitude: d.latitude != null ? Number(d.latitude) : null,
     longitude: d.longitude != null ? Number(d.longitude) : null,
     fraisLivraison: Number(d.frais_livraison ?? 0),
@@ -177,6 +184,9 @@ export function mapPlat(d: PlatDTO): Dish {
     isPopular: d.is_popular,
     category: d.categorie_nom,
     image: absMedia(d.image),
+    images: (d.images ?? []).map(u => absMedia(u)).filter((u): u is string => !!u),
+    myRating: d.ma_note ?? null,
+    ratingCount: d.nombre_notes ?? 0,
   };
 }
 
@@ -191,8 +201,8 @@ export const DELIVERY_FEE = 800;
 // Étapes du suivi de livraison (mappées sur les statuts de commande)
 export const TRACK_STEPS = [
   { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande', statuts: ['en_attente', 'acceptee'] },
-  { title: 'En préparation',     desc: 'Vos plats sont en cuisine',            statuts: ['en_preparation', 'prete'] },
-  { title: 'En route',           desc: 'Le livreur a récupéré votre commande', statuts: ['en_livraison'] },
+  { title: 'En préparation',     desc: 'Vos plats sont en cuisine',            statuts: ['en_preparation', 'prete', 'assignee'] },
+  { title: 'En route',           desc: 'Le livreur a récupéré votre commande', statuts: ['en_livraison', 'en_collecte'] },
   { title: 'Livré',              desc: 'Bon appétit !',                        statuts: ['livree'] },
 ];
 export const TRACK_ETA = ['Arrive dans ~22 min', 'Arrive dans ~16 min', 'Arrive dans ~8 min', 'Livré'];
