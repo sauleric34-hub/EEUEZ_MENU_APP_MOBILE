@@ -1,0 +1,82 @@
+{% extends 'resto_base.html' %}
+{% block title %}Mes Livreurs — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Mes Livreurs{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Mes Livreurs</h1>
+    <p class="page-subtitle">Créez des comptes livreur et déléguez vos livraisons</p>
+  </div>
+</div>
+
+<!-- Création d'un compte livreur -->
+<div class="glass-card anim-fade-up" style="padding:24px;margin-bottom:20px;">
+  <div class="chart-title" style="margin-bottom:6px;">Créer un compte livreur</div>
+  <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
+    Choisissez un mot de passe, ou laissez le champ vide : il sera généré automatiquement
+    et affiché <strong>une seule fois</strong> après création pour que vous le transmettiez au livreur.
+  </p>
+  <form method="post" class="form-grid-auto" style="display:grid;grid-template-columns:1.6fr 1.2fr 1.8fr 1.4fr auto;gap:12px;align-items:end;">
+    {% csrf_token %}
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Nom complet *</label>
+      <input type="text" name="nom" class="input-field" required placeholder="Ex : Ibrahim Sali">
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Téléphone</label>
+      <input type="text" name="telephone" class="input-field" placeholder="699 00 00 00">
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Email (identifiant)</label>
+      <input type="email" name="email" class="input-field" placeholder="livreur@exemple.cm">
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Mot de passe (optionnel)</label>
+      <input type="text" name="password" class="input-field" placeholder="Auto si vide" autocomplete="new-password">
+    </div>
+    <button type="submit" class="btn btn-primary">+ Créer</button>
+  </form>
+</div>
+
+<!-- Liste des livreurs -->
+<div class="glass-card anim-fade-up" style="padding:0;overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr><th>Livreur</th><th>Contact</th><th>Livraisons totales</th><th>En cours</th><th>Gains cumulés</th><th>Statut</th></tr>
+    </thead>
+    <tbody>
+      {% for l in livreurs %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-blue-dim);color:var(--accent-blue);display:flex;align-items:center;justify-content:center;font-weight:700;">
+              {{ l.first_name|first|upper|default:'L' }}
+            </div>
+            <div style="font-weight:600;">{{ l.get_full_name|default:l.username }}</div>
+          </div>
+        </td>
+        <td style="font-size:0.82rem;">
+          {{ l.telephone|default:'—' }}
+          <div style="color:var(--text-muted);">{{ l.email }}</div>
+        </td>
+        <td>{{ l.nombre_livraisons }}</td>
+        <td>
+          {% if l.en_cours %}<span class="badge badge-blue">{{ l.en_cours }} mission{{ l.en_cours|pluralize }}</span>
+          {% else %}<span style="color:var(--text-muted);">Disponible</span>{% endif %}
+        </td>
+        <td style="color:var(--accent-green);font-weight:600;">{{ l.gain_total }} F</td>
+        <td>
+          {% if l.is_active %}<span class="badge badge-green">Actif</span>
+          {% else %}<span class="badge badge-red">Suspendu</span>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:40px;">
+        Aucun livreur — créez le premier compte ci-dessus pour pouvoir déléguer vos livraisons.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

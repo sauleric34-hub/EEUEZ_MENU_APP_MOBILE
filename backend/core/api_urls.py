@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from . import api_views
+from . import client_views
 
 router = DefaultRouter()
 # Viewsets routing
@@ -13,20 +15,45 @@ urlpatterns = [
     # Auth
     path('auth/login', api_views.LoginView.as_view(), name='api-login'),
     path('auth/register/<str:role>', api_views.RegisterView.as_view(), name='api-register'),
+    path('auth/refresh', TokenRefreshView.as_view(), name='api-token-refresh'),
     path('auth/ping', api_views.ping_view, name='api-ping'),
-    
-    # Client
+
+    # Client — profil
     path('client/profile', api_views.ClientProfileView.as_view(), name='api-client-profile'),
     path('client/restaurants/nearby', api_views.nearby_restaurants, name='api-client-nearby'),
-    
+
+    # Client — catalogue (app mobile)
+    path('client/restaurants', client_views.restaurants_list, name='api-client-restaurants'),
+    path('client/restaurants/<int:id>', client_views.restaurant_detail, name='api-client-restaurant-detail'),
+    path('client/plats', client_views.plats_list, name='api-client-plats'),
+    path('client/plats/<int:id>', client_views.plat_detail, name='api-client-plat-detail'),
+    path('client/categories', client_views.categories_list, name='api-client-categories'),
+    path('client/recommandations', client_views.recommandations, name='api-client-recommandations'),
+    path('client/plats/<int:id>/noter', client_views.noter_plat, name='api-client-noter-plat'),
+
+    # Client — messagerie
+    path('client/conversations', client_views.conversations, name='api-client-conversations'),
+    path('client/conversations/<int:id>/messages', client_views.conversation_messages, name='api-client-conversation-messages'),
+
+    # Client — adresses de livraison enregistrées
+    path('client/adresses', client_views.adresses, name='api-client-adresses'),
+    path('client/adresses/<int:id>', client_views.adresse_detail, name='api-client-adresse-detail'),
+
+    # Client — favoris & abonnements
+    path('client/favoris', client_views.favoris, name='api-client-favoris'),
+    path('client/abonnements', client_views.abonnements, name='api-client-abonnements'),
+
+    # Client — avis
+    path('client/commandes/<int:commande_id>/avis', client_views.create_avis, name='api-client-avis'),
+
     # Restaurant
     path('restaurant/workspace', api_views.RestaurantWorkspaceView.as_view(), name='api-restaurant-workspace'),
-    
+
     # Map
     path('map/restaurants', api_views.map_restaurants, name='api-map-restaurants'),
     path('map/restaurants/search', api_views.map_restaurants_search, name='api-map-restaurants-search'),
     path('map/restaurants/<int:id>/details', api_views.map_restaurant_details, name='api-map-restaurant-details'),
-    
-    # Viewsets (includes client/commandes, restaurant/menu/plats, etc.)
+
+    # Viewsets (client/commandes, restaurant/menu/plats, etc.)
     path('', include(router.urls)),
 ]

@@ -1,5 +1,6 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
+from core.views import resto_ws, livreur_ws
 
 app_name = 'core'
 
@@ -50,4 +51,26 @@ urlpatterns = [
     # Map
     path('map/', map_view.map_view, name='map'),
     path('api/restaurants/geojson/', map_view.restaurants_geojson, name='restaurants_geojson'),
+
+    # ─── Workspace Restaurant ───
+    path('resto/', resto_ws.dashboard, name='resto_dashboard'),
+    path('resto/commandes/', resto_ws.commandes, name='resto_commandes'),
+    path('resto/commandes/<int:pk>/action/', resto_ws.commande_action, name='resto_commande_action'),
+    path('resto/plats/', resto_ws.plats, name='resto_plats'),
+    path('resto/plats/nouveau/', resto_ws.plat_form, name='resto_plat_create'),
+    path('resto/plats/<int:pk>/', resto_ws.plat_form, name='resto_plat_edit'),
+    path('resto/plats/<int:pk>/toggle/', resto_ws.plat_toggle, name='resto_plat_toggle'),
+    path('resto/plats/<int:pk>/du-jour/', resto_ws.plat_du_jour, name='resto_plat_du_jour'),
+    path('resto/plats/<int:pk>/supprimer/', resto_ws.plat_delete, name='resto_plat_delete'),
+    path('resto/messages/', resto_ws.conversations, name='resto_messages'),
+    path('resto/messages/<int:pk>/', resto_ws.conversation_detail, name='resto_conversation'),
+    path('resto/livreurs/', resto_ws.livreurs, name='resto_livreurs'),
+    path('resto/communaute/', resto_ws.communaute, name='resto_communaute'),
+    path('resto/finances/', resto_ws.finances, name='resto_finances'),
+    path('resto/profil/', resto_ws.profil, name='resto_profil'),
+
+    # ─── Workspace Livreur ───
+    path('livreur/', livreur_ws.dashboard, name='livreur_dashboard'),
+    path('livreur/carte/', livreur_ws.carte, name='livreur_carte'),
+    path('livreur/livraisons/<int:pk>/action/', livreur_ws.livraison_action, name='livreur_livraison_action'),
 ]

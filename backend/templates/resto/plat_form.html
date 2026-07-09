@@ -1,0 +1,88 @@
+{% extends 'resto_base.html' %}
+{% block title %}{% if plat %}Modifier {{ plat.nom }}{% else %}Publier un plat{% endif %} — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}{% if plat %}Modifier un plat{% else %}Publier un plat{% endif %}{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">{% if plat %}Modifier « {{ plat.nom }} »{% else %}Publier un nouveau plat{% endif %}</h1>
+    <p class="page-subtitle">Les clients le verront immédiatement dans l'application</p>
+  </div>
+  <a href="{% url 'core:resto_plats' %}" class="btn btn-secondary" style="margin-left:auto;">← Retour</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="glass-card anim-fade-up" style="padding:28px;max-width:820px;">
+  {% csrf_token %}
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Nom du plat *</label>
+      <input type="text" name="nom" class="input-field" required value="{{ plat.nom|default:'' }}" placeholder="Ex : Poulet DG">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Prix (FCFA) *</label>
+      <input type="number" name="prix" class="input-field" required min="100" step="50" value="{{ plat.prix|default:'' }}" placeholder="Ex : 4500">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Catégorie</label>
+      <select name="categorie" class="input-field">
+        <option value="">— Choisir —</option>
+        {% for c in categories %}
+        <option value="{{ c.pk }}" {% if plat.categorie_id == c.pk %}selected{% endif %}>{{ c.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Allergènes (séparés par des virgules)</label>
+      <input type="text" name="allergies" class="input-field" value="{{ plat.allergies|default:'' }}" placeholder="Ex : Arachides, Gluten">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Description</label>
+    <textarea name="description" class="input-field" rows="3" placeholder="Décrivez votre plat en quelques mots…">{{ plat.description|default:'' }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Ingrédients (séparés par des virgules)</label>
+    <input type="text" name="ingredients" class="input-field" value="{{ plat.ingredients|default:'' }}" placeholder="Ex : Poulet, Plantains mûrs, Ail, Huile rouge">
+  </div>
+
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Photo principale {% if plat.image %}(actuelle : {{ plat.image.name|truncatechars:28 }}){% endif %}</label>
+      <input type="file" name="image" accept="image/*" class="input-field">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Photos supplémentaires (galerie, plusieurs possibles)</label>
+      <input type="file" name="photos" accept="image/*" multiple class="input-field">
+    </div>
+  </div>
+
+  {% if plat and plat.photos.all %}
+  <div class="form-group">
+    <label class="form-label">Galerie actuelle</label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      {% for ph in plat.photos.all %}
+      <img src="{{ ph.image.url }}" style="width:72px;height:72px;border-radius:12px;object-fit:cover;border:1px solid var(--border-color,rgba(255,255,255,0.1));">
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:26px;margin:18px 0;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" name="is_available" {% if not plat or plat.is_available %}checked{% endif %}>
+      <span>Disponible à la commande</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" name="is_popular" {% if plat.is_popular %}checked{% endif %}>
+      <span>Mettre en avant (populaire)</span>
+    </label>
+  </div>
+
+  <div style="display:flex;gap:12px;">
+    <button type="submit" class="btn btn-primary">{% if plat %}Enregistrer les modifications{% else %}Publier le plat{% endif %}</button>
+    <a href="{% url 'core:resto_plats' %}" class="btn btn-secondary">Annuler</a>
+  </div>
+</form>
+{% endblock %}

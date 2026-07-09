@@ -1,351 +1,422 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
+// ═══════════════════════════════════════════════════════════
+//  AppContext — état global + accès au backend Django
+//  Auth, catalogue (restos/plats/catégories), favoris,
+//  abonnements, panier, commandes, suivi.
+// ═══════════════════════════════════════════════════════════
+
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { commandeService } from '../services/apiService';
+import { getPalette, type Palette, type ThemeMode } from '../constants/theme';
+import {
+  mapResto, mapPlat, mapCategory, statutToStep, DELIVERY_FEE,
+  type Resto, type Dish, type Category,
+} from '../data/menuData';
+import * as authService from '../services/auth';
+import * as menu from '../services/menu';
+import * as addr from '../services/addresses';
+import type { PaymentMode } from '../services/menu';
+import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
 
-export type CartItem = {
-  id: string;
-  nom: string;
-  prix: number;
-  quantite: number;
-  restaurantId: string;
-};
+export interface CartLine { dish: Dish; qty: number; }
 
-export type Order = {
-  id: string;
-  status: string; // 'en_attente', 'en_preparation', 'livreur_assigne', 'en_livraison', 'livree'
+/** Lieu de livraison choisi pour la commande en cours. */
+export interface DeliveryTarget {
+  adresse: string;
+  details?: string;
+  latitude: number | null;
+  longitude: number | null;
+  label?: string;
+  savedId?: number;
+}
+
+interface AppContextValue {
+  // thème
+  mode: ThemeMode;
+  colors: Palette;
+  toggleTheme: () => void;
+
+  // préférences (persistées)
+  notifsEnabled: boolean;
+  setNotifsEnabled: (v: boolean) => void;
+  promoEnabled: boolean;
+  setPromoEnabled: (v: boolean) => void;
+
+  // auth
+  user: UserDTO | null;
+  authReady: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  register: (p: authService.RegisterParams) => Promise<void>;
+  signOut: () => Promise<void>;
+  updateUser: (p: authService.ProfileUpdate) => Promise<void>;
+
+  // adresses de livraison enregistrées
+  addresses: AdresseDTO[];
+  reloadAddresses: () => Promise<void>;
+  addAddress: (a: addr.NewAddress) => Promise<AdresseDTO>;
+  removeAddress: (id: number) => Promise<void>;
+  makeDefaultAddress: (id: number) => Promise<void>;
+  deliveryAddress: DeliveryTarget | null;
+  setDeliveryAddress: (a: DeliveryTarget | null) => void;
+
+  // catalogue
+  categories: Category[];
+  restaurants: Resto[];
+  plats: Dish[];
+  popular: Dish[];
+  dataLoading: boolean;
+  dataError: string | null;
+  reloadCatalogue: () => Promise<void>;
+
+  // géolocalisation & recommandations personnalisées
+  userLoc: { lat: number; lon: number } | null;
+  recommended: Dish[];
+  recoRestos: Resto[];
+  positionUsed: boolean;
+  reloadRecommendations: () => Promise<void>;
+  restoById: (id: number) => Resto | undefined;
+  dishById: (id: number) => Dish | undefined;
+  dishesOfResto: (id: number) => Dish[];
+
+  // favoris
+  likes: Record<number, boolean>;
+  toggleLike: (id: number) => void;
+  favList: Dish[];
+
+  // abonnements
+  follows: Record<number, boolean>;
+  toggleFollow: (id: number) => void;
+  isFollowing: (id: number) => boolean;
+
+  // panier
+  cart: Record<number, number>;
+  addToCart: (id: number, qty?: number) => void;
+  cartInc: (id: number) => void;
+  cartDec: (id: number) => void;
+  cartRemove: (id: number) => void;
+  cartLines: CartLine[];
+  cartCount: number;
+  subtotal: number;
+  deliveryFee: number;
   total: number;
-  items: CartItem[];
-  date: string;
-};
 
-export type SimulatedDelivery = {
-  id: number;
-  routePath: any[];
-  displayRoute?: any[] | null;
-  currentIndex: number;
-  detoursDone: number;
-  isRecalculating: boolean;
-  detourMarker: any | null;
-  clientPos: any;
-  rPos: any;
-  currentStep: number;
-};
-
-type AppContextType = {
-  cart: CartItem[];
-  addToCart: (item: CartItem) => void;
-  removeFromCart: (id: string) => void;
-  clearCart: () => void;
-  
-  activeOrder: Order | null;
-  setActiveOrder: (order: Order | null) => void;
-  
-  pastOrders: Order[];
-  addPastOrder: (order: Order) => void;
-  
-  likedDishes: string[];
-  toggleLikeDish: (id: string) => void;
-  
-  followedRestaurants: string[];
-  toggleFollowRestaurant: (id: string) => void;
-  
-  notifications: any[];
-  unreadCount: number;
-  addNotification: (notif: any) => void;
-  markNotificationsAsRead: () => void;
-
-  simulatedDeliveries: SimulatedDelivery[];
-};
-
-const AppContext = createContext<AppContextType | undefined>(undefined);
-
-function getDistanceToPath(point: any, path: any[]) {
-    if (!path || path.length === 0) return 0;
-    let minD = Infinity;
-    for (const p of path) {
-       const dx = p.latitude - point.latitude;
-       const dy = p.longitude - point.longitude;
-       const d = dx*dx + dy*dy;
-       if (d < minD) minD = d;
-    }
-    return Math.sqrt(minD);
+  // commandes / suivi
+  orders: CommandeDTO[];
+  reloadOrders: () => Promise<void>;
+  checkout: (mode?: PaymentMode) => Promise<CommandeDTO>;
+  activeOrder: CommandeDTO | null;
+  trackStep: number;
 }
 
-// Fonction OSRM globale
-async function getRouteFromOSRM(start: any, end: any) {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.routes && data.routes.length > 0) {
-      const coords = data.routes[0].geometry.coordinates;
-      return coords.map((c: any) => ({ latitude: c[1], longitude: c[0] }));
-    }
-  } catch (err) { }
-  return [start, { latitude: (start.latitude + end.latitude) / 2, longitude: start.longitude }, end];
-}
+const AppContext = createContext<AppContextValue | null>(null);
 
-async function getDetourRouteFromOSRM(start: any, detour: any, end: any) {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${detour.longitude},${detour.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.routes && data.routes.length > 0) {
-      const coords = data.routes[0].geometry.coordinates;
-      return coords.map((c: any) => ({ latitude: c[1], longitude: c[0] }));
-    }
-  } catch (err) { }
-  return [start, detour, end];
-}
+const PREFS_KEY = '@menu_prefs';
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
-  const [pastOrders, setPastOrders] = useState<Order[]>([]);
-  const [likedDishes, setLikedDishes] = useState<string[]>([]);
-  const [followedRestaurants, setFollowedRestaurants] = useState<string[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [mode, setMode] = useState<ThemeMode>('dark');
+  const [notifsEnabled, setNotifsEnabledState] = useState(true);
+  const [promoEnabled, setPromoEnabledState] = useState(true);
 
-  const [simulatedDeliveries, setSimulatedDeliveries] = useState<SimulatedDelivery[]>([]);
-  const knownOrderIds = useRef<Set<number>>(new Set());
-
-  // Charger le panier depuis le stockage local au démarrage
+  // Charge / persiste les préférences
   useEffect(() => {
-    AsyncStorage.getItem('eeuez_cart').then(str => {
-      if (str) setCart(JSON.parse(str));
-    }).catch(e => console.log(e));
-  }, []);
-
-  // Sauvegarder le panier à chaque modification
-  useEffect(() => {
-    AsyncStorage.setItem('eeuez_cart', JSON.stringify(cart)).catch(e => console.log(e));
-  }, [cart]);
-
-  // GLOBAL SIMULATION ENGINE
-  useEffect(() => {
-    let clientPos = { latitude: 3.848, longitude: 11.502 }; // Default Yaoundé
-    let locationFetched = false;
-    
-    // 1. Polling for new orders
-    const fetchOrders = async () => {
-      if (!locationFetched) {
-        try {
-          let { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            let loc = await Location.getCurrentPositionAsync({});
-            clientPos = loc.coords;
-          }
-        } catch(e) {}
-        locationFetched = true;
-      }
+    AsyncStorage.getItem(PREFS_KEY).then(raw => {
+      if (!raw) return;
       try {
-        const hist: any = await commandeService.getHistorique();
-        const activeList = hist.filter((c: any) => c.statut !== 'livree' && c.statut !== 'annulee');
-        
-        // Remove ended orders
-        const activeIds = new Set(activeList.map((o: any) => o.id));
-        setSimulatedDeliveries(prev => prev.filter(d => activeIds.has(d.id)));
-        
-        for (const order of activeList) {
-          if (!knownOrderIds.current.has(order.id)) {
-             knownOrderIds.current.add(order.id);
-             try {
-               const detail: any = await commandeService.getDetail(order.id);
-               let rPos = { latitude: 3.85, longitude: 11.51 };
-               if (detail.restaurant_details && detail.restaurant_details.latitude) {
-                 rPos = {
-                   latitude: parseFloat(detail.restaurant_details.latitude),
-                   longitude: parseFloat(detail.restaurant_details.longitude)
-                 };
-               }
-               
-               let step = 0;
-               if (order.statut === 'acceptee') step = 1;
-               else if (order.statut === 'en_preparation') step = 2;
-               else if (order.statut === 'prete') step = 3;
-               else if (order.statut === 'en_livraison') step = 4;
-               
-               const path = await getRouteFromOSRM(rPos, clientPos);
-                 setSimulatedDeliveries(prev => {
-                 if (prev.find(d => d.id === order.id)) return prev;
-                 return [...prev, { 
-                   id: order.id, routePath: path, displayRoute: path, currentIndex: 0, 
-                   detoursDone: 0, isRecalculating: false, detourMarker: null,
-                   clientPos, rPos, currentStep: step
-                 }];
-               });
-             } catch(e) {}
-          }
-        }
-      } catch(e) {}
-    };
+        const p = JSON.parse(raw);
+        if (p.mode === 'light' || p.mode === 'dark') setMode(p.mode);
+        if (typeof p.notifs === 'boolean') setNotifsEnabledState(p.notifs);
+        if (typeof p.promo === 'boolean') setPromoEnabledState(p.promo);
+      } catch { /* préférences corrompues : on repart des défauts */ }
+    });
+  }, []);
+  const persistPrefs = (patch: Record<string, unknown>) => {
+    AsyncStorage.mergeItem(PREFS_KEY, JSON.stringify(patch)).catch(() => {});
+  };
+  const setNotifsEnabled = (v: boolean) => { setNotifsEnabledState(v); persistPrefs({ notifs: v }); };
+  const setPromoEnabled = (v: boolean) => { setPromoEnabledState(v); persistPrefs({ promo: v }); };
 
-    fetchOrders();
-    const pollTimer = setInterval(fetchOrders, 3000);
+  // auth
+  const [user, setUser] = useState<UserDTO | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-    // 2. Animation & Detour Loop
-    const animTimer = setInterval(() => {
-      setSimulatedDeliveries(prev => {
-        const next = [...prev];
-        let changed = false;
+  // catalogue
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [restaurants, setRestaurants] = useState<Resto[]>([]);
+  const [plats, setPlats] = useState<Dish[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
-        for (let i = 0; i < next.length; i++) {
-          const d = next[i];
-          
-          if (d.currentStep >= 4 && d.routePath.length > 0 && !d.isRecalculating) {
-            if (d.currentIndex < d.routePath.length - 1) {
-               const nextIndex = d.currentIndex + 1;
-               
-               // DETOUR LOGIC (3 detours)
-               // On divise la route restante estimée (ou totale) pour placer les détours
-               // Si on veut 3 détours, on le fait à 1/4, 2/4, 3/4 du trajet
-               const fraction = d.routePath.length / 4;
-                const expectedDetours = Math.floor(nextIndex / fraction);
-               
-                // 1) TRIGGER DETOUR: Modifies the driver's secret routePath but DOES NOT touch displayRoute
-                if (expectedDetours > d.detoursDone && d.detoursDone < 3 && nextIndex > 2) {
-                   const futureIndex = Math.min(nextIndex + 3, d.routePath.length - 1);
-                   const futurePos = d.routePath[futureIndex];
-                   
-                   const latOffset = d.detoursDone % 2 === 0 ? 0.003 : -0.003;
-                   const lonOffset = d.detoursDone === 1 ? 0.003 : -0.003;
-                   const detourPos = { latitude: futurePos.latitude + latOffset, longitude: futurePos.longitude + lonOffset };
-                   
-                   next[i] = { ...d, detoursDone: d.detoursDone + 1, detourMarker: detourPos, currentIndex: nextIndex };
-                   changed = true;
-                   
-                   getDetourRouteFromOSRM(futurePos, detourPos, d.clientPos).then(newPath => {
-                      setSimulatedDeliveries(current => {
-                         return current.map(cd => {
-                            if (cd.id === d.id) {
-                               return { ...cd, routePath: [...cd.routePath.slice(0, futureIndex), ...newPath] };
-                            }
-                            return cd;
-                         });
-                      });
-                   }).catch(()=>{});
-                } else {
-                   next[i] = { ...d, currentIndex: nextIndex };
-                   changed = true;
-                }
-                
-                // 2) GPS RECALCULATION: Triggered naturally if driver is far from the displayRoute
-                const currentPos = next[i].routePath[next[i].currentIndex];
-                const activeDisplay = next[i].displayRoute || next[i].routePath;
-                const distanceToGPS = getDistanceToPath(currentPos, activeDisplay.slice(next[i].currentIndex));
-                
-                if (distanceToGPS > 0.0005 && !next[i].isRecalculating) {
-                   next[i].isRecalculating = true;
-                   changed = true;
-                   
-                   getRouteFromOSRM(currentPos, next[i].clientPos).then(newPath => {
-                      setSimulatedDeliveries(curr => curr.map(cd => {
-                         if (cd.id === d.id) {
-                            return { ...cd, displayRoute: newPath, isRecalculating: false };
-                         }
-                         return cd;
-                      }));
-                   }).catch(()=>{});
-                }
-             } else {
-               // Arrivé !
-               if (d.currentStep !== 5) {
-                  next[i] = { ...d, currentStep: 5 };
-                  commandeService.updateStatus(d.id, 'livree').catch(e=>{});
-                  changed = true;
-               }
-            }
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 200); // vitesse de la moto (accélérée)
+  // état utilisateur
+  const [likes, setLikes] = useState<Record<number, boolean>>({});
+  const [follows, setFollows] = useState<Record<number, boolean>>({});
+  const [cart, setCart] = useState<Record<number, number>>({});
+  const [orders, setOrders] = useState<CommandeDTO[]>([]);
+  const [addresses, setAddresses] = useState<AdresseDTO[]>([]);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryTarget | null>(null);
 
-    // 3. Status progression simulation (simuler la cuisine)
-    const statusTimer = setInterval(() => {
-       setSimulatedDeliveries(prev => {
-          const next = [...prev];
-          let changed = false;
-          for (let i = 0; i < next.length; i++) {
-             if (next[i].currentStep < 4) {
-                const ns = next[i].currentStep + 1;
-                next[i] = { ...next[i], currentStep: ns };
-                changed = true;
-                const statuts = ['en_attente', 'acceptee', 'en_preparation', 'prete', 'en_livraison'];
-                if (ns <= 4) {
-                   commandeService.updateStatus(next[i].id, statuts[ns]).catch(e => {});
-                }
-             }
-          }
-          return changed ? next : prev;
-       });
-    }, 1000); // Avance d'une étape toutes les 1 seconde (accéléré)
+  // géolocalisation & recommandations
+  const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
+  const [recommended, setRecommended] = useState<Dish[]>([]);
+  const [recoRestos, setRecoRestos] = useState<Resto[]>([]);
+  const [positionUsed, setPositionUsed] = useState(false);
 
-    return () => {
-       clearInterval(pollTimer);
-       clearInterval(animTimer);
-       clearInterval(statusTimer);
-    };
+  /** Position de l'utilisateur (permission demandée une fois, échec silencieux). */
+  const getLocation = useCallback(async (): Promise<{ lat: number; lon: number } | null> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+      const last = await Location.getLastKnownPositionAsync();
+      const pos = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (!pos) return null;
+      const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      setUserLoc(loc);
+      return loc;
+    } catch {
+      return null;
+    }
   }, []);
 
-  const addToCart = (item: CartItem) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) {
-        return prev.map(i => i.id === item.id ? { ...i, quantite: i.quantite + item.quantite } : i);
+  /** Charge les suggestions personnalisées (proximité + popularité + fraîcheur). */
+  const reloadRecommendations = useCallback(async () => {
+    try {
+      const loc = userLoc ?? await getLocation();
+      const reco = await menu.fetchRecommendations(loc?.lat, loc?.lon);
+      setPositionUsed(reco.position_utilisee);
+      setRecommended(reco.plats.map(p => ({
+        ...mapPlat(p), distanceKm: p.distance_km, etaMin: p.temps_estime,
+      })));
+      setRecoRestos(reco.restaurants.map(r => ({
+        ...mapResto(r), distanceKm: r.distance_km, etaMin: r.temps_estime,
+      })));
+    } catch {
+      // pas bloquant : l'accueil retombe sur les plats populaires
+    }
+  }, [userLoc, getLocation]);
+
+  // ─── Chargement initial ────────────────────────────────────
+  const reloadCatalogue = useCallback(async () => {
+    setDataLoading(true);
+    setDataError(null);
+    try {
+      const [cats, restos, dishes] = await Promise.all([
+        menu.fetchCategories(),
+        menu.fetchRestaurants(),
+        menu.fetchPlats(),
+      ]);
+      setCategories(cats.map(mapCategory));
+      setRestaurants(restos.map(mapResto));
+      setPlats(dishes.map(mapPlat));
+    } catch (e) {
+      setDataError(e instanceof Error ? e.message : 'Erreur de chargement');
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  const loadUserState = useCallback(async () => {
+    try {
+      const [favs, abos] = await Promise.all([menu.fetchFavoris(), menu.fetchAbonnements()]);
+      setLikes(Object.fromEntries(favs.map(f => [f.plat, true])));
+      setFollows(Object.fromEntries(abos.map(a => [a.restaurant, true])));
+    } catch {
+      // silencieux : l'utilisateur n'est peut-être pas connecté
+    }
+  }, []);
+
+  const reloadOrders = useCallback(async () => {
+    try {
+      setOrders(await menu.fetchOrders());
+    } catch {
+      setOrders([]);
+    }
+  }, []);
+
+  // ─── Adresses de livraison ─────────────────────────────────
+  const reloadAddresses = useCallback(async () => {
+    try {
+      const list = await addr.fetchAddresses();
+      setAddresses(list);
+      // Sélectionne l'adresse par défaut si aucune n'est encore choisie
+      setDeliveryAddress(cur => {
+        if (cur) return cur;
+        const def = list.find(a => a.is_default) ?? list[0];
+        return def
+          ? { adresse: def.adresse, details: def.details, latitude: Number(def.latitude), longitude: Number(def.longitude), label: def.label, savedId: def.id }
+          : null;
+      });
+    } catch {
+      setAddresses([]);
+    }
+  }, []);
+
+  const addAddress = useCallback(async (a: addr.NewAddress) => {
+    const created = await addr.createAddress(a);
+    await reloadAddresses();
+    return created;
+  }, [reloadAddresses]);
+
+  const removeAddress = useCallback(async (id: number) => {
+    await addr.deleteAddress(id);
+    setDeliveryAddress(cur => (cur?.savedId === id ? null : cur));
+    await reloadAddresses();
+  }, [reloadAddresses]);
+
+  const makeDefaultAddress = useCallback(async (id: number) => {
+    await addr.setDefaultAddress(id);
+    await reloadAddresses();
+  }, [reloadAddresses]);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await authService.getStoredUser();
+      if (stored) setUser(stored);
+      setAuthReady(true);
+      await reloadCatalogue();
+      await reloadRecommendations();
+      if (stored) {
+        await loadUserState();
+        await reloadOrders();
+        await reloadAddresses();
       }
-      return [...prev, item];
-    });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Auth ──────────────────────────────────────────────────
+  const signIn = async (email: string, password: string) => {
+    const u = await authService.login(email, password);
+    setUser(u);
+    await loadUserState();
+    await reloadOrders();
+    await reloadAddresses();
+  };
+  const register = async (p: authService.RegisterParams) => {
+    const u = await authService.registerClient(p);
+    setUser(u);
+    await reloadOrders();
+    await reloadAddresses();
+  };
+  const updateUser = async (p: authService.ProfileUpdate) => {
+    const u = await authService.updateProfile(p);
+    setUser(u);
+  };
+  const signOut = async () => {
+    await authService.logout();
+    setUser(null);
+    setLikes({});
+    setFollows({});
+    setCart({});
+    setOrders([]);
+    setAddresses([]);
+    setDeliveryAddress(null);
   };
 
-  const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(i => i.id !== id));
+  // ─── Thème ─────────────────────────────────────────────────
+  const toggleTheme = () => setMode(m => {
+    const next = m === 'dark' ? 'light' : 'dark';
+    persistPrefs({ mode: next });
+    return next;
+  });
+
+  // ─── Caches de lookup ──────────────────────────────────────
+  const restoMap = useMemo(() => new Map(restaurants.map(r => [r.id, r])), [restaurants]);
+  const dishMap = useMemo(() => new Map(plats.map(d => [d.id, d])), [plats]);
+  const restoById = useCallback((id: number) => restoMap.get(id), [restoMap]);
+  const dishById = useCallback((id: number) => dishMap.get(id), [dishMap]);
+  const dishesOfResto = useCallback((id: number) => plats.filter(d => d.restoId === id), [plats]);
+  const popular = useMemo(() => {
+    const pop = plats.filter(d => d.isPopular);
+    return (pop.length ? pop : plats).slice(0, 8);
+  }, [plats]);
+  const favList = useMemo(() => plats.filter(d => likes[d.id]), [plats, likes]);
+
+  // ─── Favoris (optimiste + serveur) ─────────────────────────
+  const toggleLike = (id: number) => {
+    setLikes(s => ({ ...s, [id]: !s[id] }));
+    menu.toggleFavori(id).catch(() => setLikes(s => ({ ...s, [id]: !s[id] })));
+  };
+  const toggleFollow = (id: number) => {
+    setFollows(s => ({ ...s, [id]: !s[id] }));
+    menu.toggleAbonnement(id).catch(() => setFollows(s => ({ ...s, [id]: !s[id] })));
   };
 
-  const clearCart = () => setCart([]);
+  // ─── Panier ────────────────────────────────────────────────
+  const addToCart = (id: number, qty = 1) => setCart(s => ({ ...s, [id]: (s[id] || 0) + qty }));
+  const cartInc = (id: number) => setCart(s => ({ ...s, [id]: (s[id] || 0) + 1 }));
+  const cartDec = (id: number) => setCart(s => {
+    const q = (s[id] || 0) - 1; const next = { ...s };
+    if (q <= 0) delete next[id]; else next[id] = q;
+    return next;
+  });
+  const cartRemove = (id: number) => setCart(s => { const next = { ...s }; delete next[id]; return next; });
 
-  const toggleLikeDish = (id: string) => {
-    setLikedDishes(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const toggleFollowRestaurant = (id: string) => {
-    setFollowedRestaurants(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const addNotification = (notif: any) => {
-    setNotifications(prev => [notif, ...prev]);
-    setUnreadCount(prev => prev + 1);
-  };
-
-  const markNotificationsAsRead = () => {
-    setUnreadCount(0);
-  };
-
-  const addPastOrder = (order: Order) => {
-    setPastOrders(prev => [order, ...prev]);
-  };
-
-  return (
-    <AppContext.Provider value={{
-      cart, addToCart, removeFromCart, clearCart,
-      activeOrder, setActiveOrder,
-      pastOrders, addPastOrder,
-      likedDishes, toggleLikeDish,
-      followedRestaurants, toggleFollowRestaurant,
-      notifications, unreadCount, addNotification, markNotificationsAsRead,
-      simulatedDeliveries
-    }}>
-      {children}
-    </AppContext.Provider>
+  const cartLines = useMemo<CartLine[]>(
+    () => Object.entries(cart)
+      .map(([id, qty]) => { const dish = dishMap.get(Number(id)); return dish ? { dish, qty } : null; })
+      .filter((l): l is CartLine => l !== null),
+    [cart, dishMap],
   );
+  const cartCount = useMemo(() => Object.values(cart).reduce((a, b) => a + b, 0), [cart]);
+  const subtotal = useMemo(() => cartLines.reduce((a, l) => a + l.dish.price * l.qty, 0), [cartLines]);
+  const deliveryFee = useMemo(() => {
+    if (!cartLines.length) return 0;
+    const resto = restoMap.get(cartLines[0].dish.restoId);
+    return resto?.fraisLivraison ?? DELIVERY_FEE;
+  }, [cartLines, restoMap]);
+
+  // ─── Commandes / suivi ─────────────────────────────────────
+  const checkout = async (mode: PaymentMode = 'especes'): Promise<CommandeDTO> => {
+    if (!cartLines.length) throw new Error('Panier vide');
+    if (!deliveryAddress || !deliveryAddress.adresse) {
+      throw new Error('Choisissez un lieu de livraison.');
+    }
+    const restaurant = cartLines[0].dish.restoId;
+    const items = cartLines
+      .filter(l => l.dish.restoId === restaurant)
+      .map(l => ({ plat_id: l.dish.id, quantite: l.qty }));
+    const adresseText = [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ');
+    const order = await menu.createOrder({
+      restaurant, adresse_livraison: adresseText, items, mode_paiement: mode,
+      // Coordonnées GPS précises du lieu de livraison → carte du livreur + suivi
+      latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
+      longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
+    });
+    setCart({});
+    await reloadOrders();
+    return order;
+  };
+
+  const activeOrder = useMemo(() => {
+    const live = orders.filter(o => o.statut !== 'livree' && o.statut !== 'refusee' && o.statut !== 'annulee');
+    return (live[0] ?? orders[0]) ?? null;
+  }, [orders]);
+  const trackStep = useMemo(
+    () => (activeOrder ? statutToStep(activeOrder.livraison_statut || activeOrder.statut) : 0),
+    [activeOrder],
+  );
+
+  const colors = useMemo(() => getPalette(mode), [mode]);
+
+  const value: AppContextValue = {
+    mode, colors, toggleTheme,
+    notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
+    user, authReady, signIn, register, signOut, updateUser,
+    addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
+    categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
+    userLoc, recommended, recoRestos, positionUsed, reloadRecommendations,
+    restoById, dishById, dishesOfResto,
+    likes, toggleLike, favList,
+    follows, toggleFollow, isFollowing: (id) => !!follows[id],
+    cart, addToCart, cartInc, cartDec, cartRemove,
+    cartLines, cartCount, subtotal, deliveryFee, total: subtotal + deliveryFee,
+    orders, reloadOrders, checkout, activeOrder, trackStep,
+  };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-export function useAppContext() {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
+export function useApp(): AppContextValue {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useApp doit être utilisé dans un AppProvider');
+  return ctx;
 }

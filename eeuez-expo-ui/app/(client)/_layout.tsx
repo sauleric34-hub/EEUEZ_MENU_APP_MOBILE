@@ -1,76 +1,67 @@
+// ═══════════════════════════════════════════════════════════
+//  Layout client — barre de navigation personnalisée (6 onglets)
+// ═══════════════════════════════════════════════════════════
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography } from '../../constants/theme';
 import {
-  Home, House,
-  ShoppingCart, ShoppingBag,
-  Utensils, UtensilsCrossed,
-  Heart,
-  User, UserCircle,
+  House, UtensilsCrossed, Navigation, ShoppingCart, MessageCircle, User,
+  type LucideIcon,
 } from 'lucide-react-native';
+import { Brand, Radius } from '../../constants/theme';
+import { useApp } from '../../context/AppContext';
+import { PressableScale, bodyFont } from '../../components/ui';
 
-// Paires outline / filled pour chaque onglet
-const TAB_ICONS: Record<string, { outline: any; filled: any; label: string }> = {
-  index:     { outline: Home,         filled: House,           label: 'Accueil' },
-  cart:      { outline: ShoppingCart, filled: ShoppingBag,     label: 'Panier'  },
-  explore:   { outline: Utensils,     filled: UtensilsCrossed, label: 'Explorer'},
-  favorites: { outline: Heart,        filled: Heart,           label: 'Favoris' },
-  profile:   { outline: User,         filled: UserCircle,      label: 'Profil'  },
-};
+interface NavDef { route: string; label: string; Icon: LucideIcon; }
+const NAV: NavDef[] = [
+  { route: 'index',   label: 'Accueil', Icon: House },
+  { route: 'plats',   label: 'Plats',   Icon: UtensilsCrossed },
+  { route: 'carte',   label: 'Carte',   Icon: Navigation },
+  { route: 'panier',   label: 'Panier',   Icon: ShoppingCart },
+  { route: 'messages', label: 'Messages', Icon: MessageCircle },
+  { route: 'profil',   label: 'Profil',   Icon: User },
+];
+// L'onglet Accueil reste actif sur les sous-écrans plat/resto
+const HOME_GROUP = new Set(['index', 'dish', 'resto']);
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function BottomNav({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-
-  const ALLOWED_ROUTES = ['index', 'cart', 'explore', 'favorites', 'profile'];
-  const visibleRoutes = state.routes.filter((route: any) => ALLOWED_ROUTES.includes(route.name));
+  const { colors, cartCount } = useApp();
+  const current = state.routes[state.index]?.name ?? 'index';
 
   return (
     <View style={[
-      s.tabBar,
-      { paddingBottom: Math.max(insets.bottom, 12), height: 62 + Math.max(insets.bottom, 12) }
+      styles.bar,
+      {
+        backgroundColor: colors.nav,
+        borderTopColor: colors.navBorder,
+        paddingBottom: Math.max(insets.bottom, 12),
+        height: 66 + Math.max(insets.bottom, 12),
+      },
     ]}>
-      {visibleRoutes.map((route: any) => {
-        const isFocused = state.index === state.routes.findIndex((r: any) => r.key === route.key);
-        const tabCfg = TAB_ICONS[route.name];
-        if (!tabCfg) return null;
-
+      {NAV.map(({ route, label, Icon }) => {
+        const active = current === route || (route === 'index' && HOME_GROUP.has(current));
         const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!isFocused && !event.defaultPreventDefault) {
-            navigation.navigate(route.name);
-          }
+          const event = navigation.emit({ type: 'tabPress', target: route, canPreventDefault: true });
+          if (!event.defaultPrevented) navigation.navigate(route);
         };
-
-        const IconComp   = isFocused ? tabCfg.filled   : tabCfg.outline;
-        const iconColor  = isFocused ? Colors.client.primary : Colors.text.muted;
-        const labelColor = isFocused ? Colors.client.primary : Colors.text.muted;
-        // Pour les icônes qui supportent le remplissage (Heart, etc.)
-        const fillColor  = isFocused && route.name === 'favorites'
-          ? Colors.client.primary
-          : 'transparent';
-
+        const showBadge = route === 'panier' && cartCount > 0;
         return (
-          <TouchableOpacity
-            key={route.key}
-            onPress={onPress}
-            style={s.tabItem}
-            activeOpacity={0.7}
-          >
-            <IconComp
-              size={24}
-              color={iconColor}
-              fill={fillColor}
-              strokeWidth={isFocused ? 2.2 : 1.8}
-            />
-            <Text style={[s.tabLabel, { color: labelColor, fontWeight: isFocused ? '700' : '400' }]}>
-              {tabCfg.label}
+          <PressableScale key={route} onPress={onPress} style={styles.item} scaleTo={0.88}>
+            <View style={[styles.pill, active && { backgroundColor: Brand.accent + '22' }]}>
+              <Icon size={21} color={active ? Brand.accentLight : colors.faint} strokeWidth={active ? 2.5 : 2} />
+              {showBadge && (
+                <View style={[styles.badge, { borderColor: colors.nav }]}>
+                  <Text style={styles.badgeTxt}>{cartCount}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[bodyFont(10, active ? '800' : '600'), { color: active ? Brand.accentLight : colors.faint }]}>
+              {label}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         );
       })}
     </View>
@@ -79,38 +70,35 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
 export default function ClientLayout() {
   return (
-    <Tabs
-      tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="index"     options={{ title: 'Accueil' }} />
-      <Tabs.Screen name="cart"      options={{ title: 'Panier' }} />
-      <Tabs.Screen name="explore"   options={{ title: 'Explorer' }} />
-      <Tabs.Screen name="favorites" options={{ title: 'Favoris' }} />
-      <Tabs.Screen name="profile"   options={{ title: 'Profil' }} />
-      <Tabs.Screen name="map"       options={{ href: null }} />
+    <Tabs tabBar={props => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="plats" />
+      <Tabs.Screen name="carte" />
+      <Tabs.Screen name="panier" />
+      <Tabs.Screen name="messages" />
+      <Tabs.Screen name="profil" />
     </Tabs>
   );
 }
 
-const s = StyleSheet.create({
-  tabBar: {
+const styles = StyleSheet.create({
+  bar: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    justifyContent: 'space-around',
     alignItems: 'flex-start',
+    justifyContent: 'space-around',
+    paddingTop: 9,
     borderTopWidth: 1,
-    backgroundColor: Colors.bg.surface,
-    borderTopColor: Colors.border.default,
   },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
+  item: { alignItems: 'center', gap: 3, flex: 1 },
+  pill: {
+    width: 46, height: 32, borderRadius: Radius.pill,
+    alignItems: 'center', justifyContent: 'center',
   },
-  tabLabel: {
-    fontSize: 10,
-    letterSpacing: 0.2,
+  badge: {
+    position: 'absolute', top: -3, right: 4,
+    minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8,
+    backgroundColor: Brand.accent, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
   },
+  badgeTxt: { color: '#fff', fontSize: 9.5, fontWeight: '800' },
 });

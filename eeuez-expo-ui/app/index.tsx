@@ -1,263 +1,160 @@
-import React, { useRef, useEffect } from 'react';
+// ═══════════════════════════════════════════════════════════
+//  Splash / Authentification (connexion & inscription réelles)
+// ═══════════════════════════════════════════════════════════
+
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  Animated, StatusBar,
+  View, Text, StyleSheet, Animated, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Radius, Spacing, glow } from '../constants/theme';
-import { ShoppingBag, Store, Bike, ChevronRight } from 'lucide-react-native';
+import { ScanFace, TriangleAlert } from 'lucide-react-native';
+import { Brand, Radius, glow } from '../constants/theme';
+import { useApp } from '../context/AppContext';
+import { ScreenBg } from '../components/ScreenBg';
+import { LogoMark } from '../components/Logo';
+import { AccentButton, PressableScale, displayFont, bodyFont } from '../components/ui';
 
-const ROLES = [
-  {
-    key: 'client',
-    label: 'Client',
-    sub: 'Parcourir, commander et suivre votre livraison',
-    icon: ShoppingBag,
-    color: Colors.client.primary,
-    glowColor: Colors.client.glow,
-    bg: Colors.client.bg,
-    borderColor: Colors.client.primary,
-    route: '/(client)',
-  },
-  {
-    key: 'restaurant',
-    label: 'Restaurant',
-    sub: 'Gérer le menu, les commandes et les livraisons',
-    icon: Store,
-    color: Colors.restaurant.primary,
-    glowColor: Colors.restaurant.glow,
-    bg: Colors.restaurant.bg,
-    borderColor: Colors.restaurant.primary,
-    route: '/(restaurant)',
-  },
-  {
-    key: 'livreur',
-    label: 'Livreur',
-    sub: 'Accepter des missions et suivre vos gains',
-    icon: Bike,
-    color: Colors.livreur.primary,
-    glowColor: Colors.livreur.glow,
-    bg: Colors.livreur.bg,
-    borderColor: Colors.livreur.primary,
-    route: '/(livreur)',
-  },
-];
+const DEMO = { email: 'client@menu.cm', password: 'client123' };
 
-export default function WelcomeScreen() {
+export default function SplashScreen() {
+  const { colors, user, authReady, signIn } = useApp();
   const router = useRouter();
-  const logoAnim = useRef(new Animated.Value(0)).current;
-  const subtitleAnim = useRef(new Animated.Value(0)).current;
-  const cardAnims = useRef(ROLES.map(() => new Animated.Value(0))).current;
-  const orbAnim = useRef(new Animated.Value(0)).current;
+
+  const [email, setEmail] = useState(DEMO.email);
+  const [password, setPassword] = useState(DEMO.password);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const float = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.spring(logoAnim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-      Animated.timing(subtitleAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.stagger(120, cardAnims.map(a =>
-        Animated.spring(a, { toValue: 1, tension: 70, friction: 9, useNativeDriver: true })
-      )),
-    ]).start();
-
     Animated.loop(
       Animated.sequence([
-        Animated.timing(orbAnim, { toValue: 1, duration: 4000, useNativeDriver: true }),
-        Animated.timing(orbAnim, { toValue: 0, duration: 4000, useNativeDriver: true }),
-      ])
+        Animated.timing(float, { toValue: 1, duration: 2400, useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 2400, useNativeDriver: true }),
+      ]),
     ).start();
-  }, []);
+  }, [float]);
 
-  const orbTranslate = orbAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 20] });
-  const orbScale = orbAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  // Session déjà active → on entre directement
+  useEffect(() => {
+    if (authReady && user) router.replace('/(client)');
+  }, [authReady, user, router]);
+
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+
+  const validate = (): string | null => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Adresse email invalide.';
+    if (password.length < 6) return 'Le mot de passe doit faire au moins 6 caractères.';
+    return null;
+  };
+
+  const submit = async () => {
+    const invalid = validate();
+    if (invalid) { setError(invalid); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(email.trim(), password);
+      router.replace('/(client)');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la connexion');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const quickDemo = async () => {
+    setEmail(DEMO.email); setPassword(DEMO.password);
+    setBusy(true); setError(null);
+    try {
+      await signIn(DEMO.email, DEMO.password);
+      router.replace('/(client)');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la connexion');
+    } finally { setBusy(false); }
+  };
+
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Animated.View style={{ transform: [{ translateY }], alignItems: 'center' }}>
+            <View style={[styles.logoGlow, glow(Brand.accent, 30)]}>
+              <LogoMark size={128} radius={34} />
+            </View>
+            <Text style={[displayFont(30, '800'), { color: colors.text, marginTop: 22 }]}>Menu</Text>
+            <Text style={[bodyFont(13.5, '500'), styles.subtitle, { color: colors.muted }]}>
+              Les meilleurs plats africains, livrés chez vous.
+            </Text>
+          </Animated.View>
 
-      {/* Orbes décoratifs */}
-      <Animated.View style={[styles.orb1, { transform: [{ translateY: orbTranslate }, { scale: orbScale }] }]} />
-      <Animated.View style={[styles.orb2, { transform: [{ translateY: Animated.multiply(orbTranslate, new Animated.Value(-1)) }] }]} />
+          <View style={styles.form}>
+            <TextInput
+              value={email} onChangeText={setEmail}
+              placeholder="Email" placeholderTextColor={colors.faint}
+              autoCapitalize="none" keyboardType="email-address"
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+            />
+            <TextInput
+              value={password} onChangeText={setPassword}
+              placeholder="Mot de passe" placeholderTextColor={colors.faint} secureTextEntry
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+            />
 
-      <SafeAreaView style={styles.safeArea}>
+            {error && (
+              <View style={styles.errRow}>
+                <TriangleAlert size={15} color={Brand.danger} strokeWidth={2.3} />
+                <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', flex: 1 }]}>{error}</Text>
+              </View>
+            )}
 
-        {/* Logo + Tagline */}
-        <Animated.View style={[styles.logoSection, {
-          opacity: logoAnim,
-          transform: [{ translateY: logoAnim.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }) }]
-        }]}>
-          <View style={styles.logoPill}>
-            <View style={styles.logoIconDot} />
-            <Text style={styles.logoText}>Menu</Text>
+            {busy ? (
+              <View style={[styles.busyBtn, glow(Brand.accent, 18)]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : (
+              <AccentButton label="Connexion" onPress={submit} style={{ marginTop: 4 }} />
+            )}
+
+            <PressableScale onPress={() => { setError(null); router.push('/register'); }}>
+              <Text style={[bodyFont(13, '700'), { color: Brand.accentLight, textAlign: 'center', marginTop: 16 }]}>
+                Pas de compte ? Créer un compte
+              </Text>
+            </PressableScale>
+
+            <PressableScale onPress={quickDemo}>
+              <View style={[styles.faceBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <ScanFace size={22} color={Brand.accent} strokeWidth={2} />
+                <Text style={[bodyFont(12.5, '700'), { color: colors.muted }]}>Connexion démo</Text>
+              </View>
+            </PressableScale>
           </View>
-          <Animated.Text style={[styles.tagline, { opacity: subtitleAnim }]}>
-            Commandez, gérez, livrez.{'\n'}Le tout en un seul endroit.
-          </Animated.Text>
-        </Animated.View>
-
-        {/* Titre */}
-        <Text style={styles.rolesTitle}>Qui êtes-vous ?</Text>
-
-        {/* Sélection du Rôle */}
-        <View style={styles.rolesSection}>
-          {ROLES.map((role, i) => (
-            <Animated.View
-              key={role.key}
-              style={{
-                opacity: cardAnims[i],
-                transform: [
-                  { translateY: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
-                  { scale: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
-                ]
-              }}
-            >
-              <TouchableOpacity
-                style={[styles.roleCard, { borderColor: role.borderColor + '55' }]}
-                onPress={() => router.push(role.route as any)}
-                activeOpacity={0.82}
-              >
-                {/* Icône */}
-                <View style={[styles.roleIconBg, { backgroundColor: role.bg }]}>
-                  <role.icon size={26} color={role.color} strokeWidth={2} />
-                </View>
-
-                {/* Texte */}
-                <View style={styles.roleText}>
-                  <Text style={[styles.roleLabel, { color: role.color }]}>{role.label}</Text>
-                  <Text style={styles.roleSub}>{role.sub}</Text>
-                </View>
-
-                {/* Flèche */}
-                <View style={[styles.arrowCircle, { backgroundColor: role.bg }]}>
-                  <ChevronRight size={18} color={role.color} strokeWidth={2.5} />
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
-        </View>
-
-        {/* Footer */}
-        <Text style={styles.footer}>
-          Version 1.0 Bêta · Cameroun
-        </Text>
+        </KeyboardAvoidingView>
       </SafeAreaView>
-    </View>
+    </ScreenBg>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg.app },
-  safeArea: { flex: 1, paddingHorizontal: Spacing.lg },
-
-  // Orbes décoratifs
-  orb1: {
-    position: 'absolute', width: 320, height: 320, borderRadius: 160,
-    backgroundColor: Colors.client.glow, top: -100, right: -100,
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
+  logoGlow: { borderRadius: 34 },
+  subtitle: { textAlign: 'center', maxWidth: 260, marginTop: 10 },
+  form: { marginTop: 32 },
+  input: {
+    borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 15, fontWeight: '600', marginBottom: 12,
   },
-  orb2: {
-    position: 'absolute', width: 220, height: 220, borderRadius: 110,
-    backgroundColor: Colors.restaurant.glow, bottom: 60, left: -90,
+  errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 4 },
+  busyBtn: {
+    marginTop: 4, paddingVertical: 16, borderRadius: Radius.pill,
+    backgroundColor: Brand.accent, alignItems: 'center', justifyContent: 'center',
   },
-
-  // Logo
-  logoSection: {
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
+  faceBtn: {
+    marginTop: 22, flexDirection: 'row', gap: 10, alignSelf: 'center',
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.pill, borderWidth: 1,
     alignItems: 'center',
-    gap: Spacing.md,
-  },
-  logoPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  logoIconDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.client.primary,
-  },
-  logoText: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: 1,
-    color: Colors.text.primary,
-  },
-  tagline: {
-    ...Typography.body,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-
-  // Titre section rôles
-  rolesTitle: {
-    ...Typography.h2,
-    textAlign: 'center',
-    marginBottom: Spacing.md,
-    color: Colors.text.primary,
-  },
-
-  // Sélection Rôle
-  rolesSection: { gap: Spacing.sm + 4 },
-
-  roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.bg.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.md,
-  },
-
-  roleIconBg: {
-    width: 54,
-    height: 54,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-
-  roleText: {
-    flex: 1,
-    gap: 3,
-  },
-
-  roleLabel: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-
-  roleSub: {
-    ...Typography.small,
-    color: Colors.text.muted,
-    lineHeight: 18,
-  },
-
-  arrowCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-
-  // Footer
-  footer: {
-    ...Typography.caption,
-    textAlign: 'center',
-    paddingVertical: Spacing.lg,
-    color: Colors.text.muted,
   },
 });

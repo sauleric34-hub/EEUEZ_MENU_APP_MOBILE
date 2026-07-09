@@ -79,6 +79,13 @@ def restaurant_create(request):
         if User.objects.filter(username=username).exists():
             messages.error(request, 'Ce nom d\'utilisateur existe déjà.')
         else:
+            # Mot de passe laissé vide → génération automatique d'identifiants
+            generated = False
+            if not password:
+                import secrets
+                password = secrets.token_urlsafe(9)
+                generated = True
+
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -110,7 +117,16 @@ def restaurant_create(request):
                 description={'nom': nom, 'ville': ville},
                 ip_address=request.META.get('REMOTE_ADDR'),
             )
-            messages.success(request, f'Restaurant "{nom}" créé avec succès.')
+            if generated:
+                messages.success(
+                    request,
+                    f'Restaurant "{nom}" créé. Identifiants à transmettre — '
+                    f'Utilisateur : {username} · Mot de passe : {password} '
+                    f'(affiché une seule fois, notez-le maintenant). '
+                    f'Connexion : /admin-panel/login/',
+                )
+            else:
+                messages.success(request, f'Restaurant "{nom}" créé avec succès.')
             return redirect('core:restaurant_detail', pk=profile.pk)
 
     return render(request, 'admin_panel/restaurants/create.html', {'active_page': 'restaurants'})

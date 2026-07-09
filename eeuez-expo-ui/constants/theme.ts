@@ -1,183 +1,111 @@
 // ═══════════════════════════════════════════════════════════
-//  MENU — SYSTÈME DE DESIGN CENTRALISÉ
-//  Toutes les constantes visuelles de l'application
+//  MENU — SYSTÈME DE DESIGN
+//  Thème africain (orange / vert / or) — mode clair & sombre
+//  Porté depuis le design Claude « Menu App v2 »
 // ═══════════════════════════════════════════════════════════
 
-import { StyleSheet, Dimensions } from 'react-native';
-import {
-  Clock, CheckCircle2, ChefHat, Utensils, Bike, Package, MapPin, PartyPopper, XCircle, Ban, Bell
-} from 'lucide-react-native';
+import { Dimensions } from 'react-native';
 
 const { width: W, height: H } = Dimensions.get('window');
+export const Screen = { W, H };
 
-// ─── PALETTE DE COULEURS ────────────────────────────────────
-export const Colors = {
-  // Fonds
-  bg: {
-    app:        '#070B14',   // Bleu nuit quasi noir — fond global
-    screen:     '#0C1322',   // Fond des écrans
-    surface:    '#141E33',   // Cards
-    elevated:   '#1A2845',   // Cards surélévées
-  },
-  // Glass
-  glass: {
-    bg:         'rgba(255,255,255,0.05)',
-    bgStrong:   'rgba(255,255,255,0.09)',
-    border:     'rgba(255,255,255,0.08)',
-    borderStrong: 'rgba(255,255,255,0.15)',
-  },
-  // Client — Bleu Saphir
-  client: {
-    primary:    '#4F8EF7',
-    light:      '#7BB3FF',
-    dark:       '#2A5DC7',
-    glow:       'rgba(79, 142, 247, 0.35)',
-    bg:         'rgba(79, 142, 247, 0.12)',
-  },
-  // Restaurant — Vert Émeraude
-  restaurant: {
-    primary:    '#00D68F',
-    light:      '#4DFFC4',
-    dark:       '#00A870',
-    glow:       'rgba(0, 214, 143, 0.35)',
-    bg:         'rgba(0, 214, 143, 0.12)',
-  },
-  // Livreur — Ambre Or
-  livreur: {
-    primary:    '#FFB224',
-    light:      '#FFD47A',
-    dark:       '#E09000',
-    glow:       'rgba(255, 178, 36, 0.35)',
-    bg:         'rgba(255, 178, 36, 0.12)',
-  },
-  // Texte
-  text: {
-    primary:    '#F0F4FF',
-    secondary:  '#8899BB',
-    muted:      '#475980',
-    inverse:    '#070B14',
-  },
-  // États
-  danger:       '#FF4757',
-  dangerBg:     'rgba(255, 71, 87, 0.15)',
-  success:      '#00D68F',
-  successBg:    'rgba(0, 214, 143, 0.12)',
-  warning:      '#FFB224',
-  warningBg:    'rgba(255, 178, 36, 0.12)',
-  // Bordures
-  border: {
-    default:    'rgba(255,255,255,0.07)',
-    subtle:     'rgba(255,255,255,0.04)',
-  },
+export type ThemeMode = 'dark' | 'light';
+
+// ─── COULEURS DE MARQUE (indépendantes du mode) ──────────────
+export const Brand = {
+  accent:      '#f26a1b', // orange principal
+  accentLight: '#f7a03b',
+  accentTop:   '#f7891b', // haut du dégradé bouton
+  accentBot:   '#f2611b', // bas du dégradé bouton
+  green:       '#1f8a4c',
+  greenDark:   '#0f5132',
+  yellow:      '#f7b500',
+  danger:      '#e5484d',
+  white:       '#ffffff',
 };
 
+// Dégradé du bouton principal (orange)
+export const AccentGradient = [Brand.accentTop, Brand.accentBot] as const;
+// Couleurs du motif kente (bande décorative)
+export const KenteColors = [Brand.yellow, Brand.accent, Brand.greenDark] as const;
+
+// ─── PALETTES PAR MODE ───────────────────────────────────────
+export interface Palette {
+  page: string;
+  screenGrad: [string, string];
+  surface: string;
+  surface2: string;
+  border: string;
+  text: string;
+  muted: string;
+  faint: string;
+  nav: string;
+  navBorder: string;
+  shadow: string;
+  glowBg: string; // léger halo de fond
+}
+
+const DARK: Palette = {
+  page:       '#080c09',
+  screenGrad: ['#0b100d', '#080c09'],
+  surface:    'rgba(255,255,255,0.05)',
+  surface2:   'rgba(255,255,255,0.09)',
+  border:     'rgba(255,255,255,0.12)',
+  text:       '#f4f1ec',
+  muted:      'rgba(244,241,236,0.6)',
+  faint:      'rgba(244,241,236,0.4)',
+  nav:        'rgba(14,19,15,0.92)',
+  navBorder:  'rgba(255,255,255,0.08)',
+  shadow:     '#000000',
+  glowBg:     'rgba(31,138,76,0.16)',
+};
+
+const LIGHT: Palette = {
+  page:       '#eae6dc',
+  screenGrad: ['#ffffff', '#f5f2ea'],
+  surface:    '#ffffff',
+  surface2:   '#f2eee4',
+  border:     'rgba(20,40,25,0.10)',
+  text:       '#17231a',
+  muted:      'rgba(23,35,26,0.58)',
+  faint:      'rgba(23,35,26,0.4)',
+  nav:        'rgba(255,255,255,0.94)',
+  navBorder:  'rgba(20,40,25,0.08)',
+  shadow:     'rgba(30,50,30,0.5)',
+  glowBg:     'rgba(242,106,27,0.10)',
+};
+
+export const Palettes: Record<ThemeMode, Palette> = { dark: DARK, light: LIGHT };
+export const getPalette = (mode: ThemeMode): Palette => Palettes[mode];
+
 // ─── TYPOGRAPHIE ─────────────────────────────────────────────
-export const Typography = {
-  display: { fontSize: 36, fontWeight: '900' as const, letterSpacing: -1, color: Colors.text.primary },
-  h1:      { fontSize: 28, fontWeight: '900' as const, letterSpacing: -0.5, color: Colors.text.primary },
-  h2:      { fontSize: 22, fontWeight: '800' as const, color: Colors.text.primary },
-  h3:      { fontSize: 18, fontWeight: '700' as const, color: Colors.text.primary },
-  body:    { fontSize: 15, fontWeight: '400' as const, lineHeight: 22, color: Colors.text.primary },
-  bodyBold:{ fontSize: 15, fontWeight: '700' as const, color: Colors.text.primary },
-  small:   { fontSize: 13, fontWeight: '400' as const, color: Colors.text.secondary },
-  caption: { fontSize: 11, fontWeight: '600' as const, color: Colors.text.muted, letterSpacing: 0.5 },
-  label:   { fontSize: 12, fontWeight: '700' as const, letterSpacing: 1, textTransform: 'uppercase' as const, color: Colors.text.muted },
+// Design d'origine : « Bricolage Grotesque » (titres) + « Manrope » (corps).
+// Faute de fichiers de police embarqués, on retombe sur la police système
+// avec les mêmes graisses. Pour activer les vraies polices :
+//   npx expo install @expo-google-fonts/bricolage-grotesque @expo-google-fonts/manrope expo-font
+//   puis charger via useFonts et renseigner Fonts.display / Fonts.body.
+export const Fonts = {
+  display: undefined as string | undefined, // titres (Bricolage Grotesque)
+  body:    undefined as string | undefined, // corps (Manrope)
 };
 
 // ─── ESPACEMENT & GÉOMÉTRIE ──────────────────────────────────
-export const Spacing = {
-  xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48,
-};
+export const Spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 };
+export const Radius = { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 };
 
-export const Radius = {
-  sm: 8, md: 14, lg: 20, xl: 26, full: 999,
-};
-
-export const Screen = { W, H };
-
-// ─── STYLES RÉUTILISABLES ────────────────────────────────────
-export const CommonStyles = StyleSheet.create({
-  // Surfaces Glass
-  glassCard: {
-    backgroundColor: Colors.glass.bg,
-    borderWidth: 1,
-    borderColor: Colors.glass.border,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-  },
-  glassCardStrong: {
-    backgroundColor: Colors.glass.bgStrong,
-    borderWidth: 1,
-    borderColor: Colors.glass.borderStrong,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-  },
-  // Surface standard
-  surface: {
-    backgroundColor: Colors.bg.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-  },
-  // Row utilitaires
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  // Textes
-  textPrimary:   { ...Typography.body, color: Colors.text.primary },
-  textSecondary: { ...Typography.body, color: Colors.text.secondary },
-  // Boutons
-  btnPrimary: {
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    borderRadius: Radius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  // Status Pill
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  // Icône badge
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
+// ─── OMBRES / HALO ───────────────────────────────────────────
+export const glow = (color: string, radius = 18) => ({
+  shadowColor: color,
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.45,
+  shadowRadius: radius,
+  elevation: 10,
 });
 
-// ─── HELPERS ─────────────────────────────────────────────────
-export const glow = (color: string, radius = 12) => ({
-  shadowColor: color,
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.5,
-  shadowRadius: radius,
+export const cardShadow = (shadowColor: string) => ({
+  shadowColor,
+  shadowOffset: { width: 0, height: 14 },
+  shadowOpacity: 0.35,
+  shadowRadius: 22,
   elevation: 8,
 });
-
-export const glowSubtle = (color: string) => ({
-  shadowColor: color,
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 6,
-  elevation: 4,
-});
-
-// ─── STATUT COMMANDE ─────────────────────────────────────────
-export const StatutConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  en_attente:      { label: 'En attente',     color: Colors.warning,    bg: Colors.warningBg,   icon: Clock },
-  acceptee:        { label: 'Acceptée',       color: Colors.client.primary, bg: Colors.client.bg, icon: CheckCircle2 },
-  en_preparation:  { label: 'En préparation', color: Colors.livreur.primary, bg: Colors.livreur.bg, icon: ChefHat },
-  prete:           { label: 'Prête',          color: Colors.success,    bg: Colors.successBg,   icon: Utensils },
-  livreur_assigne: { label: 'Livreur assigné',color: Colors.client.primary, bg: Colors.client.bg, icon: Bike },
-  en_collecte:     { label: 'En collecte',    color: Colors.livreur.primary, bg: Colors.livreur.bg, icon: Package },
-  en_livraison:    { label: 'En livraison',   color: Colors.restaurant.primary, bg: Colors.restaurant.bg, icon: Bike },
-  livree:          { label: 'Livrée ✓',       color: Colors.success,    bg: Colors.successBg,   icon: PartyPopper },
-  refusee:         { label: 'Refusée',        color: Colors.danger,     bg: Colors.dangerBg,    icon: XCircle },
-  annulee:         { label: 'Annulée',        color: Colors.danger,     bg: Colors.dangerBg,    icon: Ban },
-};

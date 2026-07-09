@@ -1,0 +1,47 @@
+{% extends 'resto_base.html' %}
+{% block title %}Messages — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Messages clients</h1>
+    <p class="page-subtitle">Répondez aux questions sur vos plats — les clients voient vos réponses dans l'app</p>
+  </div>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:0;">
+  {% for c in conversations %}
+  <a href="{% url 'core:resto_conversation' c.pk %}" style="display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.06));text-decoration:none;color:inherit;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
+    {% if c.plat.image %}
+      <img src="{{ c.plat.image.url }}" style="width:52px;height:52px;border-radius:14px;object-fit:cover;">
+    {% else %}
+      <div style="width:52px;height:52px;border-radius:14px;background:var(--accent-amber-dim);display:flex;align-items:center;justify-content:center;font-size:1.3rem;">🍽</div>
+    {% endif %}
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-weight:700;">{{ c.plat.nom }}</span>
+        <span style="font-size:0.75rem;color:var(--text-muted);">avec {{ c.client.get_full_name|default:c.client.username }}</span>
+      </div>
+      {% with last=c.messages.last %}
+      {% if last %}
+      <div style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        {% if last.sender == 'restaurant' %}Vous : {% endif %}{{ last.texte|truncatechars:90 }}
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:0.72rem;color:var(--text-muted);">{{ c.updated_at|date:'d M · H:i' }}</div>
+      {% if c.non_lus %}
+      <span class="badge badge-red" style="margin-top:4px;">{{ c.non_lus }} non lu{{ c.non_lus|pluralize }}</span>
+      {% endif %}
+    </div>
+  </a>
+  {% empty %}
+  <div style="padding:60px;text-align:center;color:var(--text-muted);">
+    Aucune conversation pour l'instant.<br>Les clients peuvent vous écrire depuis la fiche de vos plats dans l'application.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

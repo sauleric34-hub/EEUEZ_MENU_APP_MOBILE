@@ -1,0 +1,141 @@
+{% extends 'resto_base.html' %}
+{% block title %}Dashboard — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Bienvenue, {{ resto.nom }}</h1>
+    <p class="page-subtitle">Vue d'ensemble de votre activité en temps réel</p>
+  </div>
+  <form method="post" action="{% url 'core:resto_profil' %}" style="margin-left:auto;">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="statut">
+    <button type="submit" class="btn {% if resto.is_open %}btn-secondary{% else %}btn-primary{% endif %}">
+      {% if resto.is_open %}● Ouvert — Fermer le restaurant{% else %}○ Fermé — Ouvrir le restaurant{% endif %}
+    </button>
+  </form>
+</div>
+
+<!-- KPI Grid -->
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);--kpi-bg:var(--accent-amber-dim);--kpi-glow:var(--glow-amber);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+    <div class="kpi-value" data-count="{{ cmd_jour }}">0</div>
+    <div class="kpi-label">Commandes aujourd'hui</div>
+    <div class="kpi-sub">{{ cmd_mois }} ce mois · {{ en_attente }} en attente</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-green);--kpi-bg:var(--accent-green-dim);--kpi-glow:var(--glow-green);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="kpi-value" data-count="{{ revenus }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Revenus cumulés</div>
+    <div class="kpi-sub">Après commission plateforme</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-blue);--kpi-bg:var(--accent-blue-dim);--kpi-glow:var(--glow-blue);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="kpi-value" data-count="{{ nb_abonnes }}">0</div>
+    <div class="kpi-label">Abonnés</div>
+    <div class="kpi-sub">{{ nb_likes }} likes sur vos plats</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-red);--kpi-bg:var(--accent-red-dim);--kpi-glow:var(--glow-red);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="kpi-value {% if non_lus %}status-live{% endif %}" data-count="{{ non_lus }}">0</div>
+    <div class="kpi-label">Messages non lus</div>
+    <div class="kpi-sub"><a href="{% url 'core:resto_messages' %}" style="color:var(--accent-amber);">Répondre aux clients →</a></div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-purple);--kpi-bg:var(--accent-purple-dim);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div>
+    <div class="kpi-value" data-count="{{ nb_plats }}">0</div>
+    <div class="kpi-label">Plats en ligne</div>
+    <div class="kpi-sub"><a href="{% url 'core:resto_plat_create' %}" style="color:var(--accent-amber);">+ Publier un plat</a></div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);--kpi-bg:var(--accent-amber-dim);--kpi-glow:var(--glow-amber);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+    <div class="kpi-value" data-count="{{ note }}" data-suffix="/5">0</div>
+    <div class="kpi-label">Note moyenne</div>
+    <div class="kpi-sub">Avis de vos clients</div>
+  </div>
+</div>
+
+<!-- Graphiques -->
+<div class="charts-grid charts-grid-2" style="margin-bottom:20px;">
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div>
+        <div class="chart-title">Commandes par jour</div>
+        <div class="chart-subtitle">7 derniers jours</div>
+      </div>
+    </div>
+    <div class="chart-container" style="height:230px;"><canvas id="barChart"></canvas></div>
+  </div>
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div>
+        <div class="chart-title">Statuts des commandes</div>
+        <div class="chart-subtitle">Répartition globale</div>
+      </div>
+    </div>
+    <div class="chart-container" style="height:230px;"><canvas id="doughnutChart"></canvas></div>
+  </div>
+</div>
+
+<!-- Top plats + commandes récentes -->
+<div class="charts-grid charts-grid-2">
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Top plats</div><div class="chart-subtitle">Par volume commandé</div></div>
+      <a href="{% url 'core:resto_plats' %}" class="btn btn-sm btn-secondary">Tout voir</a>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Plat</th><th>Prix</th><th>Commandés</th><th>Likes</th></tr></thead>
+      <tbody>
+        {% for p in top_plats %}
+        <tr>
+          <td style="font-weight:600;">{{ p.nom }}</td>
+          <td>{{ p.prix }} F</td>
+          <td>{{ p.vol|default:0 }}</td>
+          <td>❤ {{ p.likes }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" style="color:var(--text-muted);">Aucun plat publié pour l'instant.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="chart-card anim-fade-up">
+    <div class="chart-card-header">
+      <div><div class="chart-title">Commandes récentes</div><div class="chart-subtitle">Dernières activités</div></div>
+      <a href="{% url 'core:resto_commandes' %}" class="btn btn-sm btn-secondary">Gérer</a>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Client</th><th>Montant</th><th>Statut</th></tr></thead>
+      <tbody>
+        {% for c in recentes %}
+        <tr>
+          <td>#{{ c.pk }}</td>
+          <td>{{ c.client.get_full_name|default:c.client.username|default:'—' }}</td>
+          <td>{{ c.montant_total }} F</td>
+          <td><span class="badge badge-{{ c.statut }}">{{ c.get_statut_display }}</span></td>
+        </tr>
+        {% empty %}<tr><td colspan="4" style="color:var(--text-muted);">Aucune commande pour l'instant.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const jours = {{ chart_jours|safe }};
+  const valeurs = {{ chart_valeurs|safe }};
+  MENU.createBarChart('barChart', jours, [{ label: 'Commandes', data: valeurs, color: '#E8591C' }]);
+
+  const statuts = {{ chart_statuts|safe }};
+  const LABELS = { en_attente:'En attente', acceptee:'Acceptée', en_preparation:'En préparation', prete:'Prête', en_livraison:'En livraison', livree:'Livrée', refusee:'Refusée', annulee:'Annulée' };
+  MENU.createDoughnutChart('doughnutChart',
+    statuts.map(s => LABELS[s.statut] || s.statut),
+    statuts.map(s => s.c)
+  );
+});
+</script>
+{% endblock %}
