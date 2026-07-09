@@ -1,8 +1,23 @@
 import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Radius, glow } from '../../constants/theme';
-import { Home, ShoppingCart, Utensils, Heart, User } from 'lucide-react-native';
+import { Colors, Typography } from '../../constants/theme';
+import {
+  Home, House,
+  ShoppingCart, ShoppingBag,
+  Utensils, UtensilsCrossed,
+  Heart,
+  User, UserCircle,
+} from 'lucide-react-native';
+
+// Paires outline / filled pour chaque onglet
+const TAB_ICONS: Record<string, { outline: any; filled: any; label: string }> = {
+  index:     { outline: Home,         filled: House,           label: 'Accueil' },
+  cart:      { outline: ShoppingCart, filled: ShoppingBag,     label: 'Panier'  },
+  explore:   { outline: Utensils,     filled: UtensilsCrossed, label: 'Explorer'},
+  favorites: { outline: Heart,        filled: Heart,           label: 'Favoris' },
+  profile:   { outline: User,         filled: UserCircle,      label: 'Profil'  },
+};
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -13,14 +28,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   return (
     <View style={[
       s.tabBar,
-      {
-        paddingBottom: Math.max(insets.bottom, 20),
-        height: 70 + Math.max(insets.bottom, 20)
-      }
+      { paddingBottom: Math.max(insets.bottom, 12), height: 62 + Math.max(insets.bottom, 12) }
     ]}>
-      {visibleRoutes.map((route: any, index: number) => {
-        const { options } = descriptors[route.key];
+      {visibleRoutes.map((route: any) => {
         const isFocused = state.index === state.routes.findIndex((r: any) => r.key === route.key);
+        const tabCfg = TAB_ICONS[route.name];
+        if (!tabCfg) return null;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -28,32 +41,35 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             target: route.key,
             canPreventDefault: true,
           });
-
           if (!isFocused && !event.defaultPreventDefault) {
             navigation.navigate(route.name);
           }
         };
 
-        let IconComp = Home;
-        if (route.name === 'cart') IconComp = ShoppingCart;
-        else if (route.name === 'explore') IconComp = Utensils;
-        else if (route.name === 'favorites') IconComp = Heart;
-        else if (route.name === 'profile') IconComp = User;
-        else if (route.name === 'index') IconComp = Home;
-        else return null;
+        const IconComp   = isFocused ? tabCfg.filled   : tabCfg.outline;
+        const iconColor  = isFocused ? Colors.client.primary : Colors.text.muted;
+        const labelColor = isFocused ? Colors.client.primary : Colors.text.muted;
+        // Pour les icônes qui supportent le remplissage (Heart, etc.)
+        const fillColor  = isFocused && route.name === 'favorites'
+          ? Colors.client.primary
+          : 'transparent';
 
         return (
           <TouchableOpacity
             key={route.key}
             onPress={onPress}
             style={s.tabItem}
+            activeOpacity={0.7}
           >
-            <View style={[
-              s.iconContainer,
-              isFocused && { backgroundColor: Colors.client.primary, ...glow(Colors.client.glow, 8) }
-            ]}>
-              <IconComp size={24} color={isFocused ? Colors.bg.app : Colors.text.primary} opacity={isFocused ? 1 : 0.6} />
-            </View>
+            <IconComp
+              size={24}
+              color={iconColor}
+              fill={fillColor}
+              strokeWidth={isFocused ? 2.2 : 1.8}
+            />
+            <Text style={[s.tabLabel, { color: labelColor, fontWeight: isFocused ? '700' : '400' }]}>
+              {tabCfg.label}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -67,12 +83,12 @@ export default function ClientLayout() {
       tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
-      <Tabs.Screen name="cart" options={{ title: 'Panier' }} />
-      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
+      <Tabs.Screen name="index"     options={{ title: 'Accueil' }} />
+      <Tabs.Screen name="cart"      options={{ title: 'Panier' }} />
+      <Tabs.Screen name="explore"   options={{ title: 'Explorer' }} />
       <Tabs.Screen name="favorites" options={{ title: 'Favoris' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
-      <Tabs.Screen name="map" options={{ href: null }} />
+      <Tabs.Screen name="profile"   options={{ title: 'Profil' }} />
+      <Tabs.Screen name="map"       options={{ href: null }} />
     </Tabs>
   );
 }
@@ -80,25 +96,21 @@ export default function ClientLayout() {
 const s = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: 80,
-    paddingBottom: 25,
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    justifyContent: 'space-around',
+    alignItems: 'flex-start',
     borderTopWidth: 1,
     backgroundColor: Colors.bg.surface,
     borderTopColor: Colors.border.default,
   },
   tabItem: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    gap: 3,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  }
+  tabLabel: {
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
 });

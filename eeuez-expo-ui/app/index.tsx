@@ -6,37 +6,40 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Radius, Spacing, glow } from '../constants/theme';
-import { ShoppingBag, Store, Bike } from 'lucide-react-native';
+import { ShoppingBag, Store, Bike, ChevronRight } from 'lucide-react-native';
 
 const ROLES = [
   {
     key: 'client',
     label: 'Client',
-    sub: 'Parcourir, commander\nsuivre votre livraison',
+    sub: 'Parcourir, commander et suivre votre livraison',
     icon: ShoppingBag,
     color: Colors.client.primary,
-    glow: Colors.client.glow,
+    glowColor: Colors.client.glow,
     bg: Colors.client.bg,
+    borderColor: Colors.client.primary,
     route: '/(client)',
   },
   {
     key: 'restaurant',
     label: 'Restaurant',
-    sub: 'Gérer le menu, les commandes\net les livraisons',
+    sub: 'Gérer le menu, les commandes et les livraisons',
     icon: Store,
     color: Colors.restaurant.primary,
-    glow: Colors.restaurant.glow,
+    glowColor: Colors.restaurant.glow,
     bg: Colors.restaurant.bg,
+    borderColor: Colors.restaurant.primary,
     route: '/(restaurant)',
   },
   {
     key: 'livreur',
     label: 'Livreur',
-    sub: 'Accepter des missions\net suivre vos gains',
+    sub: 'Accepter des missions et suivre vos gains',
     icon: Bike,
     color: Colors.livreur.primary,
-    glow: Colors.livreur.glow,
+    glowColor: Colors.livreur.glow,
     bg: Colors.livreur.bg,
+    borderColor: Colors.livreur.primary,
     route: '/(livreur)',
   },
 ];
@@ -49,19 +52,14 @@ export default function WelcomeScreen() {
   const orbAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Animation d'entrée orchestrée
     Animated.sequence([
-      // 1. Logo apparaît
       Animated.spring(logoAnim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-      // 2. Sous-titre
       Animated.timing(subtitleAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      // 3. Cartes en cascade
       Animated.stagger(120, cardAnims.map(a =>
         Animated.spring(a, { toValue: 1, tension: 70, friction: 9, useNativeDriver: true })
       )),
     ]).start();
 
-    // Orbe animé en boucle
     Animated.loop(
       Animated.sequence([
         Animated.timing(orbAnim, { toValue: 1, duration: 4000, useNativeDriver: true }),
@@ -77,7 +75,7 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg.app} />
 
-      {/* Orbes décoratifs en arrière-plan */}
+      {/* Orbes décoratifs */}
       <Animated.View style={[styles.orb1, { transform: [{ translateY: orbTranslate }, { scale: orbScale }] }]} />
       <Animated.View style={[styles.orb2, { transform: [{ translateY: Animated.multiply(orbTranslate, new Animated.Value(-1)) }] }]} />
 
@@ -88,48 +86,51 @@ export default function WelcomeScreen() {
           opacity: logoAnim,
           transform: [{ translateY: logoAnim.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }) }]
         }]}>
-          <View style={styles.logoContainer}>
+          <View style={styles.logoPill}>
+            <View style={styles.logoIconDot} />
             <Text style={styles.logoText}>Menu</Text>
-            <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>MENU</Text></View>
           </View>
           <Animated.Text style={[styles.tagline, { opacity: subtitleAnim }]}>
             Commandez, gérez, livrez.{'\n'}Le tout en un seul endroit.
           </Animated.Text>
         </Animated.View>
 
+        {/* Titre */}
+        <Text style={styles.rolesTitle}>Qui êtes-vous ?</Text>
+
         {/* Sélection du Rôle */}
         <View style={styles.rolesSection}>
-          <Text style={styles.rolesTitle}>Qui êtes-vous ?</Text>
-
           {ROLES.map((role, i) => (
             <Animated.View
               key={role.key}
               style={{
                 opacity: cardAnims[i],
                 transform: [
-                  { translateX: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [80, 0] }) },
-                  { scale: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+                  { translateY: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
+                  { scale: cardAnims[i].interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
                 ]
               }}
             >
               <TouchableOpacity
-                style={[styles.roleCard, { borderColor: role.color + '33' }, glow(role.glow, 16)]}
+                style={[styles.roleCard, { borderColor: role.borderColor + '55' }]}
                 onPress={() => router.push(role.route as any)}
-                activeOpacity={0.85}
+                activeOpacity={0.82}
               >
-                {/* Fond accent subtil */}
-                <View style={[styles.roleCardAccent, { backgroundColor: role.bg }]} />
-
-                <View style={[styles.roleIconBg, { backgroundColor: role.bg, ...glow(role.color, 10) }]}>
-                  <role.icon size={28} color={role.color} />
+                {/* Icône */}
+                <View style={[styles.roleIconBg, { backgroundColor: role.bg }]}>
+                  <role.icon size={26} color={role.color} strokeWidth={2} />
                 </View>
 
+                {/* Texte */}
                 <View style={styles.roleText}>
                   <Text style={[styles.roleLabel, { color: role.color }]}>{role.label}</Text>
                   <Text style={styles.roleSub}>{role.sub}</Text>
                 </View>
 
-                <Text style={[styles.roleArrow, { color: role.color }]}>›</Text>
+                {/* Flèche */}
+                <View style={[styles.arrowCircle, { backgroundColor: role.bg }]}>
+                  <ChevronRight size={18} color={role.color} strokeWidth={2.5} />
+                </View>
               </TouchableOpacity>
             </Animated.View>
           ))}
@@ -137,7 +138,7 @@ export default function WelcomeScreen() {
 
         {/* Footer */}
         <Text style={styles.footer}>
-          Cameroun — Version 1.0 Bêta
+          Version 1.0 Bêta · Cameroun
         </Text>
       </SafeAreaView>
     </View>
@@ -146,48 +147,117 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg.app },
-  safeArea: { flex: 1, paddingHorizontal: Spacing.md },
+  safeArea: { flex: 1, paddingHorizontal: Spacing.lg },
+
   // Orbes décoratifs
   orb1: {
-    position: 'absolute', width: 280, height: 280, borderRadius: 140,
-    backgroundColor: Colors.client.glow, top: -80, right: -80,
+    position: 'absolute', width: 320, height: 320, borderRadius: 160,
+    backgroundColor: Colors.client.glow, top: -100, right: -100,
   },
   orb2: {
-    position: 'absolute', width: 200, height: 200, borderRadius: 100,
-    backgroundColor: Colors.restaurant.glow, bottom: 40, left: -80,
+    position: 'absolute', width: 220, height: 220, borderRadius: 110,
+    backgroundColor: Colors.restaurant.glow, bottom: 60, left: -90,
   },
+
   // Logo
-  logoSection: { paddingTop: Spacing.xl, paddingBottom: Spacing.lg, alignItems: 'center' },
-  logoContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  logoSection: {
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  logoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  logoIconDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.client.primary,
+  },
   logoText: {
-    fontSize: 48, fontWeight: '900', letterSpacing: -1, color: Colors.text.primary,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: Colors.text.primary,
   },
-  logoBadge: {
-    backgroundColor: Colors.client.primary, paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 6, marginBottom: 8,
-  },
-  logoBadgeText: { fontSize: 12, fontWeight: '900', letterSpacing: 2, color: '#FFF' },
   tagline: {
-    ...Typography.body, color: Colors.text.secondary, textAlign: 'center',
-    marginTop: Spacing.md, lineHeight: 24,
+    ...Typography.body,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 24,
   },
+
+  // Titre section rôles
+  rolesTitle: {
+    ...Typography.h2,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+    color: Colors.text.primary,
+  },
+
   // Sélection Rôle
-  rolesSection: { flex: 1, justifyContent: 'center', gap: Spacing.md },
-  rolesTitle: { ...Typography.h3, color: Colors.text.secondary, textAlign: 'center', marginBottom: 8 },
+  rolesSection: { gap: Spacing.sm + 4 },
+
   roleCard: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.bg.surface,
-    borderRadius: Radius.xl, borderWidth: 1,
-    padding: Spacing.md, gap: Spacing.md,
-    overflow: 'hidden', position: 'relative',
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.md,
   },
-  roleCardAccent: { position: 'absolute', top: 0, left: 0, width: 4, height: '100%', borderRadius: 2 },
-  roleIconBg: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  roleEmoji: { fontSize: 26 },
-  roleText: { flex: 1, gap: 4 },
-  roleLabel: { ...Typography.h3, fontSize: 17 },
-  roleSub: { ...Typography.small, color: Colors.text.muted, lineHeight: 18 },
-  roleArrow: { fontSize: 28, fontWeight: '300', marginRight: 4 },
+
+  roleIconBg: {
+    width: 54,
+    height: 54,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  roleText: {
+    flex: 1,
+    gap: 3,
+  },
+
+  roleLabel: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+
+  roleSub: {
+    ...Typography.small,
+    color: Colors.text.muted,
+    lineHeight: 18,
+  },
+
+  arrowCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
   // Footer
-  footer: { ...Typography.caption, textAlign: 'center', paddingBottom: Spacing.lg },
+  footer: {
+    ...Typography.caption,
+    textAlign: 'center',
+    paddingVertical: Spacing.lg,
+    color: Colors.text.muted,
+  },
 });
