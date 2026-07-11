@@ -9,7 +9,7 @@
 // Expo Go (LAN)     : 'http://192.168.x.x:8000/api'
 // Production        : 'https://api.menu.cm/api'
 
-export const API_BASE_URL = 'http://192.168.55.95:8000/api';
+export const API_BASE_URL = 'http://192.168.83.95:8000/api';
 
 // Timeout des requêtes en ms
 export const API_TIMEOUT = 10000;

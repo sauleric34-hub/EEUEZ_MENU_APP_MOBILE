@@ -93,22 +93,26 @@
         </div>
       </div>
 
+      {% if liv.statut == 'assignee' or liv.statut == 'en_collecte' %}
       <form method="post" action="{% url 'core:livreur_livraison_action' liv.pk %}">
         {% csrf_token %}
         {% if liv.statut == 'assignee' %}
           <input type="hidden" name="action" value="demarrer">
           <button type="submit" class="btn btn-primary" style="width:100%;">🛵 Démarrer la mission</button>
           <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Direction le restaurant pour récupérer la commande.</p>
-        {% elif liv.statut == 'en_collecte' %}
+        {% else %}
           <input type="hidden" name="action" value="collecte">
           <button type="submit" class="btn btn-primary" style="width:100%;">📦 Commande récupérée — en route</button>
           <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Le client verra « En route » dans son suivi en direct.</p>
-        {% elif liv.statut == 'en_livraison' %}
-          <input type="hidden" name="action" value="livree">
-          <button type="submit" class="btn btn-primary" style="width:100%;">✓ Marquer comme livrée</button>
-          <p style="font-size:0.72rem;color:var(--accent-green);margin-top:8px;">+{{ c.restaurant.frais_livraison|floatformat:0 }} F × 70 % de gains à la validation.</p>
         {% endif %}
       </form>
+      {% else %}
+        <button type="button" class="btn btn-primary" style="width:100%;"
+                onclick="openConfirmModal('{{ liv.pk }}')">🔓 Code de confirmation</button>
+        <p style="font-size:0.72rem;color:var(--accent-green);margin-top:8px;">
+          À l'arrivée, faites scanner le QR au client (ou dictez-lui le code). Sa confirmation termine la livraison.
+        </p>
+      {% endif %}
 
       <!-- Contacter le client + carte -->
       <div style="display:flex;gap:8px;margin-top:10px;">
@@ -120,6 +124,27 @@
     </div>
   </div>
 </div>
+
+{% if liv.statut == 'en_livraison' %}
+<!-- Modal code de confirmation (QR + code) -->
+<div class="confirm-modal" id="confirmModal-{{ liv.pk }}"
+     data-payload="EEUEZ:{{ c.pk }}:{{ liv.code_confirmation }}">
+  <div class="confirm-modal-box glass-card">
+    <button type="button" class="confirm-modal-close" onclick="closeConfirmModal('{{ liv.pk }}')">×</button>
+    <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px;">Confirmation de réception</div>
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:18px;">
+      Commande #{{ c.pk }} · {{ c.client.get_full_name|default:c.client.username|default:'Client' }}
+    </div>
+    <div class="confirm-qr" id="qr-{{ liv.pk }}"></div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin:16px 0 6px;">OU dictez ce code au client</div>
+    <div class="confirm-code">{{ liv.code_confirmation }}</div>
+    <div style="font-size:0.76rem;color:var(--text-muted);margin-top:16px;line-height:1.5;">
+      Le client scanne le QR ou saisit le code dans son application.<br>
+      Sa confirmation <strong>termine la livraison</strong> et débloque le paiement du restaurant.
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endwith %}
 {% endfor %}
 {% endif %}
@@ -146,4 +171,43 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.confirm-modal { display:none; position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(3px); padding:20px; }
+.confirm-modal.open { display:flex; }
+.confirm-modal-box { position:relative; width:100%; max-width:360px; padding:28px 24px; text-align:center; border-radius:20px; }
+.confirm-modal-close { position:absolute; top:12px; right:16px; background:none; border:none; color:var(--text-muted);
+  font-size:1.6rem; line-height:1; cursor:pointer; }
+.confirm-qr { display:inline-flex; padding:14px; background:#fff; border-radius:16px; }
+.confirm-qr img, .confirm-qr canvas { display:block; }
+.confirm-code { font-size:2rem; font-weight:800; letter-spacing:0.5rem; color:var(--accent-green);
+  font-family:monospace; padding-left:0.5rem; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  function openConfirmModal(pk) {
+    const modal = document.getElementById('confirmModal-' + pk);
+    if (!modal) return;
+    const holder = document.getElementById('qr-' + pk);
+    if (holder && !holder.dataset.rendered && window.QRCode) {
+      new QRCode(holder, { text: modal.dataset.payload, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+      holder.dataset.rendered = '1';
+    }
+    modal.classList.add('open');
+  }
+  function closeConfirmModal(pk) {
+    const modal = document.getElementById('confirmModal-' + pk);
+    if (modal) modal.classList.remove('open');
+  }
+  // Fermer en cliquant sur le fond
+  document.querySelectorAll('.confirm-modal').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+  });
+</script>
 {% endblock %}

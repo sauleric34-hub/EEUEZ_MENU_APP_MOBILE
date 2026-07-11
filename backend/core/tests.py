@@ -1,7 +1,7 @@
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from .models import User, RestaurantProfile, Plat, Categorie, Commande, Transaction, Favori
+from .models import User, RestaurantProfile, Plat, Categorie, Commande, Transaction, Favori, Livraison
 
 # Désactive le throttling pendant les tests (sinon 429 après quelques appels auth).
 NO_THROTTLE = {
@@ -25,6 +25,7 @@ class ClientApiTests(TestCase):
         self.resto = RestaurantProfile.objects.create(
             user=self.resto_user, nom='Resto Test', adresse='Douala', ville='Douala',
             is_open=True, is_verified=True, frais_livraison=500, temps_livraison_moyen=25,
+            commission_rate=10,  # pourcentage de revenu plateforme (majoration client)
         )
         cat = Categorie.objects.create(nom='Grillades')
         self.plat = Plat.objects.create(
@@ -53,6 +54,9 @@ class ClientApiTests(TestCase):
         self.assertIsNotNone(plat)
         self.assertEqual(plat['description'], 'Poulet braise servi avec epices maison.')
         self.assertEqual(plat['composition'], ['Poulet', 'Epices', 'Oignons'])
+        # Prix de base 3000 ; prix client majoré de 10 % = 3300
+        self.assertEqual(int(float(plat['prix'])), 3000)
+        self.assertEqual(int(plat['prix_client']), 3300)
 
     def test_restaurant_can_create_plat_with_composition(self):
         tok = self.api.post('/api/auth/login', {'email': 'r@test.cm', 'password': 'x'}, format='json').json()
@@ -90,13 +94,42 @@ class ClientApiTests(TestCase):
         }
         res = self.api.post('/api/client/commandes/', payload, format='json')
         self.assertEqual(res.status_code, 201)
-        # 2 x 3000 + 500 livraison = 6500
-        self.assertEqual(int(float(res.json()['montant_total'])), 6500)
+        # Prix de base 3000 + 10 % = 3300 payé par le client
+        # 2 x 3300 + 500 livraison = 7100
+        self.assertEqual(int(float(res.json()['montant_total'])), 7100)
         order = Commande.objects.get(id=res.json()['id'])
         self.assertEqual(order.client, self.client_user)
+        # Le restaurant ne perçoit que ses prix de base : 2 x 3000 = 6000
+        self.assertEqual(int(order.montant_restaurant), 6000)
+        # La plateforme encaisse la majoration : 2 x 300 = 600
+        self.assertEqual(int(order.commission_eeuez), 600)
         tx = Transaction.objects.get(commande=order)
         self.assertEqual(tx.mode_paiement, 'especes')
         self.assertEqual(tx.statut, 'complete')
+
+    def test_client_confirme_reception_par_code(self):
+        self._auth()
+        livreur = User.objects.create_user(username='liv@test.cm', email='liv@test.cm', password='x', role='livreur')
+        commande = Commande.objects.create(
+            client=self.client_user, restaurant=self.resto, statut='en_livraison', montant_total=7100,
+        )
+        livraison = Livraison.objects.create(
+            commande=commande, livreur=livreur, statut='en_livraison', code_confirmation='ABC234',
+        )
+        url = f'/api/client/commandes/{commande.id}/confirmer_reception/'
+        # Mauvais code → refus, rien ne change
+        bad = self.api.post(url, {'code': 'ZZZZZZ'}, format='json')
+        self.assertEqual(bad.status_code, 400)
+        livraison.refresh_from_db()
+        self.assertEqual(livraison.statut, 'en_livraison')
+        # Bon code (accepte le format QR « EEUEZ:id:code ») → livraison terminée
+        ok = self.api.post(url, {'code': f'EEUEZ:{commande.id}:ABC234'}, format='json')
+        self.assertEqual(ok.status_code, 200)
+        commande.refresh_from_db(); livraison.refresh_from_db(); livreur.refresh_from_db()
+        self.assertEqual(commande.statut, 'livree')
+        self.assertEqual(livraison.statut, 'livree')
+        self.assertIsNotNone(livraison.delivered_at)
+        self.assertEqual(livreur.nombre_livraisons, 1)
 
     def test_recommandations_proximity_first(self):
         # Deux restos identiques en qualité : le plus proche doit passer devant.

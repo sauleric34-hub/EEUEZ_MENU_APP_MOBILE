@@ -173,7 +173,8 @@ export function mapPlat(d: PlatDTO): Dish {
     name: d.nom,
     restoId: d.restaurant,
     restoName: d.restaurant_nom || '',
-    price: Number(d.prix),
+    // Prix payé par le client = prix de base majoré du pourcentage plateforme
+    price: Number(d.prix_client ?? d.prix),
     icon: iconForPlat(d.nom, d.categorie_nom),
     grad: gradForId(d.categorie ?? d.id),
     rating: d.note ? String(d.note) : '—',

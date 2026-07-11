@@ -120,22 +120,15 @@ def livraison_action(request, pk):
         livraison.statut = 'en_collecte'
         messages.success(request, f'Mission #{commande.pk} démarrée — direction le restaurant.')
     elif action == 'collecte' and livraison.statut == 'en_collecte':
-        # Commande récupérée → en route vers le client (suivi visible dans l'app)
+        # Commande récupérée → en route vers le client (suivi visible dans l'app).
+        # On génère le code de confirmation que le client scannera/saisira à la réception.
         livraison.statut = 'en_livraison'
+        if not livraison.code_confirmation:
+            livraison.code_confirmation = Livraison.generer_code()
         commande.statut = 'en_livraison'
         commande.save(update_fields=['statut', 'updated_at'])
-        messages.success(request, f'Commande #{commande.pk} récupérée — le client suit votre trajet en direct.')
-    elif action == 'livree' and livraison.statut == 'en_livraison':
-        livraison.statut = 'livree'
-        livraison.delivered_at = timezone.now()
-        commande.statut = 'livree'
-        commande.save(update_fields=['statut', 'updated_at'])
-        # Gains : 70 % des frais de livraison
-        gain = float(commande.restaurant.frais_livraison) * 0.7 if commande.restaurant else 0
-        request.user.gain_total = float(request.user.gain_total) + gain
-        request.user.nombre_livraisons += 1
-        request.user.save(update_fields=['gain_total', 'nombre_livraisons'])
-        messages.success(request, f'Livraison #{commande.pk} terminée — +{int(gain)} F de gains. Bravo !')
+        messages.success(request, f'Commande #{commande.pk} récupérée — le client suit votre trajet. '
+                                  f'Faites-lui scanner votre QR ou saisir le code à l\'arrivée.')
     else:
         messages.error(request, 'Action impossible pour ce statut.')
         return redirect('core:livreur_dashboard')

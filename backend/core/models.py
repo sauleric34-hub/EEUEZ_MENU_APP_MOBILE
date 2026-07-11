@@ -108,6 +108,14 @@ class Plat(models.Model):
         from django.utils import timezone
         return self.plat_du_jour_le == timezone.localdate()
 
+    @property
+    def prix_client(self):
+        """Prix affiché et payé par le client = prix de base du restaurant
+        + le pourcentage de revenu de la plateforme (défini par l'admin).
+        Le restaurant ne perçoit que son prix de base (voir Commande)."""
+        rate = float(self.restaurant.commission_rate) if self.restaurant else 0.0
+        return int(round(float(self.prix) * (1 + rate / 100)))
+
     class Meta:
         verbose_name = 'Plat'
         verbose_name_plural = 'Plats'
@@ -150,10 +158,19 @@ class Commande(models.Model):
         return f"Commande #{self.pk} — {self.restaurant}"
 
     def save(self, *args, **kwargs):
-        if self.restaurant and self.montant_total:
-            rate = self.restaurant.commission_rate / 100
-            self.commission_eeuez = int(float(self.montant_total) * float(rate))
-            self.montant_restaurant = int(float(self.montant_total)) - int(self.commission_eeuez)
+        # Modèle « majoration » : le client paie prix_base + pourcentage.
+        #   montant_restaurant  = somme des prix de base (dû au restaurant)
+        #   commission_eeuez    = majoration encaissée par la plateforme
+        # Ces montants sont fixés à la création (à partir des lignes). Ce bloc
+        # n'est qu'un repli quand ils n'ont pas été fournis (ex. données seed) :
+        # on retrouve la base en divisant le total plats par (1 + taux).
+        if self.restaurant and self.montant_total and not self.montant_restaurant:
+            rate = float(self.restaurant.commission_rate) / 100
+            frais = float(self.restaurant.frais_livraison or 0)
+            dishes_client = max(float(self.montant_total) - frais, 0)
+            base = dishes_client / (1 + rate) if (1 + rate) else dishes_client
+            self.montant_restaurant = int(round(base))
+            self.commission_eeuez = int(round(dishes_client - base))
         super().save(*args, **kwargs)
 
 
@@ -183,6 +200,9 @@ class Livraison(models.Model):
     longitude_actuelle = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     estimated_delivery_time = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    # Code que le client scanne (QR) ou saisit pour confirmer la réception.
+    # Généré au départ vers le client ; sa validation termine la livraison.
+    code_confirmation = models.CharField(max_length=8, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -191,6 +211,13 @@ class Livraison(models.Model):
 
     def __str__(self):
         return f"Livraison #{self.commande_id}"
+
+    @staticmethod
+    def generer_code(longueur=6):
+        import secrets
+        # Alphabet sans caractères ambigus (0/O, 1/I/L)
+        alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+        return ''.join(secrets.choice(alphabet) for _ in range(longueur))
 
 
 class Avis(models.Model):

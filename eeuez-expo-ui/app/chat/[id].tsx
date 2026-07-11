@@ -133,7 +133,7 @@ export default function ChatScreen() {
                     <Text numberOfLines={1} style={[displayFont(16, '700'), { color: colors.text }]}>{p.nom}</Text>
                     <View style={styles.row}>
                       <Text style={[bodyFont(11.5, '700'), { color: Brand.accentLight }]}>{conv?.restaurant_nom}</Text>
-                      <Text style={[bodyFont(11.5, '600'), { color: colors.faint }]}> · {formatPrice(Number(p.prix))}</Text>
+                      <Text style={[bodyFont(11.5, '600'), { color: colors.faint }]}> · {formatPrice(Number(p.prix_client ?? p.prix))}</Text>
                     </View>
                   </View>
                   <View style={[styles.online, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>

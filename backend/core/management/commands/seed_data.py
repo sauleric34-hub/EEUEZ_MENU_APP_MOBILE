@@ -36,6 +36,24 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write(">> Creation des donnees de demo...")
 
+        # Admin
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_superuser(
+                username="admin",
+                email="admin@eeuez.cm",
+                password="admin123",
+                role="admin",
+            )
+            self.stdout.write("  OK admin créé (admin / admin123)")
+        else:
+            admin = User.objects.get(username="admin")
+            admin.set_password("admin123")
+            admin.role = "admin"
+            admin.is_staff = True
+            admin.is_superuser = True
+            admin.save()
+            self.stdout.write("  OK admin mis à jour (admin / admin123)")
+
         # Catégories
         cats = []
         for nom in CATEGORIES:

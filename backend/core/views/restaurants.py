@@ -48,7 +48,9 @@ def restaurant_detail(request, pk):
     plats = restaurant.plats.all()
     avis = restaurant.avis_set.order_by('-created_at')[:5]
     ca = restaurant.chiffre_affaires
-    commissions = float(ca) * float(restaurant.commission_rate) / 100
+    # Revenu réel de la plateforme = majoration encaissée sur les commandes livrées
+    commissions = restaurant.commandes.filter(statut='livree') \
+        .aggregate(t=Sum('commission_eeuez'))['t'] or 0
 
     return render(request, 'admin_panel/restaurants/detail.html', {
         'restaurant': restaurant,

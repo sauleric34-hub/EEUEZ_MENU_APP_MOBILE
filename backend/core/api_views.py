@@ -12,6 +12,7 @@ from .serializers import (
     CommandeSerializer, LivraisonSerializer
 )
 from .utils import geo
+from .delivery import finaliser_livraison
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -162,25 +163,32 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             delai_estime=restaurant.temps_livraison_moyen,
         )
 
-        sous_total = 0
+        sous_total_client = 0  # ce que paie le client (prix de base + %)
+        sous_total_base = 0    # ce qui revient au restaurant (prix de base)
         for item in items:
             try:
                 plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
             except (Plat.DoesNotExist, KeyError):
                 continue
             qte = max(1, int(item.get('quantite', 1)))
-            prix = plat.prix
+            prix_base = int(plat.prix)
+            prix_client = plat.prix_client  # prix de base majoré du pourcentage
             LigneCommande.objects.create(
-                commande=commande, plat=plat, quantite=qte, prix_unitaire=prix,
+                commande=commande, plat=plat, quantite=qte, prix_unitaire=prix_client,
             )
-            sous_total += float(prix) * qte
+            sous_total_client += prix_client * qte
+            sous_total_base += prix_base * qte
 
-        if sous_total == 0:
+        if sous_total_client == 0:
             commande.delete()
             return Response({"error": "Aucun plat valide dans la commande"}, status=status.HTTP_400_BAD_REQUEST)
 
         frais_liv = float(restaurant.frais_livraison)
-        commande.montant_total = sous_total + frais_liv
+        # Le client paie les plats majorés + la livraison
+        commande.montant_total = sous_total_client + frais_liv
+        # Le restaurant ne perçoit que ses prix de base ; la majoration revient à la plateforme
+        commande.montant_restaurant = sous_total_base
+        commande.commission_eeuez = sous_total_client - sous_total_base
         commande.save()
 
         # Trace du paiement (espèces = à encaisser à la livraison)
@@ -193,6 +201,31 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         )
 
         return Response(CommandeSerializer(commande).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def confirmer_reception(self, request, pk=None):
+        """Le client confirme avoir reçu sa commande en scannant le QR du
+        livreur ou en saisissant le code. Cela termine la livraison et
+        débloque l'argent du restaurant."""
+        commande = self.get_object()  # limité aux commandes du client (get_queryset)
+        livraison = getattr(commande, 'livraison', None)
+        if not livraison or livraison.statut != 'en_livraison':
+            return Response(
+                {"error": "Cette commande n'est pas en cours de livraison."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Le QR encode « EEUEZ:<id>:<code> » ; on accepte aussi le code seul.
+        raw = (request.data.get('code') or '').strip().upper()
+        code = raw.split(':')[-1] if ':' in raw else raw
+        if not livraison.code_confirmation or code != livraison.code_confirmation:
+            return Response(
+                {"error": "Code de confirmation invalide."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        finaliser_livraison(livraison)
+        return Response(CommandeSerializer(commande).data)
 
 # --- RESTAURANT ---
 class RestaurantWorkspaceView(views.APIView):
@@ -281,22 +314,9 @@ class LivreurMissionViewSet(viewsets.ViewSet):
             livraison = Livraison.objects.get(commande_id=pk)
         except Livraison.DoesNotExist:
             return Response({"error": "Livraison introuvable"}, status=404)
-            
-        livraison.statut = 'livree'
-        livraison.delivered_at = timezone.now()
-        livraison.save()
-        
-        commande = livraison.commande
-        commande.statut = 'livree'
-        commande.save()
-        
-        # Calcul des gains du livreur
-        livreur = request.user
-        gain = float(commande.restaurant.frais_livraison) * 0.7
-        livreur.gain_total = float(livreur.gain_total) + gain
-        livreur.nombre_livraisons += 1
-        livreur.save()
-        
+
+        # Finalise via le helper partagé (crédite le livreur, débloque l'argent resto)
+        finaliser_livraison(livraison)
         return Response(LivraisonSerializer(livraison).data)
 
 # --- MAP ---

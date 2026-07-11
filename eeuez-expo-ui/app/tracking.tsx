@@ -2,23 +2,26 @@
 //  Suivi de livraison en direct
 // ═══════════════════════════════════════════════════════════
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { ChevronLeft, Bike, Phone, MessageCircle, Check, MapPin, Star, PackageSearch } from 'lucide-react-native';
-import { Brand, Radius } from '../constants/theme';
+import { ChevronLeft, Bike, Phone, MessageCircle, Check, MapPin, Star, PackageSearch, QrCode } from 'lucide-react-native';
+import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { TRACK_STEPS, TRACK_ETA } from '../data/menuData';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
+import { ConfirmReception } from '../components/ConfirmReception';
 
 export default function TrackingScreen() {
   const { colors, trackStep, activeOrder, reloadOrders } = useApp();
   const router = useRouter();
+  const [showConfirm, setShowConfirm] = useState(false);
   const etaLabel = TRACK_ETA[trackStep] ?? TRACK_ETA[0];
+  const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
 
   // Rafraîchit le statut de la commande toutes les 8 s
   useEffect(() => {
@@ -95,6 +98,19 @@ export default function TrackingScreen() {
             </View>
           </View>
 
+          {/* Confirmation de réception — visible quand le livreur est en route */}
+          {enLivraison && (
+            <PressableScale onPress={() => setShowConfirm(true)} style={{ marginTop: 16 }}>
+              <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.confirmCta, glow(Brand.accent, 20)]}>
+                <QrCode size={20} color="#fff" strokeWidth={2.3} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[bodyFont(15, '800'), { color: '#fff' }]}>J'ai reçu ma commande</Text>
+                  <Text style={[bodyFont(11.5, '600'), { color: '#ffffffcc', marginTop: 1 }]}>Scanner le QR du livreur ou saisir le code</Text>
+                </View>
+              </LinearGradient>
+            </PressableScale>
+          )}
+
           {/* Progression */}
           <View style={[styles.progress, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.row}>
@@ -134,6 +150,15 @@ export default function TrackingScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {activeOrder && (
+        <ConfirmReception
+          visible={showConfirm}
+          orderId={activeOrder.id}
+          onClose={() => setShowConfirm(false)}
+          onConfirmed={() => { setShowConfirm(false); reloadOrders(); }}
+        />
+      )}
     </ScreenBg>
   );
 }
@@ -158,6 +183,7 @@ const styles = StyleSheet.create({
   courier: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 22, borderWidth: 1, marginTop: 16 },
   courierAvatar: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   contactBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  confirmCta: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15, paddingHorizontal: 18, borderRadius: Radius.pill },
   progress: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   stepRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   stepAxis: { alignItems: 'center', alignSelf: 'stretch' },

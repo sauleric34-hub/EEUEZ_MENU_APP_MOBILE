@@ -18,6 +18,12 @@
     <div class="kpi-label">Solde disponible</div>
     <div class="kpi-sub">Retirable dès maintenant</div>
   </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);--kpi-bg:var(--accent-amber-dim);--kpi-glow:var(--glow-amber);">
+    <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+    <div class="kpi-value" data-count="{{ argent_gele }}" data-suffix=" F">0</div>
+    <div class="kpi-label">Argent gelé</div>
+    <div class="kpi-sub">{{ nb_gele }} commande{{ nb_gele|pluralize }} en cours · débloqué à la livraison</div>
+  </div>
   <div class="kpi-card" style="--kpi-color:var(--accent-blue);--kpi-bg:var(--accent-blue-dim);--kpi-glow:var(--glow-blue);">
     <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
     <div class="kpi-value" data-count="{{ gains_total }}" data-suffix=" F">0</div>

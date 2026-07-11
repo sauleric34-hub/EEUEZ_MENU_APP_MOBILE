@@ -48,8 +48,11 @@
         <textarea name="description" class="input-field" placeholder="Spécialités camerounaises…"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">Taux de commission (%) *</label>
+        <label class="form-label">Pourcentage de revenu plateforme (%) *</label>
         <input type="number" name="commission_rate" class="input-field" value="10" min="0" max="100" step="0.5" required>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+          Ajouté au prix de chaque plat. Le client paie prix + ce %, le restaurant ne perçoit que son prix de base.
+        </div>
       </div>
     </div>
 
