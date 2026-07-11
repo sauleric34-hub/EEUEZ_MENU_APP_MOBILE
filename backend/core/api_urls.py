@@ -46,6 +46,11 @@ urlpatterns = [
     # Client — avis
     path('client/commandes/<int:commande_id>/avis', client_views.create_avis, name='api-client-avis'),
 
+    # ─── Monetbil — webhook serveur-à-serveur ──────────────────────────────────
+    # Note : le routeur DRF enregistre automatiquement l'action initier_paiement
+    # sous POST /api/client/commandes/{id}/initier_paiement/
+    path('monetbil/notify/', api_views.monetbil_notify, name='api-monetbil-notify'),
+
     # Restaurant
     path('restaurant/workspace', api_views.RestaurantWorkspaceView.as_view(), name='api-restaurant-workspace'),
 

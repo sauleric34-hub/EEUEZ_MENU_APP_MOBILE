@@ -158,6 +158,14 @@ if not DEBUG:
         o.strip() for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
     ]
 
+# ─── Monetbil ─────────────────────────────────────────────────────────────────
+# Récupérés depuis les variables d'environnement en production.
+# En dev, vous pouvez les définir ici ou dans un fichier .env.
+MONETBIL_SERVICE_KEY    = os.environ.get('MONETBIL_SERVICE_KEY',    'w6UhePXsVJVWmCn29uP1AsyvSD7NaRr6')
+MONETBIL_SERVICE_SECRET = os.environ.get('MONETBIL_SERVICE_SECRET', 'cl93w0tUX3MgfOlzLxEnDk2l8cNatq8BOSXZsGrY3gVEveRodcRVHq5QLHnAoAsW')
+# URL de base publique de l'application (utilisée pour return_url et notify_url)
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),

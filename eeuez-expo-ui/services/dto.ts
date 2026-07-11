@@ -156,3 +156,9 @@ export interface AbonnementToggleDTO {
   restaurant: number;
   abonnements: number[];
 }
+
+/** Réponse de l'endpoint POST /client/commandes/{id}/initier_paiement/ */
+export interface MonetbilPaymentDTO {
+  payment_url: string;
+  payment_ref: string;
+}

@@ -3,17 +3,19 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star } from 'lucide-react-native';
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
 import type { PaymentMode } from '../../services/menu';
+import { initiateMonetbilPayment } from '../../services/menu';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
+import { MonetbilWebView } from '../../components/MonetbilWebView';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
   { mode: 'especes', label: 'Espèces', Icon: Banknote },
@@ -21,19 +23,36 @@ const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = 
   { mode: 'orange_money', label: 'Orange Money', Icon: Smartphone },
 ];
 
+/** Modes qui nécessitent le widget Monetbil */
+const MONETBIL_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
+
 export default function PanierScreen() {
-  const { colors, cartLines, cartInc, cartDec, cartRemove, subtotal, deliveryFee, total, cartCount, checkout, deliveryAddress } = useApp();
+  const { colors, cartLines, cartInc, cartDec, cartRemove, subtotal, deliveryFee, total, cartCount, checkout, deliveryAddress, user } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<PaymentMode>('especes');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState(user?.telephone || '');
+
+  // ─── État WebView Monetbil ────────────────────────────
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
   const submit = async () => {
     if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
     setBusy(true); setError(null);
     try {
-      await checkout(mode);
-      router.push('/tracking');
+      // 1. Créer la commande (toujours)
+      const order = await checkout(mode);
+
+      if (MONETBIL_MODES.includes(mode)) {
+        // 2. Pour MTN/Orange Money → initier le paiement Monetbil
+        const data = await initiateMonetbilPayment(order.id, phone || undefined);
+        setPaymentUrl(data.payment_url);
+        // Le WebView gère la suite (onSuccess / onCancel)
+      } else {
+        // Espèces → navigation directe vers le suivi
+        router.push('/tracking');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La commande a échoué.');
     } finally {
@@ -144,7 +163,24 @@ export default function PanierScreen() {
                 })}
               </View>
 
-              {/* Récapitulatif */}
+              {/* Numéro de téléphone (Mobile Money uniquement) */}
+              {MONETBIL_MODES.includes(mode) && (
+                <View style={[styles.phoneRow, { backgroundColor: colors.surface, borderColor: Brand.accent + '55' }]}>
+                  <View style={[styles.phoneIcon, { backgroundColor: Brand.accent + '1f' }]}>
+                    <Phone size={16} color={Brand.accentLight} strokeWidth={2.3} />
+                  </View>
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="N° de téléphone (ex: 6XXXXXXXX)"
+                    placeholderTextColor={colors.muted}
+                    keyboardType="phone-pad"
+                    style={[bodyFont(13.5, '600'), styles.phoneInput, { color: colors.text }]}
+                  />
+                </View>
+              )}
+
+
               <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.sumRow}>
                   <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Sous-total</Text>
@@ -183,7 +219,23 @@ export default function PanierScreen() {
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>
-  );
+
+    {/* ─── Modal WebView Monetbil ─────────────────── */}
+    {paymentUrl && (
+      <MonetbilWebView
+        paymentUrl={paymentUrl}
+        amount={total}
+        onSuccess={() => {
+          setPaymentUrl(null);
+          router.push('/tracking');
+        }}
+        onCancel={() => {
+          setPaymentUrl(null);
+          setError('Paiement annulé. Vous pouvez réessayer.');
+        }}
+      />
+    )}
+  </>);
 }
 
 const styles = StyleSheet.create({
@@ -206,6 +258,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: 5,
     paddingVertical: 12, borderRadius: Radius.md, borderWidth: 1,
   },
+  phoneRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 16, paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: Radius.md, borderWidth: 1,
+  },
+  phoneIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  phoneInput: { flex: 1, paddingVertical: 4 },
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   summary: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   sumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

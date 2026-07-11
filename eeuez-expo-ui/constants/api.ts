@@ -7,7 +7,7 @@
 // Émulateur Android : 'http://10.0.2.2:8000/api'
 // Appareil physique : 'http://VOTRE_IP_LOCAL:8000/api'
 // Expo Go (LAN)     : 'http://192.168.x.x:8000/api'
-// Production        : 'https://api.menu.cm/api'
+// Production        : 'https://menu.cambus.cm/api'
 
 export const API_BASE_URL = 'http://192.168.83.95:8000/api';
 
@@ -25,3 +25,7 @@ export const AUTH_TOKEN_KEY = '@menu_auth_token';
 export const REFRESH_TOKEN_KEY = '@menu_refresh_token';
 export const USER_KEY = '@menu_user';
 
+// ─── Monetbil ────────────────────────────────────────────
+// URL de retour surveillée par le WebView pour détecter la fin du paiement.
+// En prod : 'https://menu.cambus.cm/payment/success/'
+export const MONETBIL_SUCCESS_URL = `${MEDIA_BASE_URL}/payment/success/`;
