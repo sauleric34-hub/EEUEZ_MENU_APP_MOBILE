@@ -14,7 +14,7 @@
 <div class="glass-card anim-fade-up" style="padding:0;overflow-x:auto;">
   <table class="data-table">
     <thead>
-      <tr><th>Plat</th><th>Catégorie</th><th>Prix</th><th>Commandés</th><th>Likes</th><th>Statut</th><th style="min-width:340px;">Actions</th></tr>
+      <tr><th>Plat</th><th>Catégorie</th><th>Votre prix / Prix client</th><th>Commandés</th><th>Likes</th><th>Statut</th><th style="min-width:340px;">Actions</th></tr>
     </thead>
     <tbody>
       {% for p in plats %}
@@ -33,7 +33,10 @@
           </div>
         </td>
         <td>{{ p.categorie.nom|default:'—' }}</td>
-        <td style="font-weight:700;color:var(--accent-green);">{{ p.prix }} F</td>
+        <td style="white-space:nowrap;">
+          <div style="font-weight:700;color:var(--accent-green);">{{ p.prix }} F</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">client : {{ p.prix_client }} F</div>
+        </td>
         <td>{{ p.vol|default:0 }}</td>
         <td>❤ {{ p.nb_likes }}</td>
         <td>

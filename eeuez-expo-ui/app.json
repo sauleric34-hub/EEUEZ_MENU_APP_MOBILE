@@ -40,6 +40,12 @@
         {
           "photosPermission": "Menu accède à vos photos pour joindre une image à vos messages avec les restaurants."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Menu utilise la caméra pour scanner le QR code du livreur et confirmer la réception de votre commande."
+        }
       ]
     ]
   }

@@ -70,16 +70,21 @@ class PlatSerializer(serializers.ModelSerializer):
     nombre_likes = serializers.SerializerMethodField()
     composition = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    prix_client = serializers.SerializerMethodField()
 
     class Meta:
         model = Plat
         fields = [
             'id', 'restaurant', 'restaurant_nom', 'categorie', 'categorie_nom',
-            'nom', 'description', 'prix', 'image', 'images', 'is_available', 'is_popular',
+            'nom', 'description', 'prix', 'prix_client', 'image', 'images', 'is_available', 'is_popular',
             'allergies', 'ingredients', 'composition', 'note', 'nombre_notes', 'ma_note',
             'nombre_commandes', 'nombre_likes',
         ]
         read_only_fields = ['restaurant']
+
+    def get_prix_client(self, obj):
+        # Prix réellement affiché et payé par le client (base + pourcentage plateforme)
+        return obj.prix_client
 
     def get_categorie_nom(self, obj):
         return obj.categorie.nom if obj.categorie else None

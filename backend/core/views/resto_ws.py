@@ -389,6 +389,12 @@ def finances(request):
     livrees = resto.commandes.filter(statut='livree')
     gains_total = livrees.aggregate(t=Sum('montant_restaurant'))['t'] or 0
     commission_total = livrees.aggregate(t=Sum('commission_eeuez'))['t'] or 0
+    # Argent gelé : commandes payées mais pas encore livrées (en cours).
+    # Le montant n'entre dans le solde disponible qu'à la confirmation de réception.
+    EN_COURS = ['en_attente', 'acceptee', 'en_preparation', 'prete', 'en_livraison']
+    argent_gele = resto.commandes.filter(statut__in=EN_COURS) \
+        .aggregate(t=Sum('montant_restaurant'))['t'] or 0
+    nb_gele = resto.commandes.filter(statut__in=EN_COURS).count()
     now = timezone.now()
     gains_mois = livrees.filter(created_at__month=now.month, created_at__year=now.year) \
         .aggregate(t=Sum('montant_restaurant'))['t'] or 0
@@ -405,6 +411,8 @@ def finances(request):
     return render(request, 'resto/finances.html', {
         'resto': resto,
         'solde': int(_solde_disponible(resto)),
+        'argent_gele': int(argent_gele),
+        'nb_gele': nb_gele,
         'gains_total': int(gains_total),
         'gains_mois': int(gains_mois),
         'commission_total': int(commission_total),

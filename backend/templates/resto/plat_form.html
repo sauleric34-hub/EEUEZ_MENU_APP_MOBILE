@@ -19,8 +19,11 @@
       <input type="text" name="nom" class="input-field" required value="{{ plat.nom|default:'' }}" placeholder="Ex : Poulet DG">
     </div>
     <div class="form-group">
-      <label class="form-label">Prix (FCFA) *</label>
+      <label class="form-label">Votre prix (FCFA) *</label>
       <input type="number" name="prix" class="input-field" required min="100" step="50" value="{{ plat.prix|default:'' }}" placeholder="Ex : 4500">
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+        Montant qui vous revient. Le client paiera ce prix majoré de {{ resto.commission_rate }} % (revenu plateforme).
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Catégorie</label>

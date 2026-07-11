@@ -93,5 +93,10 @@ export const createOrder = (params: CreateOrderParams) =>
 
 export const fetchOrders = () => apiGet<CommandeDTO[]>('/client/commandes/', { auth: true });
 
+// Confirmation de réception par le client (scan QR ou saisie du code).
+// Termine la livraison et débloque le paiement du restaurant.
+export const confirmReception = (commandeId: number, code: string) =>
+  apiPost<CommandeDTO>('/client/commandes/' + commandeId + '/confirmer_reception/', { code }, { auth: true });
+
 export const createAvis = (commandeId: number, note: number, commentaire = '') =>
   apiPost('/client/commandes/' + commandeId + '/avis', { note, commentaire }, { auth: true });

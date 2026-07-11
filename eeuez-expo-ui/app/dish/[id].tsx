@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  ChevronLeft, Heart, Flame, Star, ChevronRight, MessageCircle, Store, Plus, Minus,
+  ChevronLeft, Heart, Flame, Star, ChevronRight, MessageCircle, Store, Plus, Minus, Bike, Clock,
 } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
@@ -149,6 +149,19 @@ export default function DishDetail() {
             <Text style={[displayFont(22, '800'), { color: Brand.accentLight }]}>{formatPrice(dish.price)}</Text>
           </View>
 
+          {/* Livraison — frais fixés par le restaurant */}
+          {resto && (
+            <View style={styles.deliveryRow}>
+              <Bike size={15} color={Brand.accentLight} strokeWidth={2.3} />
+              <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>
+                Livraison {resto.fraisLivraison > 0 ? formatPrice(resto.fraisLivraison) : 'offerte'}
+              </Text>
+              <View style={styles.sep} />
+              <Clock size={14} color="#8fd6a8" strokeWidth={2.3} />
+              <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>~{resto.tempsLivraison} min</Text>
+            </View>
+          )}
+
           <View style={styles.statsRow}>
             <StatCard Icon={Flame} color={Brand.yellow} value={dish.orders} label="commandes" bg={colors.surface} border={colors.border} />
             <StatCard Icon={Heart} color="#ff6b70" value={dish.likes} label="j'aime" bg={colors.surface} border={colors.border} />
@@ -267,6 +280,8 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  deliveryRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 10 },
+  sep: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(150,150,150,0.5)' },
   statsRow: { flexDirection: 'row', gap: 9, marginTop: 14 },
   stat: { flex: 1, paddingVertical: 12, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
   statTop: { flexDirection: 'row', alignItems: 'center', gap: 5 },

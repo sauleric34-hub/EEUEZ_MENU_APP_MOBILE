@@ -6,10 +6,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Animated, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing } from 'lucide-react-native';
+import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock } from 'lucide-react-native';
 import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { mapResto, mapPlat, type Resto, type Dish } from '../../data/menuData';
+import { mapResto, mapPlat, formatPrice, type Resto, type Dish } from '../../data/menuData';
 import { fetchRestaurant, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
@@ -102,6 +102,20 @@ export default function RestoProfile() {
             <Stat value={String(dishes.length)} label="plats" color={Brand.accentLight} colors={colors} />
           </View>
 
+          {/* Livraison — frais fixés par le restaurant */}
+          <View style={styles.deliveryRow}>
+            <View style={[styles.deliveryPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Bike size={16} color={Brand.accentLight} strokeWidth={2.3} />
+              <Text style={[bodyFont(13, '700'), { color: colors.text }]}>
+                Livraison {resto.fraisLivraison > 0 ? formatPrice(resto.fraisLivraison) : 'offerte'}
+              </Text>
+            </View>
+            <View style={[styles.deliveryPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Clock size={16} color="#8fd6a8" strokeWidth={2.3} />
+              <Text style={[bodyFont(13, '700'), { color: colors.text }]}>~{resto.tempsLivraison} min</Text>
+            </View>
+          </View>
+
           <View style={styles.followRow}>
             <Animated.View style={{ flex: 1, transform: [{ scale: followPop }] }}>
               <PressableScale onPress={onFollow}>
@@ -153,6 +167,11 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   statsRow: { flexDirection: 'row', gap: 9, marginTop: 16 },
   stat: { flex: 1, paddingVertical: 12, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
+  deliveryRow: { flexDirection: 'row', gap: 9, marginTop: 12 },
+  deliveryPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: Radius.pill, borderWidth: 1,
+  },
   followRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   followIcon: {
     width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff',

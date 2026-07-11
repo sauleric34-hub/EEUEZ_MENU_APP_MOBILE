@@ -32,7 +32,8 @@ export interface PlatDTO {
   categorie_nom: string | null;
   nom: string;
   description: string;
-  prix: string;
+  prix: string;          // prix de base fixé par le restaurant
+  prix_client?: number;  // prix payé par le client (base + pourcentage plateforme)
   image: string | null;
   images: string[];
   is_available: boolean;
