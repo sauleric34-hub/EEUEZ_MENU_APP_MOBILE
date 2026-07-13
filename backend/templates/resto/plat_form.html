@@ -26,6 +26,13 @@
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Frais de livraison (FCFA) *</label>
+      <input type="number" name="frais_livraison" class="input-field" required min="0" step="100" value="{{ plat.frais_livraison|default:'500' }}" placeholder="Ex : 800">
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+        Affiché au client dans l'app et ajouté au total de sa commande. Mettez 0 pour une livraison offerte.
+      </div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Catégorie</label>
       <select name="categorie" class="input-field">
         <option value="">— Choisir —</option>

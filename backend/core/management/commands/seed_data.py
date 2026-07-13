@@ -1,8 +1,13 @@
+import os
 import random
 from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from core.models import User, RestaurantProfile, Categorie, Plat, Commande, LigneCommande, Livraison, Avis, Transaction
+
+# Mot de passe de l'admin de démo. Surchargeable via SEED_ADMIN_PASSWORD pour ne
+# jamais créer un superutilisateur avec un mot de passe connu en production.
+ADMIN_PASSWORD = os.environ.get('SEED_ADMIN_PASSWORD', 'admin123')
 
 RESTAURANTS = [
     {"nom": "Le Phénix d'Or", "ville": "Yaoundé", "adresse": "Avenue Kennedy", "lat": 3.8667, "lng": 11.5167, "rate": 12},
@@ -41,18 +46,18 @@ class Command(BaseCommand):
             User.objects.create_superuser(
                 username="admin",
                 email="admin@eeuez.cm",
-                password="admin123",
+                password=ADMIN_PASSWORD,
                 role="admin",
             )
-            self.stdout.write("  OK admin créé (admin / admin123)")
+            self.stdout.write("  OK admin créé (username: admin)")
         else:
             admin = User.objects.get(username="admin")
-            admin.set_password("admin123")
+            admin.set_password(ADMIN_PASSWORD)
             admin.role = "admin"
             admin.is_staff = True
             admin.is_superuser = True
             admin.save()
-            self.stdout.write("  OK admin mis à jour (admin / admin123)")
+            self.stdout.write("  OK admin mis à jour (username: admin)")
 
         # Catégories
         cats = []

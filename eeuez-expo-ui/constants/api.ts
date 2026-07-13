@@ -9,7 +9,7 @@
 // Expo Go (LAN)     : 'http://192.168.x.x:8000/api'
 // Production        : 'https://menu.cambus.cm/api'
 
-export const API_BASE_URL = 'http://192.168.83.95:8000/api';
+export const API_BASE_URL = 'https://menu.cambus.cm/api';
 
 // Timeout des requêtes en ms
 export const API_TIMEOUT = 10000;

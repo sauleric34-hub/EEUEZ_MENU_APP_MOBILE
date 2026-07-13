@@ -35,8 +35,10 @@ export interface Resto {
   latitude: number | null;
   longitude: number | null;
   fraisLivraison: number;
+  prixReservation: number;
   tempsLivraison: number;
   isOpen: boolean;
+  isFollowing?: boolean;
   /** Renseignés par le moteur de recommandation (si position connue) */
   distanceKm?: number | null;
   etaMin?: number | null;
@@ -57,6 +59,7 @@ export interface Dish {
   description: string;
   isPopular: boolean;
   category: string | null;
+  fraisLivraison: number;
   image?: string;
   images: string[];
   myRating: number | null;
@@ -154,8 +157,10 @@ export function mapResto(d: RestoDTO): Resto {
     latitude: d.latitude != null ? Number(d.latitude) : null,
     longitude: d.longitude != null ? Number(d.longitude) : null,
     fraisLivraison: Number(d.frais_livraison ?? 0),
+    prixReservation: Number(d.prix_reservation ?? 0),
     tempsLivraison: d.temps_livraison_moyen ?? 30,
     isOpen: d.is_open,
+    isFollowing: d.is_following,
   };
 }
 
@@ -184,6 +189,7 @@ export function mapPlat(d: PlatDTO): Dish {
     description: d.description || '',
     isPopular: d.is_popular,
     category: d.categorie_nom,
+    fraisLivraison: Number(d.frais_livraison ?? 0),
     image: absMedia(d.image),
     images: (d.images ?? []).map(u => absMedia(u)).filter((u): u is string => !!u),
     myRating: d.ma_note ?? null,

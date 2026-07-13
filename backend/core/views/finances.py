@@ -1,12 +1,14 @@
 import csv
-from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse
 from django.db.models import Sum, Count
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 import json
-from core.models import Commande, Transaction, RestaurantProfile
+from core.models import Commande, Transaction, RestaurantProfile, RetraitFonds
+from core.payout import executer_retrait
 from .dashboard import admin_required
 
 
@@ -46,6 +48,45 @@ def finances_view(request):
         'comm_data': json.dumps(comm_data),
         'restaurant_labels': json.dumps([r.nom[:20] for r in restaurants]),
         'restaurant_ca': json.dumps([float(r.ca or 0) for r in restaurants]),
+        'active_page': 'finances',
+    })
+
+
+@admin_required
+def retraits_view(request):
+    """Gestion des demandes de retrait des restaurants + déclenchement du versement."""
+    from django.conf import settings
+
+    if request.method == 'POST':
+        retrait = get_object_or_404(RetraitFonds, pk=request.POST.get('retrait_id'))
+        action = request.POST.get('action')
+        if action == 'refuser':
+            retrait.statut = 'refuse'
+            retrait.processed_at = timezone.now()
+            retrait.save(update_fields=['statut', 'processed_at'])
+            messages.info(request, f'Retrait #{retrait.pk} refusé.')
+        elif action == 'payer':
+            # Confirmation manuelle du versement par l'admin
+            retrait.statut = 'paye'
+            retrait.processed_at = timezone.now()
+            retrait.save(update_fields=['statut', 'processed_at'])
+            messages.success(request, f'Retrait #{retrait.pk} marqué comme payé ({retrait.montant} F).')
+        elif action == 'approuver':
+            # Décaissement auto (Monetbil) si activé, sinon simple approbation manuelle
+            result = executer_retrait(retrait)
+            if result.status == 'paye':
+                messages.success(request, f'Retrait #{retrait.pk} versé ({retrait.montant} F).')
+            elif result.status == 'en_attente':
+                messages.success(request, f'Retrait #{retrait.pk} approuvé. {result.message}')
+            else:
+                messages.error(request, f'Échec du versement : {result.message}')
+        return redirect('core:admin_retraits')
+
+    retraits = RetraitFonds.objects.select_related('restaurant').all()
+    return render(request, 'admin_panel/finances/retraits.html', {
+        'retraits': retraits,
+        'en_attente': retraits.filter(statut='en_attente'),
+        'payout_auto': getattr(settings, 'MONETBIL_PAYOUT_ENABLED', False),
         'active_page': 'finances',
     })
 

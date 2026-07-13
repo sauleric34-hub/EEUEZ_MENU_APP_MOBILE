@@ -3,7 +3,22 @@
 // ═══════════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL, API_TIMEOUT, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../constants/api';
+import { API_BASE_URL, API_TIMEOUT, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../constants/api';
+
+// Notifie l'app (AppContext) qu'une session est irrécupérable (token périmé /
+// SECRET_KEY changée) → forcer la déconnexion et rediriger vers l'écran de connexion.
+let onAuthExpired: (() => void) | null = null;
+export function setAuthExpiredHandler(fn: (() => void) | null) {
+  onAuthExpired = fn;
+}
+
+// Efface les jetons stockés puis prévient l'app. Appelé quand le refresh échoue sur un 401.
+async function forceSignedOut() {
+  try {
+    await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
+  } catch { /* ignore */ }
+  if (onAuthExpired) onAuthExpired();
+}
 
 // Rafraîchit l'access token via le refresh token stocké (appel direct, sans
 // passer par apiRequest pour éviter toute récursion). Renvoie le nouvel access.
@@ -93,6 +108,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (res.status === 401 && auth) {
       const refreshed = await tryRefreshToken();
       if (refreshed) res = await doFetch(path, method, body, query, refreshed);
+      else await forceSignedOut();  // refresh impossible → session périmée, on déconnecte
     }
 
     const text = await res.text();
@@ -130,6 +146,7 @@ export async function apiUpload<T>(path: string, form: FormData, method: 'POST' 
     if (res.status === 401) {
       const refreshed = await tryRefreshToken();
       if (refreshed) res = await send(refreshed);
+      else await forceSignedOut();
     }
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;

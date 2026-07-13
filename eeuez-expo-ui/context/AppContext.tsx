@@ -14,6 +14,7 @@ import {
 } from '../data/menuData';
 import * as authService from '../services/auth';
 import * as menu from '../services/menu';
+import { setAuthExpiredHandler } from '../services/http';
 import * as addr from '../services/addresses';
 import type { PaymentMode } from '../services/menu';
 import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
@@ -94,6 +95,7 @@ interface AppContextValue {
   cartInc: (id: number) => void;
   cartDec: (id: number) => void;
   cartRemove: (id: number) => void;
+  clearCart: () => void;
   cartLines: CartLine[];
   cartCount: number;
   subtotal: number;
@@ -225,7 +227,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reloadOrders = useCallback(async () => {
     try {
-      setOrders(await menu.fetchOrders());
+      const all = await menu.fetchOrders();
+      // On masque les commandes dont le paiement mobile money n'a pas abouti :
+      // tant que ce n'est pas payé, ce n'est pas une commande (ça reste au panier).
+      setOrders(all.filter(o => o.paiement_confirme !== false));
     } catch {
       setOrders([]);
     }
@@ -311,6 +316,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDeliveryAddress(null);
   };
 
+  // Session périmée (token invalidé / refresh échoué) : le client HTTP a déjà
+  // effacé les jetons, on remet l'app dans l'état déconnecté.
+  useEffect(() => {
+    setAuthExpiredHandler(() => {
+      setUser(null);
+      setLikes({});
+      setFollows({});
+      setOrders([]);
+      setAddresses([]);
+      setDeliveryAddress(null);
+    });
+    return () => setAuthExpiredHandler(null);
+  }, []);
+
   // ─── Thème ─────────────────────────────────────────────────
   const toggleTheme = () => setMode(m => {
     const next = m === 'dark' ? 'light' : 'dark';
@@ -330,14 +349,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [plats]);
   const favList = useMemo(() => plats.filter(d => likes[d.id]), [plats, likes]);
 
-  // ─── Favoris (optimiste + serveur) ─────────────────────────
+  // ─── Favoris (optimiste puis réconcilié avec la réponse serveur) ───────
   const toggleLike = (id: number) => {
     setLikes(s => ({ ...s, [id]: !s[id] }));
-    menu.toggleFavori(id).catch(() => setLikes(s => ({ ...s, [id]: !s[id] })));
+    menu.toggleFavori(id)
+      .then(res => setLikes(Object.fromEntries(res.favoris.map(p => [p, true]))))
+      .catch(() => setLikes(s => ({ ...s, [id]: !s[id] })));
   };
   const toggleFollow = (id: number) => {
     setFollows(s => ({ ...s, [id]: !s[id] }));
-    menu.toggleAbonnement(id).catch(() => setFollows(s => ({ ...s, [id]: !s[id] })));
+    menu.toggleAbonnement(id)
+      .then(res => setFollows(Object.fromEntries(res.abonnements.map(r => [r, true]))))
+      .catch(() => setFollows(s => ({ ...s, [id]: !s[id] })));
   };
 
   // ─── Panier ────────────────────────────────────────────────
@@ -360,6 +383,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const subtotal = useMemo(() => cartLines.reduce((a, l) => a + l.dish.price * l.qty, 0), [cartLines]);
   const deliveryFee = useMemo(() => {
     if (!cartLines.length) return 0;
+    // Frais de livraison = le plus élevé parmi les plats du panier (une seule livraison).
+    // Repli sur le frais du restaurant puis la constante par défaut.
+    const platFees = cartLines.map(l => l.dish.fraisLivraison).filter(f => f > 0);
+    if (platFees.length) return Math.max(...platFees);
     const resto = restoMap.get(cartLines[0].dish.restoId);
     return resto?.fraisLivraison ?? DELIVERY_FEE;
   }, [cartLines, restoMap]);
@@ -381,10 +408,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
       longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
     });
-    setCart({});
+    // On NE vide PAS le panier ici : pour le mobile money la commande n'existe
+    // vraiment qu'une fois payée. Le panier est vidé par l'appelant (espèces
+    // tout de suite, mobile money seulement après confirmation du paiement).
     await reloadOrders();
     return order;
   };
+
+  const clearCart = () => setCart({});
 
   const activeOrder = useMemo(() => {
     const live = orders.filter(o => o.statut !== 'livree' && o.statut !== 'refusee' && o.statut !== 'annulee');
@@ -407,7 +438,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     restoById, dishById, dishesOfResto,
     likes, toggleLike, favList,
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
-    cart, addToCart, cartInc, cartDec, cartRemove,
+    cart, addToCart, cartInc, cartDec, cartRemove, clearCart,
     cartLines, cartCount, subtotal, deliveryFee, total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,
   };

@@ -9,3 +9,6 @@ channels
 daphne
 psycopg2-binary
 requests
+reportlab
+qrcode
+python-dotenv

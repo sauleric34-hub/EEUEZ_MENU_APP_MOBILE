@@ -34,6 +34,7 @@ export interface PlatDTO {
   description: string;
   prix: string;          // prix de base fixé par le restaurant
   prix_client?: number;  // prix payé par le client (base + pourcentage plateforme)
+  frais_livraison?: string; // frais de livraison du plat (fixé par le restaurant)
   image: string | null;
   images: string[];
   is_available: boolean;
@@ -99,8 +100,10 @@ export interface RestoDTO {
   note_moyenne: number;
   temps_livraison_moyen: number;
   frais_livraison: string;
+  prix_reservation?: string;
   nombre_plats: number;
   nombre_abonnes: number;
+  is_following?: boolean;
   plat_du_jour?: number | null;
   plats?: PlatDTO[];
 }
@@ -125,6 +128,21 @@ export interface CommandeDTO {
   restaurant: number | null;
   restaurant_details: RestoDTO | null;
   lignes: LigneCommandeDTO[];
+  // false tant qu'un paiement mobile money n'a pas abouti (commande « fantôme »).
+  paiement_confirme?: boolean;
+  // Suivi cartographique en direct (présent dès qu'une livraison existe).
+  suivi?: SuiviDTO | null;
+}
+
+export interface GeoPointDTO { lat: number; lon: number; }
+
+export interface SuiviDTO {
+  statut: string;
+  livreur: { nom: string | null; telephone: string; note: number } | null;
+  livreur_position: GeoPointDTO | null;
+  destination: GeoPointDTO | null;
+  restaurant_position: GeoPointDTO | null;
+  code_present: boolean;
 }
 
 export interface RecoPlatDTO extends PlatDTO {
@@ -157,8 +175,39 @@ export interface AbonnementToggleDTO {
   abonnements: number[];
 }
 
-/** Réponse de l'endpoint POST /client/commandes/{id}/initier_paiement/ */
+/** Réponse d'initiation de paiement (commande ou réservation).
+ *  `free` = réservation gratuite déjà confirmée (pas de paiement). */
 export interface MonetbilPaymentDTO {
-  payment_url: string;
-  payment_ref: string;
+  payment_url?: string;
+  payment_ref?: string;
+  free?: boolean;
+}
+
+// ─── Galerie ─────────────────────────────────────────────────
+export interface GalleryMediaDTO {
+  id?: number;
+  type: 'image' | 'video';
+  url: string;
+  legende: string;
+  ordre?: number;
+}
+export interface GalleryDTO {
+  medias: GalleryMediaDTO[];
+  plats_photos: { type: 'image'; url: string; legende: string }[];
+}
+
+// ─── Réservations ────────────────────────────────────────────
+export type ReservationStatut = 'en_attente' | 'acceptee' | 'refusee' | 'payee' | 'annulee';
+export interface ReservationDTO {
+  id: number;
+  restaurant: number;
+  restaurant_nom: string | null;
+  nom: string;
+  date_reservation: string;
+  nombre_personnes: number;
+  statut: ReservationStatut;
+  prix: number;
+  code: string;
+  notes: string;
+  created_at: string;
 }

@@ -36,7 +36,7 @@ def restaurants_list(request):
     q = request.GET.get('q', '').strip()
     if q:
         qs = qs.filter(nom__icontains=q)
-    return Response(RestaurantProfileSerializer(qs, many=True).data)
+    return Response(RestaurantProfileSerializer(qs, many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -46,7 +46,7 @@ def restaurant_detail(request, id):
         r = RestaurantProfile.objects.get(id=id)
     except RestaurantProfile.DoesNotExist:
         return Response({'error': 'Restaurant introuvable'}, status=status.HTTP_404_NOT_FOUND)
-    data = RestaurantProfileSerializer(r).data
+    data = RestaurantProfileSerializer(r, context={'request': request}).data
     plats = Plat.objects.filter(restaurant=r, is_available=True, is_visible=True)
     data['plats'] = PlatSerializer(plats, many=True, context={'request': request}).data
     return Response(data)
@@ -300,7 +300,7 @@ def recommandations(request):
 
     plats_payload = []
     for plat, score, dist, detail in recommendation.recommander_plats(lat, lon, limit=limit):
-        data = PlatSerializer(plat).data
+        data = PlatSerializer(plat, context={'request': request}).data
         data['score'] = score
         data['distance_km'] = dist
         data['temps_estime'] = (
@@ -312,7 +312,7 @@ def recommandations(request):
 
     restos_payload = []
     for resto, score, dist in recommendation.recommander_restaurants(lat, lon, limit=limit):
-        data = RestaurantProfileSerializer(resto).data
+        data = RestaurantProfileSerializer(resto, context={'request': request}).data
         data['score'] = score
         data['distance_km'] = dist
         data['temps_estime'] = (

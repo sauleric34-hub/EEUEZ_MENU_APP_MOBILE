@@ -40,7 +40,13 @@ export function MonetbilWebView({ paymentUrl, onSuccess, onCancel, amount }: Pro
 
   const handleNavChange = (nav: WebViewNavigation) => {
     if (handledRef.current) return;
-    // Détecte la redirection vers return_url (menu.cambus.cm/payment/success/)
+    // Échec / annulation → on ferme et on prévient
+    if (nav.url.includes('/payment/failed')) {
+      handledRef.current = true;
+      setTimeout(onCancel, 800);
+      return;
+    }
+    // Succès → redirection vers /payment/success/
     if (nav.url.startsWith(MONETBIL_SUCCESS_URL) || nav.url.includes('/payment/success')) {
       handledRef.current = true;
       // Petit délai pour que la page de succès s'affiche une fraction de seconde

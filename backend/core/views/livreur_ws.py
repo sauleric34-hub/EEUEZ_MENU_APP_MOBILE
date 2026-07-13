@@ -9,8 +9,11 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
 
 from core.models import Livraison, AuditLog
 
@@ -62,6 +65,7 @@ def dashboard(request):
 
 
 # ─── CARTE DES MISSIONS ──────────────────────────────────────
+@ensure_csrf_cookie
 @livreur_required
 def carte(request):
     """Carte des livraisons actives : point de collecte (restaurant) + destination client."""
@@ -78,6 +82,7 @@ def carte(request):
         r = c.restaurant
         missions.append({
             'id': c.pk,
+            'livraison_id': liv.pk,
             'statut': liv.statut,
             'statut_label': liv.get_statut_display(),
             'restaurant': {
@@ -103,6 +108,28 @@ def carte(request):
         'resto_attache': livreur.restaurant_attache,
         'active_page': 'carte',
     })
+
+
+# ─── POSITION GPS EN DIRECT ───────────────────────────────────
+@livreur_required
+@require_POST
+def position_update(request, pk):
+    """Le workspace livreur pousse sa position GPS ici (toutes les quelques
+    secondes) pendant une livraison active. Le client la voit bouger sur sa
+    carte de suivi. Répond en JSON léger."""
+    livraison = get_object_or_404(Livraison, pk=pk, livreur=request.user)
+    try:
+        lat = float(request.POST.get('lat'))
+        lon = float(request.POST.get('lon'))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Coordonnées invalides'}, status=400)
+    # Bornes plausibles (évite d'enregistrer des valeurs aberrantes).
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return JsonResponse({'error': 'Coordonnées hors limites'}, status=400)
+    livraison.latitude_actuelle = lat
+    livraison.longitude_actuelle = lon
+    livraison.save(update_fields=['latitude_actuelle', 'longitude_actuelle'])
+    return JsonResponse({'ok': True})
 
 
 # ─── ACTIONS SUR UNE LIVRAISON ───────────────────────────────

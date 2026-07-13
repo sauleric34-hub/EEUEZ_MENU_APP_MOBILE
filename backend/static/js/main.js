@@ -28,26 +28,41 @@ function initTheme() {
 }
 
 // ---- Page entry animations (GSAP if available, CSS fallback) ----
+// Robustesse : on utilise fromTo + clearProps pour qu'après l'animation les
+// styles inline (opacity/transform) soient retirés — l'élément reste visible
+// via le CSS. Un garde-fou force la visibilité au cas où un tween est
+// interrompu (évite les sections qui « apparaissent puis disparaissent »).
+const ANIM_SELECTOR = '.kpi-card, .chart-card, .glass-card, .table-wrapper, .page-header';
+
+function forceVisible() {
+  document.querySelectorAll(ANIM_SELECTOR).forEach((el) => {
+    el.style.opacity = '1';
+    el.style.transform = 'none';
+  });
+}
+
 function initPageAnimations() {
   if (typeof gsap !== 'undefined') {
-    gsap.from('.page-header', { duration: 0.5, opacity: 0, y: 20, ease: 'power3.out' });
-    gsap.from('.kpi-card', {
-      duration: 0.5, opacity: 0, y: 24, stagger: 0.06, ease: 'power3.out', delay: 0.1
-    });
-    gsap.from('.chart-card', {
-      duration: 0.55, opacity: 0, y: 20, stagger: 0.08, ease: 'power3.out', delay: 0.25
-    });
-    gsap.from('.glass-card', {
-      duration: 0.5, opacity: 0, y: 16, stagger: 0.05, ease: 'power3.out', delay: 0.15
-    });
-    gsap.from('.table-wrapper', {
-      duration: 0.5, opacity: 0, y: 20, ease: 'power3.out', delay: 0.2
-    });
+    const reveal = (sel, opts) => gsap.fromTo(
+      sel,
+      { opacity: 0, y: opts.y ?? 20 },
+      {
+        opacity: 1, y: 0, duration: opts.duration ?? 0.5, ease: 'power3.out',
+        stagger: opts.stagger, delay: opts.delay ?? 0,
+        overwrite: 'auto', clearProps: 'opacity,transform',
+      },
+    );
+    reveal('.page-header', { y: 20 });
+    reveal('.kpi-card', { y: 24, stagger: 0.06, delay: 0.1 });
+    reveal('.glass-card', { y: 16, stagger: 0.05, delay: 0.15 });
+    reveal('.chart-card', { y: 20, duration: 0.55, stagger: 0.08, delay: 0.25 });
+    reveal('.table-wrapper', { y: 20, delay: 0.2 });
+    // Garde-fou : quoi qu'il arrive, tout est visible après 1,5 s.
+    setTimeout(forceVisible, 1500);
   } else {
-    document.querySelectorAll('.kpi-card, .chart-card, .glass-card, .table-wrapper, .page-header')
-      .forEach((el, i) => {
-        el.style.animation = `fadeInUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.05}s both`;
-      });
+    document.querySelectorAll(ANIM_SELECTOR).forEach((el, i) => {
+      el.style.animation = `fadeInUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.05}s both`;
+    });
   }
 }
 
@@ -190,10 +205,18 @@ function closeModal(el) {
 
 // ---- Table row stagger animation ----
 function initTableRowAnimations() {
+  const rows = document.querySelectorAll('tbody tr');
+  if (!rows.length) return;
   if (typeof gsap !== 'undefined') {
-    gsap.from('tbody tr', {
-      duration: 0.35, opacity: 0, x: -10, stagger: 0.03, ease: 'power2.out', delay: 0.3
-    });
+    gsap.fromTo('tbody tr',
+      { opacity: 0, x: -10 },
+      {
+        opacity: 1, x: 0, duration: 0.35, stagger: 0.03, ease: 'power2.out', delay: 0.3,
+        overwrite: 'auto', clearProps: 'opacity,transform',
+      },
+    );
+    // Garde-fou : les lignes restent visibles même si le tween est interrompu.
+    setTimeout(() => rows.forEach(tr => { tr.style.opacity = '1'; tr.style.transform = 'none'; }), 1500);
   }
 }
 

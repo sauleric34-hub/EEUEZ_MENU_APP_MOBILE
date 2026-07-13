@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -15,13 +15,17 @@ import { TRACK_STEPS, TRACK_ETA } from '../data/menuData';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
 import { ConfirmReception } from '../components/ConfirmReception';
+import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 
 export default function TrackingScreen() {
-  const { colors, trackStep, activeOrder, reloadOrders } = useApp();
+  const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const etaLabel = TRACK_ETA[trackStep] ?? TRACK_ETA[0];
   const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
+  const suivi = activeOrder?.suivi ?? null;
+  // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
+  const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
 
   // Rafraîchit le statut de la commande toutes les 8 s
   useEffect(() => {
@@ -61,42 +65,59 @@ export default function TrackingScreen() {
             </View>
           </View>
 
-          {/* Mini-carte */}
+          {/* Carte — vraie carte en direct pendant la livraison, sinon aperçu */}
           <View style={[styles.map, { borderColor: colors.border }]}>
-            <LinearGradient colors={['#0f1a13', '#0a120d']} start={{ x: 0.2, y: 0.1 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
-            <Svg width="100%" height="100%" viewBox="0 0 340 200" style={StyleSheet.absoluteFill}>
-              <Path d="M40 165 C 110 150, 130 60, 210 60 S 300 45, 305 40" fill="none"
-                stroke={Brand.accent} strokeWidth={3.5} strokeLinecap="round" strokeDasharray="10 12" opacity={0.9} />
-            </Svg>
-            <View style={styles.startDot} />
-            <View style={styles.destWrap}>
-              <View style={styles.destPing} />
-              <MapPin size={20} color={Brand.accent} fill={Brand.accent} strokeWidth={1.5} />
-            </View>
-            <View style={styles.scooter}>
-              <View style={styles.scooterBadge}><Bike size={24} color="#fff" strokeWidth={2.2} /></View>
-            </View>
+            {showLiveMap ? (
+              <LiveDeliveryMap
+                driver={suivi?.livreur_position ?? null}
+                destination={suivi?.destination ?? null}
+                dark={mode === 'dark'}
+              />
+            ) : (
+              <>
+                <LinearGradient colors={['#0f1a13', '#0a120d']} start={{ x: 0.2, y: 0.1 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
+                <Svg width="100%" height="100%" viewBox="0 0 340 200" style={StyleSheet.absoluteFill}>
+                  <Path d="M40 165 C 110 150, 130 60, 210 60 S 300 45, 305 40" fill="none"
+                    stroke={Brand.accent} strokeWidth={3.5} strokeLinecap="round" strokeDasharray="10 12" opacity={0.9} />
+                </Svg>
+                <View style={styles.startDot} />
+                <View style={styles.destWrap}>
+                  <View style={styles.destPing} />
+                  <MapPin size={20} color={Brand.accent} fill={Brand.accent} strokeWidth={1.5} />
+                </View>
+                <View style={styles.scooter}>
+                  <View style={styles.scooterBadge}><Bike size={24} color="#fff" strokeWidth={2.2} /></View>
+                </View>
+              </>
+            )}
           </View>
 
-          {/* Livreur */}
-          <View style={[styles.courier, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.courierAvatar}>
-              <Bike size={24} color="#fff" strokeWidth={2} />
-            </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <Text style={[displayFont(15.5, '700'), { color: colors.text }]}>Ibrahim · Livreur</Text>
-              <View style={[styles.row, { gap: 4, marginTop: 2 }]}>
-                <Star size={12} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                <Text style={[bodyFont(12, '700'), { color: Brand.yellow }]}>4.9 · Yamaha bleue</Text>
+          {/* Livreur — infos réelles dès qu'un livreur est assigné */}
+          {suivi?.livreur && (
+            <View style={[styles.courier, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.courierAvatar}>
+                <Bike size={24} color="#fff" strokeWidth={2} />
+              </LinearGradient>
+              <View style={{ flex: 1 }}>
+                <Text style={[displayFont(15.5, '700'), { color: colors.text }]}>
+                  {suivi.livreur.nom || 'Livreur'} · Livreur
+                </Text>
+                {suivi.livreur.note > 0 && (
+                  <View style={[styles.row, { gap: 4, marginTop: 2 }]}>
+                    <Star size={12} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
+                    <Text style={[bodyFont(12, '700'), { color: Brand.yellow }]}>{suivi.livreur.note.toFixed(1)}</Text>
+                  </View>
+                )}
               </View>
+              {!!suivi.livreur.telephone && (
+                <PressableScale onPress={() => Linking.openURL(`tel:${suivi.livreur!.telephone}`)}>
+                  <View style={[styles.contactBtn, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>
+                    <Phone size={18} color="#8fd6a8" strokeWidth={2.2} />
+                  </View>
+                </PressableScale>
+              )}
             </View>
-            <View style={[styles.contactBtn, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>
-              <Phone size={18} color="#8fd6a8" strokeWidth={2.2} />
-            </View>
-            <View style={[styles.contactBtn, { backgroundColor: Brand.accent + '22', borderColor: Brand.accent + '55' }]}>
-              <MessageCircle size={18} color={Brand.accentLight} strokeWidth={2.2} />
-            </View>
-          </View>
+          )}
 
           {/* Confirmation de réception — visible quand le livreur est en route */}
           {enLivraison && (

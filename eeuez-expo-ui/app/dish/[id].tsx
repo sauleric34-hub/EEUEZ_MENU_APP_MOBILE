@@ -45,6 +45,7 @@ export default function DishDetail() {
   const [qty, setQty] = useState(1);
   const [imgIndex, setImgIndex] = useState(0);
   const [rating, setRating] = useState<{ note: string; mine: number | null } | null>(null);
+  const [rateErr, setRateErr] = useState<string | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
   const addPop = useRef(new Animated.Value(1)).current;
 
@@ -67,7 +68,6 @@ export default function DishDetail() {
   const shownRating = rating?.note ?? dish.rating;
   const myRating = rating?.mine ?? dish.myRating;
   const gallery = dish.images.length ? dish.images : [];
-  const topInset = Math.max(insets.top - 8, 6);
 
   const addAndGo = () => {
     // Petit pop de confirmation avant de rejoindre le panier
@@ -84,10 +84,14 @@ export default function DishDetail() {
   };
 
   const rate = async (note: number) => {
+    setRateErr(null);
     try {
       const res = await ratePlat(dish.id, note);
       setRating({ note: String(res.note), mine: res.ma_note });
-    } catch { /* StarRating garde l'affichage local */ }
+    } catch (e) {
+      // On surface l'erreur (session expirée / réseau) au lieu de la masquer.
+      setRateErr(e instanceof Error ? e.message : 'Impossible d\'enregistrer la note.');
+    }
   };
 
   // Ouvre (ou retrouve) la discussion sur CE plat puis pousse la page chat
@@ -135,12 +139,6 @@ export default function DishDetail() {
             </LinearGradient>
           )}
           <KenteStripe height={8} style={styles.heroStripe} />
-          <PressableScale onPress={() => router.back()} style={[styles.heroBtn, { top: topInset }]}>
-            <ChevronLeft size={22} color="#fff" />
-          </PressableScale>
-          <PressableScale onPress={() => toggleLike(dish.id)} style={[styles.heroBtn, styles.heroBtnR, { top: topInset }]}>
-            <Heart size={19} color={liked ? Brand.accent : '#fff'} fill={liked ? Brand.accent : 'transparent'} strokeWidth={2.3} />
-          </PressableScale>
         </View>
 
         <View style={{ padding: 20 }}>
@@ -149,18 +147,20 @@ export default function DishDetail() {
             <Text style={[displayFont(22, '800'), { color: Brand.accentLight }]}>{formatPrice(dish.price)}</Text>
           </View>
 
-          {/* Livraison — frais fixés par le restaurant */}
-          {resto && (
-            <View style={styles.deliveryRow}>
-              <Bike size={15} color={Brand.accentLight} strokeWidth={2.3} />
-              <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>
-                Livraison {resto.fraisLivraison > 0 ? formatPrice(resto.fraisLivraison) : 'offerte'}
-              </Text>
-              <View style={styles.sep} />
-              <Clock size={14} color="#8fd6a8" strokeWidth={2.3} />
-              <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>~{resto.tempsLivraison} min</Text>
-            </View>
-          )}
+          {/* Livraison — frais fixés par le restaurant pour ce plat */}
+          <View style={styles.deliveryRow}>
+            <Bike size={15} color={Brand.accentLight} strokeWidth={2.3} />
+            <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>
+              Livraison {dish.fraisLivraison > 0 ? formatPrice(dish.fraisLivraison) : 'offerte'}
+            </Text>
+            {resto && (
+              <>
+                <View style={styles.sep} />
+                <Clock size={14} color="#8fd6a8" strokeWidth={2.3} />
+                <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>~{resto.tempsLivraison} min</Text>
+              </>
+            )}
+          </View>
 
           <View style={styles.statsRow}>
             <StatCard Icon={Flame} color={Brand.yellow} value={dish.orders} label="commandes" bg={colors.surface} border={colors.border} />
@@ -171,9 +171,13 @@ export default function DishDetail() {
           {/* Restaurant */}
           <PressableScale onPress={() => router.push(`/resto/${dish.restoId}`)}>
             <View style={[styles.restoStrip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <LinearGradient colors={restoGrad} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.restoIcon}>
-                <RestoIcon size={22} color="#fff" strokeWidth={2.1} />
-              </LinearGradient>
+              {resto?.image ? (
+                <Image source={{ uri: resto.image }} style={styles.restoIcon} resizeMode="cover" />
+              ) : (
+                <LinearGradient colors={restoGrad} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.restoIcon}>
+                  <RestoIcon size={22} color="#fff" strokeWidth={2.1} />
+                </LinearGradient>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={[displayFont(15, '700'), { color: colors.text }]}>{restoName}</Text>
                 <View style={[styles.row, { gap: 4, marginTop: 2 }]}>
@@ -212,32 +216,39 @@ export default function DishDetail() {
             <View style={[styles.rateBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[displayFont(16, '700'), { color: colors.text, marginBottom: 12 }]}>Notez ce plat</Text>
               <StarRating value={myRating} onRate={rate} colors={colors} />
+              {rateErr && (
+                <Text style={[bodyFont(12, '600'), { color: '#ff6b70', marginTop: 8, textAlign: 'center' }]}>{rateErr}</Text>
+              )}
             </View>
           )}
 
-          {/* Actions */}
+          {/* Actions — Discuter (plein, accent) + Restaurant (contour) */}
           <View style={styles.actionRow}>
-            <PressableScale onPress={discuss} style={{ flex: 1 }}>
-              <View style={[styles.actionBtn, { backgroundColor: Brand.accent + '14', borderColor: Brand.accent + '55' }]}>
-                <View style={[styles.actionIcon, { backgroundColor: Brand.accent }]}>
-                  <MessageCircle size={15} color="#fff" strokeWidth={2.4} />
-                </View>
-                <Text style={[bodyFont(14, '800'), { color: Brand.accentLight }]}>
+            <PressableScale onPress={discuss} style={{ flex: 1.4 }}>
+              <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.actionPrimary, glow(Brand.accent, 14)]}>
+                <MessageCircle size={18} color="#fff" strokeWidth={2.5} />
+                <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>
                   {openingChat ? 'Ouverture…' : 'Discuter'}
                 </Text>
-              </View>
+              </LinearGradient>
             </PressableScale>
             <PressableScale onPress={() => router.push(`/resto/${dish.restoId}`)} style={{ flex: 1 }}>
-              <View style={[styles.actionBtn, { backgroundColor: Brand.green + '14', borderColor: Brand.green + '55' }]}>
-                <View style={[styles.actionIcon, { backgroundColor: Brand.green }]}>
-                  <Store size={15} color="#fff" strokeWidth={2.4} />
-                </View>
-                <Text style={[bodyFont(14, '800'), { color: '#8fd6a8' }]}>Restaurant</Text>
+              <View style={[styles.actionSecondary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Store size={18} color={Brand.green} strokeWidth={2.4} />
+                <Text style={[bodyFont(14, '800'), { color: colors.text }]}>Restaurant</Text>
               </View>
             </PressableScale>
           </View>
         </View>
       </ScrollView>
+
+      {/* Boutons flottants — épinglés en haut de l'image, hors du défilement */}
+      <PressableScale onPress={() => router.back()} style={[styles.floatBtn, { top: insets.top + 8, left: 16 }]}>
+        <ChevronLeft size={22} color="#fff" />
+      </PressableScale>
+      <PressableScale onPress={() => toggleLike(dish.id)} style={[styles.floatBtn, { top: insets.top + 8, right: 16 }]}>
+        <Heart size={19} color={liked ? Brand.accent : '#fff'} fill={liked ? Brand.accent : 'transparent'} strokeWidth={2.3} />
+      </PressableScale>
 
       {/* Barre de commande — juste au-dessus de la navigation système */}
       <View style={[styles.orderBar, { backgroundColor: colors.nav, borderColor: colors.border, bottom: Math.max(insets.bottom, 10) + 8 }, glow(colors.shadow, 30)]}>
@@ -289,16 +300,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 12, borderRadius: 20, borderWidth: 1, marginTop: 16,
   },
-  restoIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  restoIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: Radius.pill, borderWidth: 1 },
   rateBox: { marginTop: 24, padding: 18, borderRadius: 22, borderWidth: 1, alignItems: 'center' },
   actionRow: { flexDirection: 'row', gap: 12, marginTop: 22 },
-  actionBtn: {
+  actionPrimary: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 13, borderRadius: Radius.pill, borderWidth: 1.5,
+    paddingVertical: 15, borderRadius: Radius.pill,
   },
-  actionIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  actionSecondary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 15, borderRadius: Radius.pill, borderWidth: 1.5,
+  },
+  floatBtn: {
+    position: 'absolute', width: 42, height: 42, borderRadius: 21, zIndex: 50,
+    backgroundColor: 'rgba(11,16,13,0.82)', alignItems: 'center', justifyContent: 'center',
+  },
   orderBar: {
     position: 'absolute', left: 14, right: 14, zIndex: 30,
     flexDirection: 'row', alignItems: 'center', gap: 10,

@@ -4,6 +4,7 @@ from django.db.models import Sum, Avg
 from .models import (
     RestaurantProfile, Categorie, Plat, Commande, LigneCommande,
     Livraison, Avis, Favori, Abonnement, Conversation, Message, AdresseLivraison,
+    RestaurantMedia, Reservation,
 )
 
 User = get_user_model()
@@ -38,6 +39,7 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
     note_moyenne = serializers.ReadOnlyField()
     nombre_plats = serializers.SerializerMethodField()
     nombre_abonnes = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
     plat_du_jour = serializers.SerializerMethodField()
 
     class Meta:
@@ -45,7 +47,8 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'nom', 'description', 'adresse', 'ville', 'latitude', 'longitude',
             'logo', 'cover_image', 'is_open', 'note_moyenne', 'temps_livraison_moyen',
-            'frais_livraison', 'nombre_plats', 'nombre_abonnes', 'plat_du_jour',
+            'frais_livraison', 'prix_reservation', 'nombre_plats', 'nombre_abonnes',
+            'is_following', 'plat_du_jour',
         ]
 
     def get_nombre_plats(self, obj):
@@ -53,6 +56,13 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
 
     def get_nombre_abonnes(self, obj):
         return obj.abonnes.count()
+
+    def get_is_following(self, obj):
+        # Le client courant suit-il déjà ce restaurant ?
+        request = self.context.get('request')
+        if not request or not request.user or request.user.is_anonymous:
+            return False
+        return obj.abonnes.filter(client=request.user).exists()
 
     def get_plat_du_jour(self, obj):
         from django.utils import timezone
@@ -71,20 +81,28 @@ class PlatSerializer(serializers.ModelSerializer):
     composition = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     prix_client = serializers.SerializerMethodField()
+    est_favori = serializers.SerializerMethodField()
 
     class Meta:
         model = Plat
         fields = [
             'id', 'restaurant', 'restaurant_nom', 'categorie', 'categorie_nom',
-            'nom', 'description', 'prix', 'prix_client', 'image', 'images', 'is_available', 'is_popular',
+            'nom', 'description', 'prix', 'prix_client', 'frais_livraison', 'image', 'images', 'is_available', 'is_popular',
             'allergies', 'ingredients', 'composition', 'note', 'nombre_notes', 'ma_note',
-            'nombre_commandes', 'nombre_likes',
+            'nombre_commandes', 'nombre_likes', 'est_favori',
         ]
         read_only_fields = ['restaurant']
 
     def get_prix_client(self, obj):
         # Prix réellement affiché et payé par le client (base + pourcentage plateforme)
         return obj.prix_client
+
+    def get_est_favori(self, obj):
+        # Le client courant a-t-il déjà aimé ce plat ?
+        request = self.context.get('request')
+        if not request or not request.user or request.user.is_anonymous:
+            return False
+        return obj.favoris.filter(client=request.user).exists()
 
     def get_categorie_nom(self, obj):
         return obj.categorie.nom if obj.categorie else None
@@ -93,11 +111,9 @@ class PlatSerializer(serializers.ModelSerializer):
         return obj.restaurant.nom if obj.restaurant else None
 
     def get_note(self, obj):
-        # Moyenne des notes clients du plat ; repli sur la note du restaurant.
+        # Note du plat = moyenne de ses notes (étoiles) clients. 0 si pas encore noté.
         avg = obj.notes.aggregate(a=Avg('note'))['a']
-        if avg is not None:
-            return round(avg, 1)
-        return obj.restaurant.note_moyenne if obj.restaurant else 0
+        return round(avg, 1) if avg is not None else 0
 
     def get_nombre_notes(self, obj):
         return obj.notes.count()
@@ -165,18 +181,48 @@ class CommandeSerializer(serializers.ModelSerializer):
     restaurant_details = RestaurantProfileSerializer(source='restaurant', read_only=True)
     client_details = UserSerializer(source='client', read_only=True)
     livraison_statut = serializers.SerializerMethodField()
+    suivi = serializers.SerializerMethodField()
 
     class Meta:
         model = Commande
         fields = [
             'id', 'client', 'client_details', 'restaurant', 'restaurant_details',
             'statut', 'livraison_statut', 'montant_total', 'adresse_livraison',
-            'notes', 'delai_estime', 'created_at', 'lignes',
+            'notes', 'delai_estime', 'created_at', 'lignes', 'paiement_confirme',
+            'suivi',
         ]
 
     def get_livraison_statut(self, obj):
         liv = getattr(obj, 'livraison', None)
         return liv.statut if liv else None
+
+    def get_suivi(self, obj):
+        """Données de suivi cartographique en direct pour l'app cliente :
+        position du livreur, lieu de livraison, point de collecte (restaurant)
+        et coordonnées du livreur. Renvoie None hors livraison active."""
+        liv = getattr(obj, 'livraison', None)
+        if not liv:
+            return None
+
+        def _pt(lat, lon):
+            if lat is None or lon is None:
+                return None
+            return {'lat': float(lat), 'lon': float(lon)}
+
+        livreur = liv.livreur
+        r = obj.restaurant
+        return {
+            'statut': liv.statut,
+            'livreur': {
+                'nom': (livreur.get_full_name() or livreur.username) if livreur else None,
+                'telephone': getattr(livreur, 'telephone', '') if livreur else '',
+                'note': float(getattr(livreur, 'note_moyenne', 0) or 0) if livreur else 0,
+            } if livreur else None,
+            'livreur_position': _pt(liv.latitude_actuelle, liv.longitude_actuelle),
+            'destination': _pt(obj.latitude_livraison, obj.longitude_livraison),
+            'restaurant_position': _pt(getattr(r, 'latitude', None), getattr(r, 'longitude', None)) if r else None,
+            'code_present': bool(liv.code_confirmation),
+        }
 
 
 class LivraisonSerializer(serializers.ModelSerializer):
@@ -195,6 +241,32 @@ class AvisSerializer(serializers.ModelSerializer):
         model = Avis
         fields = ['id', 'commande', 'client', 'restaurant', 'note', 'commentaire', 'reponse_restaurant', 'created_at']
         read_only_fields = ['client', 'restaurant']
+
+
+class RestaurantMediaSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RestaurantMedia
+        fields = ['id', 'type', 'url', 'legende', 'ordre']
+
+    def get_url(self, obj):
+        return obj.fichier.url if obj.fichier else None
+
+
+class ReservationSerializer(serializers.ModelSerializer):
+    restaurant_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Reservation
+        fields = [
+            'id', 'restaurant', 'restaurant_nom', 'nom', 'date_reservation',
+            'nombre_personnes', 'statut', 'prix', 'code', 'notes', 'created_at',
+        ]
+        read_only_fields = ['statut', 'prix', 'code', 'restaurant_nom']
+
+    def get_restaurant_nom(self, obj):
+        return obj.restaurant.nom if obj.restaurant else None
 
 
 class FavoriSerializer(serializers.ModelSerializer):

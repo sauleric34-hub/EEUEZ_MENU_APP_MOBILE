@@ -114,26 +114,37 @@ export default function LocationPicker() {
   };
 
   const confirm = async () => {
-    if (!address || busy) return;
+    if (busy) return;
+    // Coordonnées arrondies (le backend n'accepte que 6 décimales)
+    const lat = Number(center.latitude.toFixed(6));
+    const lon = Number(center.longitude.toFixed(6));
+    const adresseText = address || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    // Cible locale : ce qui sera livré, que l'enregistrement réussisse ou non
+    const target = {
+      adresse: adresseText, details: details.trim(), latitude: lat, longitude: lon,
+      label: label.trim() || undefined,
+    };
     setBusy(true);
     try {
       if (saveIt) {
-        const saved = await addAddress({
-          label: label.trim(), adresse: address, details: details.trim(),
-          latitude: center.latitude, longitude: center.longitude,
-        });
-        setDeliveryAddress({
-          adresse: saved.adresse, details: saved.details, latitude: Number(saved.latitude), longitude: Number(saved.longitude),
-          label: saved.label, savedId: saved.id,
-        });
+        try {
+          const saved = await addAddress({
+            label: label.trim(), adresse: adresseText, details: details.trim(),
+            latitude: lat, longitude: lon,
+          });
+          setDeliveryAddress({
+            adresse: saved.adresse, details: saved.details,
+            latitude: Number(saved.latitude), longitude: Number(saved.longitude),
+            label: saved.label, savedId: saved.id,
+          });
+        } catch {
+          // Enregistrement pour plus tard échoué → on livre quand même à ce lieu cette fois-ci
+          setDeliveryAddress(target);
+        }
       } else {
-        setDeliveryAddress({
-          adresse: address, details: details.trim(), latitude: center.latitude, longitude: center.longitude,
-        });
+        setDeliveryAddress(target);
       }
       router.back();
-    } catch {
-      // en cas d'échec réseau on garde l'écran ouvert
     } finally {
       setBusy(false);
     }

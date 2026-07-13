@@ -3,16 +3,17 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Animated, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock } from 'lucide-react-native';
+import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, Images, CalendarCheck } from 'lucide-react-native';
 import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { mapResto, mapPlat, formatPrice, type Resto, type Dish } from '../../data/menuData';
 import { fetchRestaurant, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
+import { ReservationModal } from '../../components/ReservationModal';
 
 function Stat({ value, label, color, colors }: { value: string; label: string; color: string; colors: any }) {
   return (
@@ -33,6 +34,7 @@ export default function RestoProfile() {
   const [fetchedResto, setFetchedResto] = useState<Resto | null>(null);
   const [fetchedDishes, setFetchedDishes] = useState<Dish[] | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const [showReserve, setShowReserve] = useState(false);
   const followPop = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function RestoProfile() {
   if (!resto) {
     return <View style={{ flex: 1, backgroundColor: colors.page }}><Loader colors={colors} /></View>;
   }
-  const following = !!follows[resto.id];
+  const following = !!(follows[resto.id] ?? resto.isFollowing);
 
   // Petit « pop » du bouton à chaque bascule d'abonnement
   const onFollow = () => {
@@ -59,16 +61,23 @@ export default function RestoProfile() {
     toggleFollow(resto.id);
   };
 
-  // Ouvre la discussion sur le plat du jour (premier plat du resto)
+  // Ouvre la discussion sur le premier plat du resto (les conversations sont liées à un plat)
   const discuss = async () => {
+    if (openingChat) return;
     const first = dishes[0];
-    if (!first || openingChat) return;
+    if (!first) {
+      Alert.alert('Discussion indisponible', "Ce restaurant n'a pas encore de plat à discuter.");
+      return;
+    }
     setOpeningChat(true);
     try {
       const conv = await openConversation(first.id);
       router.push(`/chat/${conv.id}`);
-    } catch { /* non connecté ou hors-ligne */ }
-    finally { setOpeningChat(false); }
+    } catch (e) {
+      Alert.alert('Discussion impossible', e instanceof Error ? e.message : 'Reconnectez-vous et réessayez.');
+    } finally {
+      setOpeningChat(false);
+    }
   };
 
   return (
@@ -144,6 +153,22 @@ export default function RestoProfile() {
             </PressableScale>
           </View>
 
+          {/* Galerie + Réservation */}
+          <View style={styles.secondaryRow}>
+            <PressableScale onPress={() => router.push(`/gallery/${resto.id}`)} style={{ flex: 1 }}>
+              <View style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Images size={18} color={Brand.accentLight} strokeWidth={2.3} />
+                <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Galerie</Text>
+              </View>
+            </PressableScale>
+            <PressableScale onPress={() => setShowReserve(true)} style={{ flex: 1 }}>
+              <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.secondaryBtn, glow(Brand.green, 12)]}>
+                <CalendarCheck size={18} color="#fff" strokeWidth={2.4} />
+                <Text style={[bodyFont(13.5, '800'), { color: '#fff' }]}>Réserver une place</Text>
+              </LinearGradient>
+            </PressableScale>
+          </View>
+
           <Text style={[displayFont(18, '700'), { color: colors.text, marginTop: 24 }]}>Ses plats</Text>
           <View style={styles.grid}>
             {dishes.map(d => (
@@ -152,6 +177,15 @@ export default function RestoProfile() {
           </View>
         </View>
       </ScrollView>
+
+      <ReservationModal
+        visible={showReserve}
+        restaurantId={resto.id}
+        restaurantNom={resto.name}
+        prix={resto.prixReservation}
+        onClose={() => setShowReserve(false)}
+        onDone={() => { setShowReserve(false); router.push('/reservations'); }}
+      />
     </View>
   );
 }
@@ -182,6 +216,11 @@ const styles = StyleSheet.create({
     paddingVertical: 15, borderRadius: Radius.pill,
   },
   chatBtn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  secondaryRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  secondaryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 13, borderRadius: Radius.pill, borderWidth: 1,
+  },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 14 },
   cell: { width: '47%', flexGrow: 1 },
 });

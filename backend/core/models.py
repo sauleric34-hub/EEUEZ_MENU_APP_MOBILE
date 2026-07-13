@@ -45,6 +45,8 @@ class RestaurantProfile(models.Model):
     is_open = models.BooleanField(default=True)
     temps_livraison_moyen = models.PositiveIntegerField(default=30)
     frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=500)
+    # Prix par défaut d'une réservation de table (modifiable par le restaurant)
+    prix_reservation = models.DecimalField(max_digits=10, decimal_places=0, default=5000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -56,10 +58,27 @@ class RestaurantProfile(models.Model):
 
     @property
     def note_moyenne(self):
-        avis = self.avis_set.all()
-        if not avis.exists():
-            return 0
-        return round(sum(a.note for a in avis) / avis.count(), 1)
+        """Note du restaurant = moyenne des notes de ses plats, pondérée par
+        le nombre de commandes de chaque plat (les plats les plus commandés
+        pèsent davantage). 0 si aucun plat n'a encore de note."""
+        from django.db.models import Avg, Sum
+        total_weighted = 0.0
+        total_weight = 0.0
+        simple = []
+        for plat in self.plats.all():
+            avg = plat.notes.aggregate(a=Avg('note'))['a']
+            if avg is None:
+                continue
+            orders = plat.lignecommande_set.aggregate(t=Sum('quantite'))['t'] or 0
+            weight = orders + 1  # +1 : un plat noté mais jamais commandé compte un minimum
+            total_weighted += float(avg) * weight
+            total_weight += weight
+            simple.append(float(avg))
+        if total_weight:
+            return round(total_weighted / total_weight, 1)
+        if simple:
+            return round(sum(simple) / len(simple), 1)
+        return 0
 
     @property
     def total_commandes(self):
@@ -91,6 +110,9 @@ class Plat(models.Model):
     nom = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     prix = models.DecimalField(max_digits=10, decimal_places=0)
+    # Frais de livraison propres au plat (fixés par le restaurant à la publication).
+    # Affichés dans l'app et appliqués à la commande.
+    frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=500)
     image = models.ImageField(upload_to='plats/', blank=True, null=True)
     is_available = models.BooleanField(default=True)
     is_popular = models.BooleanField(default=False)
@@ -138,6 +160,10 @@ class Commande(models.Model):
     client = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='commandes_client')
     restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.SET_NULL, null=True, related_name='commandes')
     statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default='en_attente')
+    # Paiement confirmé : False pour une commande mobile money tant que Monetbil
+    # n'a pas notifié le succès. Une commande non confirmée n'est PAS visible du
+    # restaurant (elle n'existe réellement qu'une fois payée).
+    paiement_confirme = models.BooleanField(default=True)
     montant_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     commission_eeuez = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     montant_restaurant = models.DecimalField(max_digits=12, decimal_places=0, default=0)
@@ -407,6 +433,9 @@ class RetraitFonds(models.Model):
     mode_paiement = models.CharField(max_length=20, choices=MODE_PAIEMENT_CHOICES, default='mtn_money')
     numero_compte = models.CharField(max_length=50, blank=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    # Suivi du décaissement (payout Monetbil ou traitement manuel)
+    payout_reference = models.CharField(max_length=100, blank=True)
+    payout_message = models.CharField(max_length=250, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
 
@@ -435,3 +464,57 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} par {self.user} — {self.created_at.strftime('%d/%m/%Y %H:%M')}"
+
+
+class RestaurantMedia(models.Model):
+    """Photo ou vidéo de la galerie d'un restaurant."""
+    TYPE_CHOICES = [('image', 'Photo'), ('video', 'Vidéo')]
+    restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='medias')
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES, default='image')
+    fichier = models.FileField(upload_to='galerie/')
+    legende = models.CharField(max_length=200, blank=True)
+    ordre = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Média restaurant'
+        verbose_name_plural = 'Médias restaurant'
+        ordering = ['ordre', '-created_at']
+
+    def __str__(self):
+        return f"{self.get_type_display()} — {self.restaurant.nom}"
+
+
+class Reservation(models.Model):
+    """Réservation d'une table dans un restaurant."""
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente'),
+        ('acceptee', 'Acceptée'),
+        ('refusee', 'Refusée'),
+        ('payee', 'Payée'),
+        ('annulee', 'Annulée'),
+    ]
+    client = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reservations')
+    restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='reservations')
+    nom = models.CharField(max_length=150)
+    date_reservation = models.DateTimeField()
+    nombre_personnes = models.PositiveSmallIntegerField(default=1)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    # Prix fixé par le restaurant (copié depuis prix_reservation, modifiable à l'acceptation)
+    prix = models.DecimalField(max_digits=10, decimal_places=0, default=0)
+    notes = models.TextField(blank=True)
+    # Code du ticket (QR / PDF), généré au paiement — cf. Livraison.generer_code
+    code = models.CharField(max_length=8, blank=True)
+    transaction = models.ForeignKey(
+        'Transaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='reservations',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Réservation'
+        verbose_name_plural = 'Réservations'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Réservation #{self.pk} — {self.nom} @ {self.restaurant.nom}"

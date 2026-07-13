@@ -4,12 +4,12 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
-import { MapPin, Sun, Moon, Star, Bike, Timer, Store, LocateFixed } from 'lucide-react-native';
+import { MapPin, Sun, Moon, Star, Bike, Timer, Store, LocateFixed, UtensilsCrossed } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice, formatKm, type Resto } from '../../data/menuData';
@@ -120,7 +120,11 @@ export default function CarteScreen() {
                   style={[styles.pin, { borderColor: active ? Brand.yellow : 'rgba(255,255,255,0.85)' }]}
                 >
                   <View style={{ transform: [{ rotate: '-45deg' }] }}>
-                    <r.icon size={19} color="#fff" strokeWidth={2.2} />
+                    {r.image ? (
+                      <Image source={{ uri: r.image }} style={styles.pinImg} />
+                    ) : (
+                      <r.icon size={19} color="#fff" strokeWidth={2.2} />
+                    )}
                   </View>
                 </LinearGradient>
                 <View style={styles.pinTip} />
@@ -186,18 +190,21 @@ export default function CarteScreen() {
           )}
 
           <View style={styles.cardActions}>
+            {/* Bouton principal : ouvrir la fiche resto (pleine largeur, lisible) */}
+            <PressableScale onPress={() => router.push(`/resto/${sel.id}`)} style={{ flex: 1 }}>
+              <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.seeDish, glow(Brand.accent, 14)]}>
+                <Store size={18} color="#fff" strokeWidth={2.4} />
+                <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Voir le restaurant</Text>
+              </LinearGradient>
+            </PressableScale>
+            {/* Accès rapide au plat du jour → icône */}
             {selDish && (
-              <PressableScale onPress={() => router.push(`/dish/${selDish.id}`)} style={{ flex: 1 }}>
-                <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.seeDish}>
-                  <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Voir le plat</Text>
-                </LinearGradient>
+              <PressableScale onPress={() => router.push(`/dish/${selDish.id}`)}>
+                <View style={[styles.iconAction, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <UtensilsCrossed size={20} color={Brand.accentLight} strokeWidth={2.3} />
+                </View>
               </PressableScale>
             )}
-            <PressableScale onPress={() => router.push(`/resto/${sel.id}`)} style={selDish ? undefined : { flex: 1 }}>
-              <View style={[styles.restoBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Store size={20} color={colors.text} strokeWidth={2.2} />
-              </View>
-            </PressableScale>
           </View>
         </View>
       )}
@@ -210,8 +217,9 @@ const styles = StyleSheet.create({
   pinWrap: { alignItems: 'center', paddingTop: 12 },
   pin: {
     width: 46, height: 46, borderRadius: 23, borderBottomLeftRadius: 4, borderWidth: 2.5,
-    transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center',
+    transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
+  pinImg: { width: 40, height: 40, borderRadius: 20 },
   pinTip: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.35)', marginTop: 3 },
   pinBadge: {
     position: 'absolute', top: 0, right: -12, zIndex: 5,
@@ -237,7 +245,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     marginHorizontal: 14, padding: 12, borderRadius: 18, borderWidth: 1,
   },
-  cardActions: { flexDirection: 'row', gap: 10, padding: 14 },
-  seeDish: { paddingVertical: 14, borderRadius: Radius.pill, alignItems: 'center' },
-  restoBtn: { paddingHorizontal: 18, paddingVertical: 14, borderRadius: Radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cardActions: { flexDirection: 'row', gap: 10, padding: 14, alignItems: 'center' },
+  seeDish: { flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  iconAction: { width: 52, height: 52, borderRadius: Radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

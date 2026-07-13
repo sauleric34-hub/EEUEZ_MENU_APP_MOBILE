@@ -45,8 +45,9 @@ export function PressableScale({ onPress, children, style, disabled, scaleTo = 0
       disabled={disabled}
       onPressIn={() => to(scaleTo)}
       onPressOut={() => to(1)}
+      style={style}
     >
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
+      <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>
     </Pressable>
   );
 }

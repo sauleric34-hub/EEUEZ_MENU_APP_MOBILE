@@ -76,7 +76,7 @@ export default function HomeScreen() {
             <PressableScale onPress={goPlats} style={{ flex: 1 }}>
               <View style={[styles.searchPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Search size={16} color={Brand.accentLight} strokeWidth={2.4} />
-                <Text style={[bodyFont(14, '500'), { color: colors.faint }]}>Rechercher un plat…</Text>
+                <Text style={[bodyFont(14, '500'), { color: colors.faint }]}>Rechercher un plat, un restaurant…</Text>
               </View>
             </PressableScale>
             <PressableScale onPress={goPlats}>

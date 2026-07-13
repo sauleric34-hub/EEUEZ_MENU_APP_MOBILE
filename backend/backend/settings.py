@@ -3,8 +3,26 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# DEBUG=True par défaut pour le dev local ; la prod DOIT poser DEBUG=False (voir render.yaml).
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# Charge un fichier .env local s'il existe (dev). En prod (cPanel/Passenger), les
+# variables sont fournies par l'environnement — python-dotenv est alors facultatif.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except Exception:
+    pass
+
+
+def _env_bool(name, default):
+    """Lit un booléen depuis l'environnement, insensible à la casse.
+    Accepte true/false, 1/0, yes/no, on/off (ex. DEBUG=False)."""
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+# DEBUG=True par défaut pour le dev local ; la prod DOIT poser DEBUG=False.
+DEBUG = _env_bool('DEBUG', True)
 
 # En production (DEBUG=False), SECRET_KEY DOIT venir de l'environnement.
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -66,30 +84,21 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 ASGI_APPLICATION = 'backend.asgi.application'
 
-# Base de données : Postgres si DATABASE_URL est défini, sinon SQLite (dev).
-def _parse_database_url(url):
-    from urllib.parse import urlparse, unquote
-    p = urlparse(url)
-    return {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': (p.path or '/').lstrip('/'),
-        'USER': unquote(p.username or ''),
-        'PASSWORD': unquote(p.password or ''),
-        'HOST': p.hostname or '',
-        'PORT': str(p.port or ''),
+
+# Base de données MySQL (cPanel). Les identifiants viennent des variables
+# d'environnement : AUCUN secret n'est écrit en dur dans le code (sinon il finit
+# dans Git). Le mot de passe DOIT être fourni via DB_PASSWORD.
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('DB_NAME', 'ch6973134ef1cfd_menu'),
+        'USER': os.environ.get('DB_USER', 'ch6973134ef1cfd_yan'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
         'CONN_MAX_AGE': 600,
     }
-
-_database_url = os.environ.get('DATABASE_URL')
-if _database_url:
-    DATABASES = {'default': _parse_database_url(_database_url)}
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -108,10 +117,20 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Stockage : les médias uploadés passent par un stockage qui translittère les
+# noms accentués en ASCII (évite les UnicodeEncodeError sur locale ASCII/POSIX).
+STORAGES = {
+    'default': {
+        'BACKEND': 'core.storage.ASCIIFileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -146,7 +165,7 @@ REST_FRAMEWORK = {
 # En-têtes de sécurité (actifs uniquement en production).
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', True)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
@@ -159,12 +178,23 @@ if not DEBUG:
     ]
 
 # ─── Monetbil ─────────────────────────────────────────────────────────────────
-# Récupérés depuis les variables d'environnement en production.
-# En dev, vous pouvez les définir ici ou dans un fichier .env.
-MONETBIL_SERVICE_KEY    = os.environ.get('MONETBIL_SERVICE_KEY',    'w6UhePXsVJVWmCn29uP1AsyvSD7NaRr6')
-MONETBIL_SERVICE_SECRET = os.environ.get('MONETBIL_SERVICE_SECRET', 'cl93w0tUX3MgfOlzLxEnDk2l8cNatq8BOSXZsGrY3gVEveRodcRVHq5QLHnAoAsW')
-# URL de base publique de l'application (utilisée pour return_url et notify_url)
+# Les clés viennent UNIQUEMENT des variables d'environnement (jamais en dur dans
+# le code : le SECRET ne doit pas se retrouver dans Git). Définissez-les en cPanel
+# (prod) ou dans un fichier .env non versionné (dev).
+MONETBIL_SERVICE_KEY    = os.environ.get('MONETBIL_SERVICE_KEY',    '')
+MONETBIL_SERVICE_SECRET = os.environ.get('MONETBIL_SERVICE_SECRET', '')
+# URL de base publique de l'application (utilisée pour notify_url)
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
+# Vérifier la signature des notifications Monetbil (activer une fois validé en prod).
+MONETBIL_VERIFY_SIGN = _env_bool('MONETBIL_VERIFY_SIGN', False)
+
+# ─── Monetbil Décaissement (payout / cashout) ───────────────────────────────────
+# Produit DISTINCT du widget d'encaissement : envoie de l'argent vers un bénéficiaire
+# (retrait restaurant). Nécessite l'activation du décaissement côté Monetbil + sa doc.
+# Tant que désactivé, les retraits sont traités manuellement (aucun versement auto).
+MONETBIL_PAYOUT_ENABLED = os.environ.get('MONETBIL_PAYOUT_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+# URL de base de l'API de décaissement (à renseigner d'après la doc payout Monetbil).
+MONETBIL_PAYOUT_URL = os.environ.get('MONETBIL_PAYOUT_URL', 'https://api.monetbil.com/payout/v1')
 
 from datetime import timedelta
 SIMPLE_JWT = {

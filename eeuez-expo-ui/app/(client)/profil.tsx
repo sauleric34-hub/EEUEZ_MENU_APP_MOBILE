@@ -9,11 +9,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
   Sun, Moon, Settings, ChefHat, Bike, Check, Clock, Package, X, LogOut, TriangleAlert,
+  CalendarCheck, ChevronRight,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { formatPrice, gradForId, iconForResto } from '../../data/menuData';
+import { formatPrice, gradForId, iconForResto, absMedia, iconForPlat } from '../../data/menuData';
 import type { CommandeDTO } from '../../services/dto';
 import { ScreenBg } from '../../components/ScreenBg';
 import {
@@ -35,19 +36,28 @@ function OrderRow({ order }: { order: CommandeDTO }) {
   const { colors, restoById } = useApp();
   const router = useRouter();
   const resto = order.restaurant ? restoById(order.restaurant) : undefined;
-  const name = order.restaurant_details?.nom || resto?.name || 'Commande';
-  const Icon = resto?.icon ?? iconForResto(name, order.restaurant ?? 0);
-  const grad = resto?.grad ?? gradForId(order.restaurant ?? 0);
+  const restoName = order.restaurant_details?.nom || resto?.name || 'Commande';
   const st = STATUT[order.statut] ?? STATUT.en_attente;
   const date = new Date(order.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   const canTrack = !['livree', 'refusee', 'annulee'].includes(order.statut);
 
+  // Détail des plats commandés : nom, photo et prix
+  const lignes = order.lignes ?? [];
+  const first = lignes[0]?.plat_details;
+  const dishName = first
+    ? (lignes.length > 1 ? `${first.nom} +${lignes.length - 1} autre${lignes.length > 2 ? 's' : ''}` : first.nom)
+    : restoName;
+  const photo = first?.image ? absMedia(first.image) : undefined;
+  const Icon = first ? iconForPlat(first.nom, first.categorie_nom) : (resto?.icon ?? iconForResto(restoName, order.restaurant ?? 0));
+  const grad = resto?.grad ?? gradForId(order.restaurant ?? 0);
+
   return (
     <View style={[styles.order, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <DishTile Icon={Icon} grad={grad} size={56} iconSize={24} radius={15} />
+      <DishTile Icon={Icon} grad={grad} image={photo} size={56} iconSize={24} radius={15} />
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={[displayFont(14, '700'), { color: colors.text }]}>{name}</Text>
-        <Text style={[bodyFont(11, '500'), { color: colors.muted, marginTop: 2 }]}>{date} · {formatPrice(Number(order.montant_total))}</Text>
+        <Text numberOfLines={1} style={[displayFont(14, '700'), { color: colors.text }]}>{dishName}</Text>
+        <Text numberOfLines={1} style={[bodyFont(11, '500'), { color: colors.muted, marginTop: 2 }]}>{restoName} · {date}</Text>
+        <Text style={[displayFont(13.5, '800'), { color: Brand.accentLight, marginTop: 3 }]}>{formatPrice(Number(order.montant_total))}</Text>
         <StatusPill Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} style={{ marginTop: 7 }} />
       </View>
       {canTrack && (
@@ -129,6 +139,17 @@ export default function ProfilScreen() {
             </View>
           )}
 
+          {/* Mes réservations */}
+          <PressableScale onPress={() => router.push('/reservations')} style={{ marginTop: 20 }}>
+            <View style={[styles.linkRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.linkIcon, { backgroundColor: Brand.green + '1f' }]}>
+                <CalendarCheck size={18} color="#8fd6a8" strokeWidth={2.3} />
+              </View>
+              <Text style={[bodyFont(14.5, '700'), { color: colors.text, flex: 1 }]}>Mes réservations</Text>
+              <ChevronRight size={20} color={colors.faint} strokeWidth={2.3} />
+            </View>
+          </PressableScale>
+
           {/* Commandes */}
           <Text style={[displayFont(18, '700'), { color: colors.text, marginTop: 24 }]}>Mes commandes</Text>
           {orders.length > 0 ? (
@@ -177,6 +198,8 @@ const styles = StyleSheet.create({
   stat: { flex: 1, paddingVertical: 14, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
   favMini: { width: 120, borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
   note: { padding: 18, borderRadius: 18, borderWidth: 1, marginTop: 12 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, borderWidth: 1 },
+  linkIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   order: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },
   trackBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.pill },
   allergy: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 15, borderRadius: 20, borderWidth: 1, marginTop: 20 },

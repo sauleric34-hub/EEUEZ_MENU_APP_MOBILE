@@ -36,6 +36,7 @@
         <td style="white-space:nowrap;">
           <div style="font-weight:700;color:var(--accent-green);">{{ p.prix }} F</div>
           <div style="font-size:0.75rem;color:var(--text-muted);">client : {{ p.prix_client }} F</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">🛵 {% if p.frais_livraison %}{{ p.frais_livraison }} F{% else %}offerte{% endif %}</div>
         </td>
         <td>{{ p.vol|default:0 }}</td>
         <td>❤ {{ p.nb_likes }}</td>

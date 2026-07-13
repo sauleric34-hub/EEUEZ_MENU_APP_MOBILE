@@ -35,6 +35,7 @@ urlpatterns = [
     # Finances
     path('finances/', finances.finances_view, name='finances'),
     path('finances/transactions/', finances.transaction_list, name='transaction_list'),
+    path('finances/retraits/', finances.retraits_view, name='admin_retraits'),
     path('finances/export/', finances.export_csv, name='finance_export'),
 
     # Deliveries
@@ -67,10 +68,14 @@ urlpatterns = [
     path('resto/livreurs/', resto_ws.livreurs, name='resto_livreurs'),
     path('resto/communaute/', resto_ws.communaute, name='resto_communaute'),
     path('resto/finances/', resto_ws.finances, name='resto_finances'),
+    path('resto/galerie/', resto_ws.galerie, name='resto_galerie'),
+    path('resto/galerie/<int:pk>/supprimer/', resto_ws.galerie_delete, name='resto_galerie_delete'),
+    path('resto/reservations/', resto_ws.reservations, name='resto_reservations'),
     path('resto/profil/', resto_ws.profil, name='resto_profil'),
 
     # ─── Workspace Livreur ───
     path('livreur/', livreur_ws.dashboard, name='livreur_dashboard'),
     path('livreur/carte/', livreur_ws.carte, name='livreur_carte'),
     path('livreur/livraisons/<int:pk>/action/', livreur_ws.livraison_action, name='livreur_livraison_action'),
+    path('livreur/livraisons/<int:pk>/position/', livreur_ws.position_update, name='livreur_position_update'),
 ]

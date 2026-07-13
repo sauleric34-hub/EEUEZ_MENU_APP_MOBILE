@@ -17,6 +17,7 @@ from django.utils import timezone
 from core.models import (
     User, RestaurantProfile, Plat, PlatImage, Categorie, Commande, Livraison,
     Conversation, Message, Favori, Abonnement, RetraitFonds, AuditLog,
+    RestaurantMedia, Reservation,
 )
 
 
@@ -47,7 +48,8 @@ def dashboard(request):
     now = timezone.now()
     today = now.date()
 
-    commandes = resto.commandes
+    # Commandes payées uniquement (les paiements mobile money abandonnés n'existent pas).
+    commandes = resto.commandes.filter(paiement_confirme=True)
     cmd_jour = commandes.filter(created_at__date=today).count()
     cmd_mois = commandes.filter(created_at__month=now.month, created_at__year=now.year).count()
     en_attente = commandes.filter(statut='en_attente').count()
@@ -97,11 +99,12 @@ def dashboard(request):
 def commandes(request):
     resto = request.resto
     statut = request.GET.get('statut', '')
-    qs = resto.commandes.select_related('client', 'livraison', 'livraison__livreur').prefetch_related('lignes__plat')
+    base = resto.commandes.filter(paiement_confirme=True)
+    qs = base.select_related('client', 'livraison', 'livraison__livreur').prefetch_related('lignes__plat')
     if statut:
         qs = qs.filter(statut=statut)
     livreurs = User.objects.filter(role='livreur', restaurant_attache=resto, is_active=True)
-    counts = {row['statut']: row['c'] for row in resto.commandes.values('statut').annotate(c=Count('id'))}
+    counts = {row['statut']: row['c'] for row in base.values('statut').annotate(c=Count('id'))}
     statut_tabs = [
         (code, label, counts.get(code, 0)) for code, label in Commande.STATUT_CHOICES
     ]
@@ -111,7 +114,7 @@ def commandes(request):
         'statut': statut,
         'livreurs': livreurs,
         'statut_tabs': statut_tabs,
-        'total_count': resto.commandes.count(),
+        'total_count': base.count(),
         'active_page': 'commandes',
     })
 
@@ -121,6 +124,12 @@ def commande_action(request, pk):
     resto = request.resto
     commande = get_object_or_404(Commande, pk=pk, restaurant=resto)
     action = request.POST.get('action')
+
+    # Une commande dont le paiement mobile money n'a pas abouti n'existe pas
+    # vraiment : aucune étape ne peut la faire avancer.
+    if not commande.paiement_confirme:
+        messages.error(request, 'Cette commande n\'est pas payée.')
+        return redirect('core:resto_commandes')
 
     if action == 'accepter' and commande.statut == 'en_attente':
         commande.statut = 'acceptee'
@@ -135,7 +144,7 @@ def commande_action(request, pk):
     elif action == 'prete' and commande.statut in ('acceptee', 'en_preparation'):
         commande.statut = 'prete'
         messages.success(request, f'Commande #{commande.pk} prête — assignez un livreur.')
-    elif action == 'assigner':
+    elif action == 'assigner' and commande.statut in ('acceptee', 'en_preparation', 'prete'):
         livreur = get_object_or_404(
             User, pk=request.POST.get('livreur'), role='livreur', restaurant_attache=resto,
         )
@@ -219,6 +228,8 @@ def plat_form(request, pk=None):
                 plat = Plat(restaurant=resto)
             plat.nom = nom
             plat.prix = int(prix)
+            frais = request.POST.get('frais_livraison', '')
+            plat.frais_livraison = int(frais) if str(frais).isdigit() else 500
             plat.description = request.POST.get('description', '')
             plat.ingredients = request.POST.get('ingredients', '')
             plat.allergies = request.POST.get('allergies', '')
@@ -463,4 +474,91 @@ def profil(request):
 
     return render(request, 'resto/profil.html', {
         'resto': resto, 'active_page': 'profil',
+    })
+
+
+# ─── GALERIE ─────────────────────────────────────────────────
+@resto_required
+def galerie(request):
+    resto = request.resto
+    if request.method == 'POST':
+        files = request.FILES.getlist('medias')
+        count = 0
+        for f in files:
+            ctype = (getattr(f, 'content_type', '') or '').lower()
+            name = (f.name or '').lower()
+            is_video = ctype.startswith('video') or name.endswith(('.mp4', '.mov', '.webm', '.m4v', '.3gp'))
+            RestaurantMedia.objects.create(
+                restaurant=resto, type='video' if is_video else 'image', fichier=f,
+            )
+            count += 1
+        if count:
+            messages.success(request, f'{count} média(s) ajouté(s) à la galerie.')
+        else:
+            messages.error(request, 'Aucun fichier sélectionné.')
+        return redirect('core:resto_galerie')
+
+    return render(request, 'resto/galerie.html', {
+        'resto': resto, 'medias': resto.medias.all(), 'active_page': 'galerie',
+    })
+
+
+@resto_required
+def galerie_delete(request, pk):
+    media = get_object_or_404(RestaurantMedia, pk=pk, restaurant=request.resto)
+    media.delete()
+    messages.info(request, 'Média supprimé.')
+    return redirect('core:resto_galerie')
+
+
+# ─── RÉSERVATIONS ────────────────────────────────────────────
+@resto_required
+def reservations(request):
+    resto = request.resto
+    if request.method == 'POST':
+        form = request.POST.get('form')
+        if form == 'prix':
+            try:
+                resto.prix_reservation = int(request.POST.get('prix_reservation', resto.prix_reservation) or 0)
+                resto.save(update_fields=['prix_reservation'])
+                messages.success(request, f'Prix de réservation mis à jour : {int(resto.prix_reservation)} F.')
+            except (TypeError, ValueError):
+                messages.error(request, 'Prix invalide.')
+        else:
+            resa = get_object_or_404(Reservation, pk=request.POST.get('reservation_id'), restaurant=resto)
+            action = request.POST.get('action')
+            if action == 'accepter' and resa.statut == 'en_attente':
+                # Le resto peut ajuster le prix au moment d'accepter
+                prix = request.POST.get('prix')
+                if prix and str(prix).isdigit():
+                    resa.prix = int(prix)
+                if int(resa.prix) <= 0:
+                    # Réservation gratuite → confirmée directement (aucun paiement)
+                    resa.statut = 'payee'
+                    if not resa.code:
+                        resa.code = Livraison.generer_code()
+                    resa.save(update_fields=['statut', 'prix', 'code', 'updated_at'])
+                    messages.success(request, f'Réservation #{resa.pk} acceptée (gratuite) — confirmée.')
+                else:
+                    resa.statut = 'acceptee'
+                    resa.save(update_fields=['statut', 'prix', 'updated_at'])
+                    messages.success(request, f'Réservation #{resa.pk} acceptée ({int(resa.prix)} F).')
+            elif action == 'refuser' and resa.statut == 'en_attente':
+                resa.statut = 'refusee'
+                resa.save(update_fields=['statut', 'updated_at'])
+                messages.info(request, f'Réservation #{resa.pk} refusée.')
+            AuditLog.objects.create(
+                user=request.user, action=f'RESERVATION_{(action or "?").upper()}',
+                model_name='Reservation', object_id=str(resa.pk),
+                description={'statut': resa.statut},
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+        return redirect('core:resto_reservations')
+
+    resas = resto.reservations.select_related('client').all()
+    return render(request, 'resto/reservations.html', {
+        'resto': resto,
+        'reservations': resas,
+        'en_attente': resas.filter(statut='en_attente').count(),
+        'active_page': 'reservations',
     })

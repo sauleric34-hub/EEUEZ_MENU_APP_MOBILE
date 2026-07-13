@@ -113,3 +113,10 @@ export const initiateMonetbilPayment = (commandeId: number, phone?: string) =>
     phone ? { phone } : {},
     { auth: true },
   );
+
+/**
+ * Annule (supprime) une commande dont le paiement mobile money n'a pas abouti.
+ * Le backend refuse l'annulation si le paiement est déjà confirmé.
+ */
+export const cancelOrder = (commandeId: number) =>
+  apiPost<void>(`/client/commandes/${commandeId}/annuler/`, {}, { auth: true });

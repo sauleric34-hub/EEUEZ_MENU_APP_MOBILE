@@ -1,0 +1,61 @@
+{% extends 'resto_base.html' %}
+{% block title %}Réservations — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Réservations{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Réservations</h1>
+    <p class="page-subtitle">{{ en_attente }} en attente · gérez les demandes de table</p>
+  </div>
+</div>
+
+<!-- Prix de réservation -->
+<form method="post" class="glass-card anim-fade-up" style="padding:18px 20px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:end;gap:14px;">
+  {% csrf_token %}
+  <input type="hidden" name="form" value="prix">
+  <div class="form-group" style="margin:0;">
+    <label class="form-label">Prix d'une réservation (FCFA)</label>
+    <input type="number" name="prix_reservation" class="input-field" min="0" step="500" value="{{ resto.prix_reservation|floatformat:0 }}" style="max-width:220px;">
+  </div>
+  <button type="submit" class="btn btn-primary">Enregistrer le prix</button>
+  <div style="font-size:0.75rem;color:var(--text-muted);flex-basis:100%;">
+    Prix appliqué par défaut ; vous pouvez l'ajuster au moment d'accepter une réservation.
+  </div>
+</form>
+
+<div class="table-wrapper">
+  <table class="data-table">
+    <thead>
+      <tr><th>#</th><th>Client</th><th>Date &amp; heure</th><th>Places</th><th>Prix</th><th>Statut</th><th>Code</th><th style="min-width:220px;">Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for r in reservations %}
+      <tr>
+        <td>#{{ r.pk }}</td>
+        <td style="font-weight:600;">{{ r.nom }}</td>
+        <td style="font-size:0.85rem;">{{ r.date_reservation|date:'d M Y · H:i' }}</td>
+        <td>{{ r.nombre_personnes }}</td>
+        <td style="font-weight:700;color:var(--accent-green);">{{ r.prix|floatformat:0 }} F</td>
+        <td><span class="badge badge-{{ r.statut }}">{{ r.get_statut_display }}</span></td>
+        <td style="font-family:monospace;">{{ r.code|default:'—' }}</td>
+        <td>
+          {% if r.statut == 'en_attente' %}
+          <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">{% csrf_token %}
+            <input type="hidden" name="reservation_id" value="{{ r.pk }}">
+            <input type="number" name="prix" class="input-field" min="0" step="500" value="{{ r.prix|floatformat:0 }}" style="width:100px;padding:6px 10px;" title="Prix">
+            <button name="action" value="accepter" class="btn btn-primary btn-sm">Accepter</button>
+            <button name="action" value="refuser" class="btn btn-danger btn-sm" onclick="return confirm('Refuser cette réservation ?');">Refuser</button>
+          </form>
+          {% else %}
+          <span style="color:var(--text-muted);font-size:0.82rem;">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">Aucune réservation pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

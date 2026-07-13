@@ -1,0 +1,48 @@
+{% extends 'resto_base.html' %}
+{% block title %}Galerie — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Galerie{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Galerie</h1>
+    <p class="page-subtitle">Photos et vidéos de votre restaurant, visibles par les clients dans l'app</p>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="glass-card anim-fade-up" style="padding:22px;margin-bottom:20px;">
+  {% csrf_token %}
+  <div class="form-group" style="margin:0;">
+    <label class="form-label">Ajouter des médias (photos et/ou vidéos)</label>
+    <input type="file" name="medias" accept="image/*,video/*" multiple class="input-field" required>
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+      Formats : JPG, PNG, MP4, MOV… Sélection multiple possible.
+    </div>
+  </div>
+  <div style="margin-top:16px;"><button type="submit" class="btn btn-primary">+ Ajouter à la galerie</button></div>
+</form>
+
+<div class="glass-card anim-fade-up" style="padding:22px;">
+  <div class="chart-title" style="margin-bottom:16px;">{{ medias|length }} média{{ medias|length|pluralize }}</div>
+  {% if medias %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;">
+    {% for m in medias %}
+    <div style="position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#000;aspect-ratio:1;">
+      {% if m.type == 'video' %}
+        <video src="{{ m.fichier.url }}" style="width:100%;height:100%;object-fit:cover;" muted playsinline preload="metadata"></video>
+        <span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:0.7rem;padding:3px 8px;border-radius:8px;">▶ Vidéo</span>
+      {% else %}
+        <img src="{{ m.fichier.url }}" style="width:100%;height:100%;object-fit:cover;" alt="{{ m.legende }}">
+      {% endif %}
+      <form method="post" action="{% url 'core:resto_galerie_delete' m.pk %}" onsubmit="return confirm('Supprimer ce média ?');"
+            style="position:absolute;top:8px;right:8px;">{% csrf_token %}
+        <button class="btn btn-danger btn-sm" style="padding:4px 8px;">✕</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;color:var(--text-muted);padding:36px;">Aucun média. Ajoutez vos premières photos/vidéos ci-dessus.</div>
+  {% endif %}
+</div>
+{% endblock %}

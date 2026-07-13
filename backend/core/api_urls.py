@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import api_views
 from . import client_views
+from . import reservation_views
 
 router = DefaultRouter()
 # Viewsets routing
@@ -45,6 +46,12 @@ urlpatterns = [
 
     # Client — avis
     path('client/commandes/<int:commande_id>/avis', client_views.create_avis, name='api-client-avis'),
+
+    # Client — galerie & réservations
+    path('client/restaurants/<int:id>/galerie', reservation_views.galerie, name='api-client-galerie'),
+    path('client/reservations', reservation_views.reservations, name='api-client-reservations'),
+    path('client/reservations/<int:id>/payer', reservation_views.reservation_payer, name='api-client-reservation-payer'),
+    path('client/reservations/<int:id>/ticket', reservation_views.reservation_ticket, name='api-client-reservation-ticket'),
 
     # ─── Monetbil — webhook serveur-à-serveur ──────────────────────────────────
     # Note : le routeur DRF enregistre automatiquement l'action initier_paiement

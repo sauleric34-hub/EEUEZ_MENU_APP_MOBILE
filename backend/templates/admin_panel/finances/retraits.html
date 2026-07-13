@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Retraits — Menu Admin{% endblock %}
+{% block topbar_title %}Retraits{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:finances' %}">Finances</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Retraits</span>
+</div>
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Demandes de retrait</h1>
+    <p class="page-subtitle">Versements aux restaurants (décaissement mobile money)</p>
+  </div>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid {% if payout_auto %}var(--accent-green){% else %}var(--accent-amber){% endif %};">
+  {% if payout_auto %}
+    <strong style="color:var(--accent-green);">Décaissement automatique activé</strong> — « Approuver » envoie l'argent via Monetbil.
+  {% else %}
+    <strong style="color:var(--accent-amber);">Décaissement manuel</strong> — « Approuver » marque la demande comme validée&nbsp;; effectuez ensuite le virement mobile money à la main, puis marquez « Payé ». (Activez <code>MONETBIL_PAYOUT_ENABLED</code> pour l'automatiser.)
+  {% endif %}
+</div>
+
+<div class="table-wrapper">
+  <table class="data-table">
+    <thead>
+      <tr><th>#</th><th>Restaurant</th><th>Montant</th><th>Numéro</th><th>Opérateur</th><th>Statut</th><th>Demandé le</th><th style="min-width:220px;">Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for r in retraits %}
+      <tr>
+        <td>#{{ r.pk }}</td>
+        <td style="font-weight:600;">{{ r.restaurant.nom }}</td>
+        <td style="font-weight:700;color:var(--accent-green);">{{ r.montant }} F</td>
+        <td>{{ r.numero_compte|default:'—' }}</td>
+        <td>{{ r.get_mode_paiement_display }}</td>
+        <td>
+          <span class="badge badge-{{ r.statut }}">{{ r.get_statut_display }}</span>
+          {% if r.payout_message %}<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">{{ r.payout_message }}</div>{% endif %}
+        </td>
+        <td style="font-size:0.82rem;">{{ r.created_at|date:'d M Y · H:i' }}</td>
+        <td>
+          {% if r.statut == 'en_attente' %}
+          <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+            <form method="post" style="display:inline;">{% csrf_token %}
+              <input type="hidden" name="retrait_id" value="{{ r.pk }}">
+              <input type="hidden" name="action" value="approuver">
+              <button class="btn btn-primary btn-sm">{% if payout_auto %}Verser{% else %}Approuver{% endif %}</button>
+            </form>
+            <form method="post" style="display:inline;" onsubmit="return confirm('Refuser ce retrait ?');">{% csrf_token %}
+              <input type="hidden" name="retrait_id" value="{{ r.pk }}">
+              <input type="hidden" name="action" value="refuser">
+              <button class="btn btn-danger btn-sm">Refuser</button>
+            </form>
+          </div>
+          {% elif r.statut == 'approuve' %}
+          <form method="post" style="display:inline;">{% csrf_token %}
+            <input type="hidden" name="retrait_id" value="{{ r.pk }}">
+            <input type="hidden" name="action" value="payer">
+            <button class="btn btn-primary btn-sm">Marquer payé</button>
+          </form>
+          {% else %}
+          <span style="color:var(--text-muted);font-size:0.82rem;">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">Aucune demande de retrait.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

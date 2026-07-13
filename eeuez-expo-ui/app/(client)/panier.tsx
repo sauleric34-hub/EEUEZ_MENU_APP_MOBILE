@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -12,30 +12,61 @@ import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
 import type { PaymentMode } from '../../services/menu';
-import { initiateMonetbilPayment } from '../../services/menu';
+import { initiateMonetbilPayment, cancelOrder } from '../../services/menu';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { MonetbilWebView } from '../../components/MonetbilWebView';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
-  { mode: 'especes', label: 'Espèces', Icon: Banknote },
   { mode: 'mtn_money', label: 'MTN Money', Icon: Smartphone },
   { mode: 'orange_money', label: 'Orange Money', Icon: Smartphone },
 ];
 
-/** Modes qui nécessitent le widget Monetbil */
+/** Modes qui nécessitent le widget Monetbil (tous les modes actuels) */
 const MONETBIL_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
 
 export default function PanierScreen() {
-  const { colors, cartLines, cartInc, cartDec, cartRemove, subtotal, deliveryFee, total, cartCount, checkout, deliveryAddress, user } = useApp();
+  const { colors, cartLines, cartInc, cartDec, cartRemove, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
   const router = useRouter();
-  const [mode, setMode] = useState<PaymentMode>('especes');
+  const [mode, setMode] = useState<PaymentMode>('mtn_money');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phone, setPhone] = useState(user?.telephone || '');
 
   // ─── État WebView Monetbil ────────────────────────────
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  // Commande créée mais non encore payée (mobile money). Tant qu'elle n'est pas
+  // confirmée, elle est invisible du restaurant et peut être relancée ou annulée.
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+
+  /** Lance (ou relance) le widget Monetbil pour une commande déjà créée. */
+  const launchPayment = async (orderId: number) => {
+    setBusy(true); setError(null);
+    try {
+      const data = await initiateMonetbilPayment(orderId, phone || undefined);
+      if (data.payment_url) setPaymentUrl(data.payment_url);
+      else setError('Paiement indisponible pour le moment. Réessayez.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "L'initiation du paiement a échoué.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Supprime la commande non payée puis réinitialise l'état de paiement. */
+  const abandonOrder = async () => {
+    const orderId = pendingOrderId;
+    setPendingOrderId(null);
+    if (orderId == null) return;
+    try {
+      await cancelOrder(orderId);
+    } catch {
+      // La commande non confirmée n'est de toute façon pas visible du restaurant.
+    } finally {
+      // Rafraîchit la liste (la commande non payée disparaît) ; le panier est conservé.
+      reloadOrders();
+    }
+  };
 
   const submit = async () => {
     if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
@@ -45,22 +76,25 @@ export default function PanierScreen() {
       const order = await checkout(mode);
 
       if (MONETBIL_MODES.includes(mode)) {
-        // 2. Pour MTN/Orange Money → initier le paiement Monetbil
-        const data = await initiateMonetbilPayment(order.id, phone || undefined);
-        setPaymentUrl(data.payment_url);
+        // 2. Pour MTN/Orange Money → initier le paiement Monetbil.
+        //    On NE vide PAS le panier : la commande n'existe vraiment qu'une fois
+        //    payée. Si le paiement est abandonné, les plats restent au panier.
+        setPendingOrderId(order.id);
+        await launchPayment(order.id);
         // Le WebView gère la suite (onSuccess / onCancel)
       } else {
-        // Espèces → navigation directe vers le suivi
+        // Espèces → commande confirmée : on vide le panier et on suit la livraison.
+        clearCart();
         router.push('/tracking');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La commande a échoué.');
-    } finally {
       setBusy(false);
     }
   };
 
   return (
+    <>
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -227,11 +261,33 @@ export default function PanierScreen() {
         amount={total}
         onSuccess={() => {
           setPaymentUrl(null);
+          setPendingOrderId(null);
+          // Paiement confirmé → c'est une vraie commande : on vide le panier.
+          clearCart();
+          reloadOrders();
           router.push('/tracking');
         }}
         onCancel={() => {
           setPaymentUrl(null);
-          setError('Paiement annulé. Vous pouvez réessayer.');
+          Alert.alert(
+            'Paiement non finalisé',
+            "Votre paiement n'a pas été confirmé. Voulez-vous réessayer ?",
+            [
+              {
+                text: 'Abandonner',
+                style: 'destructive',
+                onPress: () => {
+                  abandonOrder();
+                  setError("Commande annulée : le paiement n'a pas abouti.");
+                },
+              },
+              {
+                text: 'Réessayer',
+                onPress: () => { if (pendingOrderId != null) launchPayment(pendingOrderId); },
+              },
+            ],
+            { cancelable: false },
+          );
         }}
       />
     )}

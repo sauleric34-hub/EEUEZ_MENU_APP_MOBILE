@@ -14,13 +14,14 @@ import json
 import uuid
 import requests as http_requests
 
-from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis, Transaction
+from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis, Transaction, Reservation
 from .serializers import (
     UserSerializer, RestaurantProfileSerializer, PlatSerializer, 
     CommandeSerializer, LivraisonSerializer
 )
 from .utils import geo
 from .delivery import finaliser_livraison
+from .monetbil import initier_widget
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -173,6 +174,7 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
         sous_total_client = 0  # ce que paie le client (prix de base + %)
         sous_total_base = 0    # ce qui revient au restaurant (prix de base)
+        frais_plats = []       # frais de livraison des plats commandés
         for item in items:
             try:
                 plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
@@ -186,17 +188,22 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             )
             sous_total_client += prix_client * qte
             sous_total_base += prix_base * qte
+            frais_plats.append(float(plat.frais_livraison))
 
         if sous_total_client == 0:
             commande.delete()
             return Response({"error": "Aucun plat valide dans la commande"}, status=status.HTTP_400_BAD_REQUEST)
 
-        frais_liv = float(restaurant.frais_livraison)
+        # Frais de livraison = le plus élevé parmi les plats commandés (une seule livraison).
+        # Repli sur le frais du restaurant si aucun plat n'en définit.
+        frais_liv = max(frais_plats) if frais_plats else float(restaurant.frais_livraison)
         # Le client paie les plats majorés + la livraison
         commande.montant_total = sous_total_client + frais_liv
         # Le restaurant ne perçoit que ses prix de base ; la majoration revient à la plateforme
         commande.montant_restaurant = sous_total_base
         commande.commission_eeuez = sous_total_client - sous_total_base
+        # Mobile money : commande non confirmée tant que le paiement n'a pas abouti.
+        commande.paiement_confirme = (mode_paiement == 'especes')
         commande.save()
 
         # Trace du paiement (espèces = à encaisser à la livraison)
@@ -209,6 +216,18 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         )
 
         return Response(CommandeSerializer(commande).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        """Annule une commande non encore payée (paiement mobile money abandonné)."""
+        commande = self.get_object()  # limité aux commandes du client
+        if commande.paiement_confirme:
+            return Response(
+                {'error': 'Commande déjà payée — annulation impossible.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        commande.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     # ── Initiation du paiement mobile money via Monetbil ─────────────────────
     @action(detail=True, methods=['post'], url_path='initier_paiement')
@@ -242,48 +261,15 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
         phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
 
-        service_key = settings.MONETBIL_SERVICE_KEY
-        app_base    = settings.APP_BASE_URL
-        notify_url  = f'{app_base}/api/monetbil/notify/'
-        return_url  = f'{app_base}/payment/success/?ref={payment_ref}'
-
-        payload = {
-            'amount':      int(commande.montant_total),
-            'currency':    'XAF',
-            'country':     'CM',
-            'locale':      'fr',
-            'payment_ref': payment_ref,
-            'item_ref':    str(commande.id),
-            'notify_url':  notify_url,
-            'return_url':  return_url,
-            'email':       request.user.email or '',
-            'first_name':  request.user.first_name or '',
-            'last_name':   request.user.last_name or '',
-        }
-        if phone:
-            payload['phone'] = phone
-
-        try:
-            resp = http_requests.post(
-                f'https://api.monetbil.com/widget/v2.1/{service_key}',
-                data=payload,
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as exc:
-            return Response(
-                {'error': f'Impossible de contacter Monetbil : {exc}'},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        if not data.get('success'):
-            return Response(
-                {'error': data.get('message', 'Échec initialisation paiement Monetbil')},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return Response({'payment_url': data['payment_url'], 'payment_ref': payment_ref})
+        payment_url, error = initier_widget(
+            amount=int(commande.montant_total), payment_ref=payment_ref, item_ref=commande.id,
+            email=request.user.email, first_name=request.user.first_name,
+            last_name=request.user.last_name, phone=phone,
+        )
+        if error:
+            code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
+            return Response({'error': error}, status=code)
+        return Response({'payment_url': payment_url, 'payment_ref': payment_ref})
 
     @action(detail=True, methods=['post'])
     def confirmer_reception(self, request, pk=None):
@@ -329,9 +315,12 @@ class RestaurantPlatViewSet(viewsets.ModelViewSet):
 class RestaurantCommandeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CommandeSerializer
-    
+
     def get_queryset(self):
-        return Commande.objects.filter(restaurant=self.request.user.restaurant_profile)
+        # Seules les commandes payées (ou espèces) sont visibles du restaurant.
+        return Commande.objects.filter(
+            restaurant=self.request.user.restaurant_profile, paiement_confirme=True,
+        )
         
     @action(detail=True, methods=['put'])
     def accept(self, request, pk=None):
@@ -466,22 +455,73 @@ def map_restaurants_search(request):
 #  MONETBIL — Webhook & page de retour
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _monetbil_sign_valid(params, secret):
+    """Vérifie la signature Monetbil : md5(secret + concaténation des valeurs
+    reçues, hors 'sign'). Retourne None si aucune signature n'est fournie."""
+    sign = params.get('sign', '')
+    if not sign:
+        return None
+    concat = ''.join(str(v) for k, v in params.items() if k != 'sign')
+    computed = hashlib.md5((secret + concat).encode('utf-8')).hexdigest()
+    return hmac.compare_digest(computed, sign)
+
+
+def _monetbil_notify_reservation(payment_ref, payment_status, amount_recu):
+    """Traite la notification Monetbil d'une réservation (ref « RESA-<id> »)."""
+    try:
+        resa_id = int(payment_ref.split('-')[1])
+        resa = Reservation.objects.get(pk=resa_id)
+    except (IndexError, ValueError, Reservation.DoesNotExist):
+        return HttpResponse('OK')  # ref inconnue → 200 pour stopper les retentatives
+
+    if resa.statut == 'payee':
+        return HttpResponse('OK')  # idempotence
+
+    # Vérifie le montant
+    try:
+        if amount_recu and int(float(amount_recu)) != int(resa.prix):
+            return HttpResponse('Montant incohérent', status=400)
+    except (TypeError, ValueError):
+        pass
+
+    if payment_status == 'success':
+        if not resa.code:
+            resa.code = Livraison.generer_code()
+        resa.statut = 'payee'
+        resa.save(update_fields=['statut', 'code', 'updated_at'])
+    return HttpResponse('OK')
+
+
 @csrf_exempt
-@require_POST
 def monetbil_notify(request):
     """
-    POST /api/monetbil/notify/
+    GET/POST /api/monetbil/notify/
     Callback serveur-à-serveur envoyé par Monetbil après chaque tentative de paiement.
     Met à jour le statut de la Transaction et de la Commande en base.
+    Sécurité : vérifie le montant reçu (et la signature si activée).
     """
     try:
-        # Monetbil envoie les données en form-urlencoded
-        payment_ref  = request.POST.get('payment_ref', '')
-        payment_status = request.POST.get('status', '')   # 'success' | 'failed' | 'cancelled'
-        transaction_id = request.POST.get('transaction_id', '')
+        # Monetbil peut notifier via GET ou POST (form-urlencoded)
+        src = request.POST if request.method == 'POST' else request.GET
+        params = {k: src.get(k, '') for k in src.keys()}
+        payment_ref    = params.get('payment_ref', '')
+        payment_status = params.get('status', '')   # 'success' | 'failed' | 'cancelled'
+        amount_recu    = params.get('amount', '')
 
         if not payment_ref:
             return HttpResponse('payment_ref manquant', status=400)
+
+        # Vérification de signature (activable via settings). Quand elle est
+        # activée, une signature ABSENTE ou INVALIDE est rejetée : sans cela, les
+        # références devinables (ex. « RESA-<id> ») pourraient être forgées pour
+        # marquer un paiement comme réussi sans payer.
+        if getattr(settings, 'MONETBIL_VERIFY_SIGN', False):
+            if not _monetbil_sign_valid(params, settings.MONETBIL_SERVICE_SECRET):
+                return HttpResponse('Signature invalide ou absente', status=403)
+
+        # ── Paiement d'une RÉSERVATION (ref « RESA-<id> ») ──────────────────
+        if payment_ref.startswith('RESA-'):
+            return _monetbil_notify_reservation(payment_ref, payment_status, amount_recu)
 
         try:
             txn = Transaction.objects.get(reference=payment_ref)
@@ -489,15 +529,25 @@ def monetbil_notify(request):
             # Référence inconnue — on répond 200 pour éviter les retentatives Monetbil
             return HttpResponse('OK')
 
+        # Idempotence : ne pas retraiter une transaction déjà finalisée
+        if txn.statut == 'complete':
+            return HttpResponse('OK')
+
+        # Vérifie que le montant payé correspond bien à celui attendu
+        try:
+            if amount_recu and int(float(amount_recu)) != int(txn.montant):
+                return HttpResponse('Montant incohérent', status=400)
+        except (TypeError, ValueError):
+            pass
+
         if payment_status == 'success':
             txn.statut = 'complete'
             txn.save(update_fields=['statut'])
-            # Marque la commande comme payée (passe en_attente → déjà en_attente mais paiement OK)
+            # Paiement confirmé → la commande devient visible du restaurant.
             commande = txn.commande
-            if commande and commande.statut == 'en_attente':
-                # Le paiement est confirmé ; le restaurant peut maintenant la voir
-                commande.statut = 'en_attente'   # inchangé, c'est le resto qui l'accepte
-                commande.save(update_fields=['statut'])
+            if commande and not commande.paiement_confirme:
+                commande.paiement_confirme = True
+                commande.save(update_fields=['paiement_confirme', 'updated_at'])
         elif payment_status in ('failed', 'cancelled'):
             txn.statut = 'echouee'
             txn.save(update_fields=['statut'])
@@ -571,4 +621,38 @@ def monetbil_return(request):
 </body>
 </html>"""
 
+    return HttpResponse(html, content_type='text/html')
+
+
+def monetbil_failed(request):
+    """
+    GET /payment/failed/
+    Page de retour en cas d'échec / annulation. Le WebView de l'app la détecte
+    pour fermer le widget et informer l'utilisateur.
+    """
+    html = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paiement échoué — EEUEZ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+           justify-content: center; background: #0d1117; font-family: -apple-system, sans-serif; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 24px;
+            padding: 48px 36px; text-align: center; max-width: 360px; width: 90%; }
+    .icon { font-size: 64px; margin-bottom: 20px; }
+    h1 { color: #f85149; font-size: 22px; margin-bottom: 10px; }
+    p  { color: #8b949e; font-size: 15px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">❌</div>
+    <h1>Paiement échoué</h1>
+    <p>Le paiement n'a pas abouti ou a été annulé.<br>Vous pouvez réessayer depuis l'application.</p>
+  </div>
+</body>
+</html>"""
     return HttpResponse(html, content_type='text/html')
