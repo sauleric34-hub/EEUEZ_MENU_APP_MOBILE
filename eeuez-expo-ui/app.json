@@ -22,7 +22,18 @@
         "foregroundImage": "./assets/icon.png"
       },
       "package": "com.app.menu",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "REMPLACER_PAR_VOTRE_CLE_GOOGLE_MAPS_ANDROID"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -47,6 +58,12 @@
           "cameraPermission": "Menu utilise la caméra pour scanner le QR code du livreur et confirmer la réception de votre commande."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e9443cdd-1292-496d-bf81-9d7dc58a5bff"
+      }
+    }
   }
 }
