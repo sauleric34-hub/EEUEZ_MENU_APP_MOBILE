@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "scheme": "menu",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/icon.png",
@@ -18,8 +18,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#080c09",
-        "foregroundImage": "./assets/icon.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "package": "com.app.menu",
       "softwareKeyboardLayoutMode": "pan",
