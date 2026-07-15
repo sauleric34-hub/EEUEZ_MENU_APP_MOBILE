@@ -7,12 +7,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView, ActivityIndicator,
-  Platform, Keyboard,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import {
   ChevronLeft, LocateFixed, Search, MapPin, Check, Star, X, Home,
@@ -21,21 +20,14 @@ import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { searchPlaces, reverseGeocode, type PlaceResult } from '../services/addresses';
 import { PressableScale, bodyFont } from '../components/ui';
+import { LeafletPickerMap, type LeafletPickerHandle } from '../components/LeafletPickerMap';
 
 const DEFAULT = { latitude: 4.0611, longitude: 9.7089 }; // Douala
-const DARK_MAP = [
-  { elementType: 'geometry', stylers: [{ color: '#0e1712' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#7d8a80' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b100d' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1c2a20' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1420' }] },
-];
 
 export default function LocationPicker() {
   const { colors, mode, userLoc, addresses, addAddress, setDeliveryAddress, makeDefaultAddress, removeAddress } = useApp();
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<LeafletPickerHandle>(null);
 
   const [center, setCenter] = useState(userLoc ? { latitude: userLoc.lat, longitude: userLoc.lon } : DEFAULT);
   const [address, setAddress] = useState('');
@@ -65,19 +57,18 @@ export default function LocationPicker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onRegionChange = (r: Region) => {
-    setCenter({ latitude: r.latitude, longitude: r.longitude });
-    resolveCenter(r.latitude, r.longitude);
+  // La carte Leaflet remonte son centre après chaque déplacement.
+  const onCenterChange = (lat: number, lng: number) => {
+    setCenter({ latitude: lat, longitude: lng });
+    resolveCenter(lat, lng);
   };
 
   const useMyLocation = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return;
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    const region: Region = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.006, longitudeDelta: 0.006 };
-    mapRef.current?.animateToRegion(region, 500);
-    setCenter({ latitude: region.latitude, longitude: region.longitude });
-    resolveCenter(region.latitude, region.longitude);
+    // moveTo → la carte émettra onCenterChange (met à jour le centre + l'adresse).
+    mapRef.current?.moveTo(pos.coords.latitude, pos.coords.longitude);
   };
 
   // Recherche de lieu (Nominatim), debounce
@@ -97,8 +88,7 @@ export default function LocationPicker() {
     Keyboard.dismiss();
     setResults([]);
     setQuery('');
-    const region: Region = { latitude: p.latitude, longitude: p.longitude, latitudeDelta: 0.006, longitudeDelta: 0.006 };
-    mapRef.current?.animateToRegion(region, 500);
+    mapRef.current?.moveTo(p.latitude, p.longitude);
     setCenter({ latitude: p.latitude, longitude: p.longitude });
     setAddress(p.label);
   };
@@ -152,16 +142,13 @@ export default function LocationPicker() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {/* Carte */}
-      <MapView
+      {/* Carte OpenStreetMap (gratuite, sans clé) */}
+      <LeafletPickerMap
         ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={mode === 'dark' ? DARK_MAP : []}
-        initialRegion={{ ...center, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-        onRegionChangeComplete={onRegionChange}
-        showsUserLocation
-        showsMyLocationButton={false}
+        initialLat={center.latitude}
+        initialLng={center.longitude}
+        dark={mode === 'dark'}
+        onCenterChange={onCenterChange}
       />
 
       {/* Pin central fixe */}

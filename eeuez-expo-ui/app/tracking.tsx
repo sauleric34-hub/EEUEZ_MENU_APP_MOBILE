@@ -2,13 +2,13 @@
 //  Suivi de livraison en direct
 // ═══════════════════════════════════════════════════════════
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Linking, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { ChevronLeft, Bike, Phone, MessageCircle, Check, MapPin, Star, PackageSearch, QrCode } from 'lucide-react-native';
+import { ChevronLeft, Bike, Phone, Check, MapPin, Star, PackageSearch, QrCode } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { TRACK_STEPS, TRACK_ETA } from '../data/menuData';
@@ -21,17 +21,35 @@ export default function TrackingScreen() {
   const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const etaLabel = TRACK_ETA[trackStep] ?? TRACK_ETA[0];
   const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
   const suivi = activeOrder?.suivi ?? null;
   // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
   const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
 
-  // Rafraîchit le statut de la commande toutes les 8 s
-  useEffect(() => {
-    const id = setInterval(reloadOrders, 8000);
-    return () => clearInterval(id);
+  // Rafraîchit dès l'ouverture de l'écran, puis en continu tant qu'il est affiché.
+  // useFocusEffect (au lieu de useEffect) garantit un refresh immédiat à chaque
+  // fois qu'on revient sur la page, et relance proprement l'intervalle.
+  useFocusEffect(
+    useCallback(() => {
+      reloadOrders();                                   // immédiat
+      const id = setInterval(reloadOrders, 5000);       // puis toutes les 5 s
+      return () => clearInterval(id);
+    }, [reloadOrders]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await reloadOrders(); } finally { setRefreshing(false); }
   }, [reloadOrders]);
+
+  // Ouvre le composeur téléphonique avec le numéro du livreur (nettoyé des espaces).
+  const callDriver = useCallback((phone?: string) => {
+    const num = (phone || '').replace(/[^\d+]/g, '');
+    if (!num) return;
+    Linking.openURL(`tel:${num}`).catch(() => {});
+  }, []);
 
   if (!activeOrder) {
     return (
@@ -51,7 +69,13 @@ export default function TrackingScreen() {
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.accent} colors={[Brand.accent]} />
+          }
+        >
           {/* Header */}
           <View style={styles.header}>
             <PressableScale onPress={() => router.back()}>
@@ -110,7 +134,7 @@ export default function TrackingScreen() {
                 )}
               </View>
               {!!suivi.livreur.telephone && (
-                <PressableScale onPress={() => Linking.openURL(`tel:${suivi.livreur!.telephone}`)}>
+                <PressableScale onPress={() => callDriver(suivi.livreur!.telephone)}>
                   <View style={[styles.contactBtn, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>
                     <Phone size={18} color="#8fd6a8" strokeWidth={2.2} />
                   </View>

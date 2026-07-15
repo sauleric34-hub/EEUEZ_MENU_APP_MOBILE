@@ -1,42 +1,27 @@
 // ═══════════════════════════════════════════════════════════
-//  Carte — vraie carte interactive (react-native-maps)
+//  Carte — vraie carte interactive (OpenStreetMap / Leaflet en WebView)
 //  Restaurants géolocalisés, classés par le moteur de suggestion.
 // ═══════════════════════════════════════════════════════════
 
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { MapPin, Sun, Moon, Star, Bike, Timer, Store, LocateFixed, UtensilsCrossed } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice, formatKm, type Resto } from '../../data/menuData';
 import { DishTile, PressableScale, IconButton, displayFont, bodyFont } from '../../components/ui';
+import { LeafletRestaurantsMap, type LeafletRestosHandle, type RestoMarker } from '../../components/LeafletRestaurantsMap';
 
 // Centre par défaut : Douala (Akwa)
 const DEFAULT_CENTER = { latitude: 4.05, longitude: 9.70 };
-const CITY_DELTA = { latitudeDelta: 0.18, longitudeDelta: 0.18 };
-
-// Style sombre « nuit africaine » pour Google Maps (ignoré sur Apple Maps)
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#0e1712' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#7d8a80' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b100d' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1c2a20' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#6c7a6f' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#27392c' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1420' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#101b14' }] },
-];
 
 export default function CarteScreen() {
   const { colors, mode, toggleTheme, restaurants, recoRestos, dishesOfResto, dishById, userLoc } = useApp();
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<LeafletRestosHandle>(null);
   const [selId, setSelId] = useState<number | null>(null);
 
   // Distances/ETA calculées par le moteur de recommandation
@@ -50,11 +35,22 @@ export default function CarteScreen() {
     [restaurants],
   );
 
-  const initialRegion: Region = {
-    latitude: userLoc?.lat ?? DEFAULT_CENTER.latitude,
-    longitude: userLoc?.lon ?? DEFAULT_CENTER.longitude,
-    ...CITY_DELTA,
-  };
+  // Marqueurs pour la carte Leaflet (photo + note + couleurs du dégradé).
+  const markers = useMemo<RestoMarker[]>(
+    () => located.map(r => ({
+      id: r.id,
+      lat: r.latitude as number,
+      lon: r.longitude as number,
+      image: r.image ?? null,
+      rating: r.rating,
+      c1: r.grad?.[0] ?? Brand.accent,
+      c2: r.grad?.[1] ?? Brand.accentBot,
+    })),
+    [located],
+  );
+
+  const initialLat = userLoc?.lat ?? DEFAULT_CENTER.latitude;
+  const initialLng = userLoc?.lon ?? DEFAULT_CENTER.longitude;
 
   const sel = selId != null ? located.find(r => r.id === selId) ?? null : null;
   const selReco = sel ? recoById.get(sel.id) : undefined;
@@ -68,71 +64,32 @@ export default function CarteScreen() {
   const selectResto = (r: Resto) => {
     setSelId(r.id);
     if (r.latitude != null && r.longitude != null) {
-      mapRef.current?.animateToRegion(
-        { latitude: r.latitude, longitude: r.longitude, latitudeDelta: 0.045, longitudeDelta: 0.045 },
-        450,
-      );
+      mapRef.current?.animateTo(r.latitude, r.longitude, 15);
     }
   };
 
+  // Sélection via un tap sur un pin de la carte (remontée par la WebView).
+  const onMapSelect = (id: number | null) => {
+    if (id == null) { setSelId(null); return; }
+    const r = located.find(x => x.id === id);
+    if (r) selectResto(r);
+  };
+
   const recenter = () => {
-    mapRef.current?.animateToRegion(
-      {
-        latitude: userLoc?.lat ?? DEFAULT_CENTER.latitude,
-        longitude: userLoc?.lon ?? DEFAULT_CENTER.longitude,
-        ...CITY_DELTA,
-      },
-      450,
-    );
+    mapRef.current?.recenter(initialLat, initialLng);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <MapView
+      <LeafletRestaurantsMap
         ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={mode === 'dark' ? DARK_MAP_STYLE : []}
-        initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton={false}
-        showsCompass={false}
-        toolbarEnabled={false}
-        onPress={() => setSelId(null)}
-      >
-        {located.map(r => {
-          const active = selId === r.id;
-          return (
-            <Marker
-              key={r.id}
-              coordinate={{ latitude: r.latitude as number, longitude: r.longitude as number }}
-              onPress={(e) => { e.stopPropagation(); selectResto(r); }}
-              anchor={{ x: 0.5, y: 1 }}
-              zIndex={active ? 15 : 5}
-            >
-              <View style={styles.pinWrap}>
-                <View style={[styles.pinBadge, { borderColor: active ? Brand.yellow : 'rgba(255,255,255,0.85)' }]}>
-                  <Star size={8} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                  <Text style={styles.pinBadgeTxt}>{r.rating}</Text>
-                </View>
-                <LinearGradient
-                  colors={r.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={[styles.pin, { borderColor: active ? Brand.yellow : 'rgba(255,255,255,0.85)' }]}
-                >
-                  <View style={{ transform: [{ rotate: '-45deg' }] }}>
-                    {r.image ? (
-                      <Image source={{ uri: r.image }} style={styles.pinImg} />
-                    ) : (
-                      <r.icon size={19} color="#fff" strokeWidth={2.2} />
-                    )}
-                  </View>
-                </LinearGradient>
-                <View style={styles.pinTip} />
-              </View>
-            </Marker>
-          );
-        })}
-      </MapView>
+        markers={markers}
+        initialLat={initialLat}
+        initialLng={initialLng}
+        dark={mode === 'dark'}
+        selectedId={selId}
+        onSelect={onMapSelect}
+      />
 
       {/* Header overlay */}
       <SafeAreaView edges={['top']} pointerEvents="box-none">
