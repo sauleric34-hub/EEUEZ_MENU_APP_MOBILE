@@ -24,7 +24,7 @@ const NAV: NavDef[] = [
   { route: 'profil',   label: 'Profil',   Icon: User },
 ];
 // L'onglet Accueil reste actif sur les sous-écrans plat/resto
-const HOME_GROUP = new Set(['index', 'dish', 'resto']);
+const HOME_GROUP = new Set(['index', 'dish', 'resto', 'publication']);
 
 function BottomNav({ state, navigation }: any) {
   const insets = useSafeAreaInsets();

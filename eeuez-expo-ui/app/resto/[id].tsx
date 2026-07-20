@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Animated, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, Images, CalendarCheck } from 'lucide-react-native';
+import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, Images, CalendarCheck, Camera } from 'lucide-react-native';
 import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { mapResto, mapPlat, formatPrice, type Resto, type Dish } from '../../data/menuData';
@@ -14,6 +14,7 @@ import { fetchRestaurant, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
 import { ReservationModal } from '../../components/ReservationModal';
+import { PublicationComposer } from '../../components/PublicationComposer';
 
 function Stat({ value, label, color, colors }: { value: string; label: string; color: string; colors: any }) {
   return (
@@ -35,6 +36,7 @@ export default function RestoProfile() {
   const [fetchedDishes, setFetchedDishes] = useState<Dish[] | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
   const [showReserve, setShowReserve] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
   const followPop = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -169,6 +171,14 @@ export default function RestoProfile() {
             </PressableScale>
           </View>
 
+          {/* Contribuer : le client propose une publication au restaurant */}
+          <PressableScale onPress={() => setShowComposer(true)} style={{ marginTop: 10 }}>
+            <View style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: Brand.accent + '66' }]}>
+              <Camera size={18} color={Brand.accentLight} strokeWidth={2.3} />
+              <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Partager une photo ou une vidéo</Text>
+            </View>
+          </PressableScale>
+
           <Text style={[displayFont(18, '700'), { color: colors.text, marginTop: 24 }]}>Ses plats</Text>
           <View style={styles.grid}>
             {dishes.map(d => (
@@ -185,6 +195,20 @@ export default function RestoProfile() {
         prix={resto.prixReservation}
         onClose={() => setShowReserve(false)}
         onDone={() => { setShowReserve(false); router.push('/reservations'); }}
+      />
+
+      <PublicationComposer
+        visible={showComposer}
+        restaurantId={resto.id}
+        restaurantNom={resto.name}
+        onClose={() => setShowComposer(false)}
+        onDone={() => {
+          setShowComposer(false);
+          Alert.alert(
+            'Publication envoyée',
+            `${resto.name} doit la valider avant qu'elle apparaisse dans l'accueil. Vous la retrouverez dans votre profil.`,
+          );
+        }}
       />
     </View>
   );

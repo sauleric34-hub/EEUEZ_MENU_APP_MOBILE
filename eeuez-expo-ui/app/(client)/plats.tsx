@@ -7,33 +7,85 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Image } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Search, UtensilsCrossed, Store, Star, ChevronRight, Bike } from 'lucide-react-native';
+import { Search, UtensilsCrossed, Store, Star, ChevronRight, Bike, SlidersHorizontal, Check } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { formatKm, formatPrice } from '../../data/menuData';
+import { formatKm, formatPrice, distanceKm } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
 import { PressableScale, DishTile, Loader, CenterMessage, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
+import {
+  DishFilterModal, DEFAULT_FILTERS, countActiveFilters, type DishFilters,
+} from '../../components/DishFilterModal';
 
 type Mode = 'plats' | 'restos';
 
 export default function PlatsScreen() {
-  const { colors, plats, restaurants, categories, dataLoading } = useApp();
+  const { colors, plats, restaurants, categories, dataLoading, restoById, userLoc } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('plats');
-  const [active, setActive] = useState('Tout');
   const [query, setQuery] = useState('');
+  const [dishFilters, setDishFilters] = useState<DishFilters>(DEFAULT_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filters = useMemo(() => ['Tout', ...categories.map(c => c.name)], [categories]);
+  const activeFilterCount = countActiveFilters(dishFilters);
+  const categoryNames = useMemo(() => categories.map(c => c.name), [categories]);
+  const selectedCats = dishFilters.categories;
+
+  /** Barre de catégories : multi-sélection, partagée avec la modal de filtres. */
+  const toggleCategory = (name: string) =>
+    setDishFilters(f => ({
+      ...f,
+      categories: f.categories.includes(name)
+        ? f.categories.filter(c => c !== name)
+        : [...f.categories, name],
+    }));
+
+  /** Distance du plat = distance de son restaurant (position GPS connue). */
+  const distFor = React.useCallback((restoId: number): number | null => {
+    const r = restoById(restoId);
+    if (!userLoc || !r || r.latitude == null || r.longitude == null) return r?.distanceKm ?? null;
+    return distanceKm(userLoc.lat, userLoc.lon, r.latitude, r.longitude);
+  }, [restoById, userLoc]);
 
   const platList = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return plats.filter(d => {
-      const okCat = active === 'Tout' || d.category === active;
+    const f = dishFilters;
+
+    const list = plats.filter(d => {
+      const okCat = f.categories.length === 0 || (!!d.category && f.categories.includes(d.category));
       const okQuery = !q || d.name.toLowerCase().includes(q) || d.restoName.toLowerCase().includes(q);
-      return okCat && okQuery;
+      const okPrice = f.maxPrice == null || d.price <= f.maxPrice;
+      const okNote = f.minNote === 0 || d.noteValue >= f.minNote;
+      const okPopular = !f.popularOnly || d.isPopular;
+      const okDelivery = !f.freeDelivery || d.fraisLivraison === 0;
+      const okOpen = !f.openOnly || (restoById(d.restoId)?.isOpen ?? true);
+      return okCat && okQuery && okPrice && okNote && okPopular && okDelivery && okOpen;
     });
-  }, [plats, active, query]);
+
+    // Tri (copie : on ne mute jamais la liste du contexte)
+    const sorted = [...list];
+    switch (f.sort) {
+      case 'proches':
+        sorted.sort((a, b) => {
+          const da = distFor(a.restoId), db = distFor(b.restoId);
+          if (da == null && db == null) return 0;
+          if (da == null) return 1;          // sans position → à la fin
+          if (db == null) return -1;
+          return da - db;
+        });
+        break;
+      case 'prix_asc':   sorted.sort((a, b) => a.price - b.price); break;
+      case 'prix_desc':  sorted.sort((a, b) => b.price - a.price); break;
+      case 'notes':      sorted.sort((a, b) => b.noteValue - a.noteValue); break;
+      case 'likes':      sorted.sort((a, b) => b.likesCount - a.likesCount); break;
+      case 'commandes':  sorted.sort((a, b) => b.ordersCount - a.ordersCount); break;
+      // Nouveautés : les plus récents d'abord (id décroissant en repli si pas de date).
+      case 'nouveautes': sorted.sort((a, b) => (b.createdAt - a.createdAt) || (b.id - a.id)); break;
+      default: break;  // pertinence → ordre d'origine
+    }
+    return sorted;
+  }, [plats, query, dishFilters, restoById, distFor]);
 
   const restoList = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,29 +126,66 @@ export default function PlatsScreen() {
             })}
           </View>
 
-          <View style={[styles.searchPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Search size={16} color={Brand.accentLight} strokeWidth={2.4} />
-            <TextInput
-              value={query} onChangeText={setQuery}
-              placeholder={mode === 'plats' ? 'Rechercher un plat…' : 'Rechercher un restaurant…'}
-              placeholderTextColor={colors.faint}
-              style={[styles.input, { color: colors.text }]}
-            />
+          {/* Recherche + bouton rond de filtres (plats uniquement) */}
+          <View style={styles.searchRow}>
+            <View style={[styles.searchPill, { flex: 1, backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Search size={16} color={Brand.accentLight} strokeWidth={2.4} />
+              <TextInput
+                value={query} onChangeText={setQuery}
+                placeholder={mode === 'plats' ? 'Rechercher un plat…' : 'Rechercher un restaurant…'}
+                placeholderTextColor={colors.faint}
+                style={[styles.input, { color: colors.text }]}
+              />
+            </View>
+
+            {mode === 'plats' && (
+              <PressableScale onPress={() => setShowFilters(true)}>
+                {activeFilterCount > 0 ? (
+                  <LinearGradient
+                    colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={[styles.filterBtn, glow(Brand.accent, 14)]}
+                  >
+                    <SlidersHorizontal size={19} color="#fff" strokeWidth={2.5} />
+                    <View style={[styles.badge, { borderColor: colors.page }]}>
+                      <Text style={[bodyFont(10, '900'), { color: '#fff' }]}>{activeFilterCount}</Text>
+                    </View>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.filterBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
+                    <SlidersHorizontal size={19} color={colors.muted} strokeWidth={2.4} />
+                  </View>
+                )}
+              </PressableScale>
+            )}
           </View>
 
-          {/* Catégories (uniquement pour les plats) */}
+          {/* Catégories — multi-sélection (partagée avec la modal de filtres) */}
           {mode === 'plats' && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }} contentContainerStyle={{ gap: 9 }}>
-              {filters.map(f => {
-                const on = f === active;
+              <PressableScale onPress={() => setDishFilters(f => ({ ...f, categories: [] }))}>
+                <View style={[
+                  styles.chip,
+                  selectedCats.length === 0
+                    ? { backgroundColor: Brand.accent }
+                    : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+                ]}>
+                  <Text style={[bodyFont(13, '700'), { color: selectedCats.length === 0 ? '#fff' : colors.muted }]}>
+                    Tout
+                  </Text>
+                </View>
+              </PressableScale>
+
+              {categoryNames.map(name => {
+                const on = selectedCats.includes(name);
                 return (
-                  <PressableScale key={f} onPress={() => setActive(f)}>
+                  <PressableScale key={name} onPress={() => toggleCategory(name)}>
                     <View style={[
-                      styles.chip,
+                      styles.chipRow,
                       on ? { backgroundColor: Brand.accent }
                          : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
                     ]}>
-                      <Text style={[bodyFont(13, '700'), { color: on ? '#fff' : colors.muted }]}>{f}</Text>
+                      {on && <Check size={13} color="#fff" strokeWidth={3} />}
+                      <Text style={[bodyFont(13, '700'), { color: on ? '#fff' : colors.muted }]}>{name}</Text>
                     </View>
                   </PressableScale>
                 );
@@ -156,6 +245,15 @@ export default function PlatsScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <DishFilterModal
+        visible={showFilters}
+        value={dishFilters}
+        resultCount={platList.length}
+        categories={categoryNames}
+        onClose={() => setShowFilters(false)}
+        onChange={setDishFilters}
+      />
     </ScreenBg>
   );
 }
@@ -165,12 +263,26 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   segment: { flexDirection: 'row', gap: 6, padding: 5, borderRadius: Radius.pill, borderWidth: 1, marginTop: 18 },
   segItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: Radius.pill },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchPill: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12,
     paddingHorizontal: 16, paddingVertical: 4, borderRadius: Radius.pill, borderWidth: 1,
   },
   input: { flex: 1, fontSize: 14, fontWeight: '500', paddingVertical: 11 },
+  filterBtn: {
+    width: 48, height: 48, borderRadius: 24, marginTop: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute', top: -2, right: -2, minWidth: 19, height: 19, borderRadius: 10,
+    backgroundColor: Brand.green, borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+  },
   chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: Radius.pill },
+  chipRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: Radius.pill,
+  },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 14 },
   cell: { width: '47%', flexGrow: 1 },
   restoRow: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },

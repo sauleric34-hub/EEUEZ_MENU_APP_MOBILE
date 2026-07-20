@@ -47,6 +47,11 @@ export async function getStoredUser(): Promise<UserDTO | null> {
   return raw ? (JSON.parse(raw) as UserDTO) : null;
 }
 
+/** Persiste l'utilisateur courant (cache hors ligne). */
+export async function storeUser(user: UserDTO): Promise<void> {
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 /**
  * Rafraîchit l'access token à partir du refresh token stocké.
  * Retourne le nouvel access token, ou null si le refresh a échoué.

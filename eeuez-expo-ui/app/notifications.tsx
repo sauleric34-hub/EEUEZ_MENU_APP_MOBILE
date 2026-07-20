@@ -2,20 +2,23 @@
 //  Notifications — événements réels des commandes du client
 // ═══════════════════════════════════════════════════════════
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft, BellOff, Clock, Check, ChefHat, Package, Bike, X, Tag,
+  Flame, Heart, Sparkles,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../constants/theme';
 import { useApp } from '../context/AppContext';
-import { formatPrice } from '../data/menuData';
+import { formatPrice, mapPlat, type Dish } from '../data/menuData';
+import { fetchTendances } from '../services/menu';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
+import { DishCardWide } from '../components/cards';
 
 export const NOTIFS_SEEN_KEY = '@menu_notifs_seen';
 
@@ -39,15 +42,38 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 }
 
+interface Tendances {
+  topCommandes: Dish[];
+  topLikes: Dish[];
+  reco: Dish[];
+}
+
 export default function NotificationsScreen() {
-  const { colors, orders, reloadOrders, notifsEnabled, promoEnabled } = useApp();
+  const { colors, orders, reloadOrders, notifsEnabled, promoEnabled, userLoc } = useApp();
   const router = useRouter();
+  const [tendances, setTendances] = useState<Tendances | null>(null);
 
   useEffect(() => {
     reloadOrders();
     // Marque tout comme vu (efface la pastille de la cloche)
     AsyncStorage.setItem(NOTIFS_SEEN_KEY, new Date().toISOString()).catch(() => {});
   }, [reloadOrders]);
+
+  // Tendances de la semaine (plats les plus commandés / aimés / recommandés)
+  useEffect(() => {
+    let alive = true;
+    fetchTendances(userLoc)
+      .then(d => {
+        if (!alive) return;
+        setTendances({
+          topCommandes: (d.top_commandes ?? []).map(mapPlat),
+          topLikes: (d.top_likes ?? []).map(mapPlat),
+          reco: (d.recommandations ?? []).map(mapPlat),
+        });
+      })
+      .catch(() => { if (alive) setTendances(null); });
+    return () => { alive = false; };
+  }, [userLoc]);
 
   const items = notifsEnabled ? orders : [];
 
@@ -120,9 +146,46 @@ export default function NotificationsScreen() {
               )}
             </View>
           )}
+
+          {/* ─── Découverte : tendances de la semaine ─────────────── */}
+          <TrendSection
+            title="Les plus commandés cette semaine" Icon={Flame} color={Brand.yellow}
+            dishes={tendances?.topCommandes} colors={colors}
+          />
+          <TrendSection
+            title="Les plus aimés" Icon={Heart} color="#ff6b70"
+            dishes={tendances?.topLikes} colors={colors}
+          />
+          <TrendSection
+            title="Recommandés pour vous" Icon={Sparkles} color={Brand.accentLight}
+            dishes={tendances?.reco} colors={colors}
+          />
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>
+  );
+}
+
+/** Carrousel horizontal de plats — masqué s'il n'y a rien à montrer. */
+function TrendSection({ title, Icon, color, dishes, colors }: {
+  title: string; Icon: LucideIcon; color: string; dishes?: Dish[]; colors: any;
+}) {
+  if (!dishes || dishes.length === 0) return null;
+  return (
+    <View style={{ marginTop: 26 }}>
+      <View style={styles.trendHead}>
+        <View style={[styles.trendIcon, { backgroundColor: color + '1c' }]}>
+          <Icon size={16} color={color} strokeWidth={2.4} />
+        </View>
+        <Text style={[displayFont(16.5, '800'), { color: colors.text, flex: 1 }]}>{title}</Text>
+      </View>
+      <ScrollView
+        horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 13, paddingRight: 4 }}
+      >
+        {dishes.map(d => <DishCardWide key={d.id} dish={d} />)}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -133,4 +196,6 @@ const styles = StyleSheet.create({
   notif: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 14, borderRadius: 20, borderWidth: 1 },
   notifIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   suivre: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.pill },
+  trendHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 13 },
+  trendIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 });

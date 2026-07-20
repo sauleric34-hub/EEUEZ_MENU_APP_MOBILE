@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { apiGet, apiPost, apiUpload } from './http';
+import { ajouterFichier } from './upload';
 import type {
   CategorieDTO, PlatDTO, RestoDTO, CommandeDTO,
   FavoriToggleDTO, AbonnementToggleDTO, RecommandationsDTO,
@@ -23,11 +24,25 @@ export interface PlatFilters {
   categorie?: string;
   popular?: boolean;
   q?: string;
+  // Signature d'index : `query` attend un Record, sans elle l'appel ne typecheck pas.
+  [cle: string]: string | number | boolean | undefined;
 }
 export const fetchPlats = (filters: PlatFilters = {}) =>
   apiGet<PlatDTO[]>('/client/plats', { query: filters });
 
 export const fetchPlat = (id: number) => apiGet<PlatDTO>(`/client/plats/${id}`);
+
+/** Tendances : plats les plus commandés sur la période, les plus aimés, recommandations. */
+export interface TendancesDTO {
+  periode_jours: number;
+  top_commandes: PlatDTO[];
+  top_likes: PlatDTO[];
+  recommandations: PlatDTO[];
+}
+export const fetchTendances = (coords?: { lat: number; lon: number } | null) =>
+  apiGet<TendancesDTO>('/client/tendances', {
+    query: { jours: 7, lat: coords?.lat, lon: coords?.lon },
+  });
 
 // ─── Recommandations personnalisées ─────────────────────────
 export const fetchRecommendations = (lat?: number, lon?: number, limit = 20) =>
@@ -54,11 +69,7 @@ export const sendMessage = (conversationId: number, texte: string) =>
 export function sendMessageMedia(conversationId: number, imageUri: string, texte = '') {
   const form = new FormData();
   if (texte) form.append('texte', texte);
-  const name = imageUri.split('/').pop() || `photo_${Date.now()}.jpg`;
-  const ext = (name.split('.').pop() || 'jpg').toLowerCase();
-  const type = ext === 'png' ? 'image/png' : 'image/jpeg';
-  // React Native FormData : { uri, name, type }
-  form.append('image', { uri: imageUri, name, type } as unknown as Blob);
+  ajouterFichier(form, 'image', imageUri);
   return apiUpload<MessageDTO>(`/client/conversations/${conversationId}/messages`, form);
 }
 
@@ -87,7 +98,25 @@ export interface CreateOrderParams {
   latitude?: number | null;
   longitude?: number | null;
   notes?: string;
+  /** Demande d'utiliser les points. Le MONTANT est calculé par le serveur. */
+  utiliser_points?: boolean;
 }
+
+/** Aperçu fidélité pour un panier donné (tous plafonds déjà appliqués). */
+export interface FideliteApercuDTO {
+  solde: number;
+  niveau: string;
+  actif: boolean;
+  seuil_minimum: number;
+  points_par_unite: number;
+  valeur_unite: number;
+  reduction_max_pourcentage: number;
+  points_utilisables: number;
+  reduction: number;
+}
+
+export const fetchFideliteApercu = (montant: number) =>
+  apiGet<FideliteApercuDTO>('/client/fidelite', { query: { montant }, auth: true });
 export const createOrder = (params: CreateOrderParams) =>
   apiPost<CommandeDTO>('/client/commandes/', params, { auth: true });
 

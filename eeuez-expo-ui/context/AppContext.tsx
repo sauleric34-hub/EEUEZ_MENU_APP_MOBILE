@@ -16,6 +16,7 @@ import * as authService from '../services/auth';
 import * as menu from '../services/menu';
 import { setAuthExpiredHandler } from '../services/http';
 import * as addr from '../services/addresses';
+import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
 import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
 
@@ -50,6 +51,8 @@ interface AppContextValue {
   register: (p: authService.RegisterParams) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (p: authService.ProfileUpdate) => Promise<void>;
+  /** Recharge le profil serveur (points, avatar…). */
+  refreshUser: () => Promise<void>;
 
   // adresses de livraison enregistrées
   addresses: AdresseDTO[];
@@ -89,6 +92,11 @@ interface AppContextValue {
   toggleFollow: (id: number) => void;
   isFollowing: (id: number) => boolean;
 
+  // publications (fil social)
+  pubLikes: Record<number, boolean>;
+  togglePubLike: (id: number) => void;
+  reloadPubLikes: () => Promise<void>;
+
   // panier
   cart: Record<number, number>;
   addToCart: (id: number, qty?: number) => void;
@@ -105,7 +113,7 @@ interface AppContextValue {
   // commandes / suivi
   orders: CommandeDTO[];
   reloadOrders: () => Promise<void>;
-  checkout: (mode?: PaymentMode) => Promise<CommandeDTO>;
+  checkout: (mode?: PaymentMode, utiliserPoints?: boolean) => Promise<CommandeDTO>;
   activeOrder: CommandeDTO | null;
   trackStep: number;
 }
@@ -151,6 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // état utilisateur
   const [likes, setLikes] = useState<Record<number, boolean>>({});
   const [follows, setFollows] = useState<Record<number, boolean>>({});
+  const [pubLikes, setPubLikes] = useState<Record<number, boolean>>({});
   const [cart, setCart] = useState<Record<number, number>>({});
   const [orders, setOrders] = useState<CommandeDTO[]>([]);
   const [addresses, setAddresses] = useState<AdresseDTO[]>([]);
@@ -223,6 +232,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // silencieux : l'utilisateur n'est peut-être pas connecté
     }
+    // Les likes de publications sont chargés à part : une erreur ici ne doit
+    // pas empêcher favoris et abonnements d'être hydratés.
+    try {
+      const liked = await publications.fetchPublicationsLikees();
+      setPubLikes(Object.fromEntries(liked.map(p => [p.id, true])));
+    } catch {
+      // idem
+    }
   }, []);
 
   const reloadOrders = useCallback(async () => {
@@ -282,6 +299,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await loadUserState();
         await reloadOrders();
         await reloadAddresses();
+        // Les points ont pu évoluer côté serveur depuis la dernière session.
+        await refreshUser();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,11 +324,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const u = await authService.updateProfile(p);
     setUser(u);
   };
+
+  /** Recharge le profil depuis le serveur.
+   *  Indispensable pour les points : ils évoluent côté serveur (quelqu'un
+   *  aime ou commente votre publication), sans aucune action de votre part. */
+  const refreshUser = useCallback(async () => {
+    try {
+      const frais = await authService.fetchProfile();
+      setUser(frais);
+      await authService.storeUser(frais);
+    } catch {
+      // Hors ligne ou session expirée : on garde la copie locale.
+    }
+  }, []);
   const signOut = async () => {
     await authService.logout();
     setUser(null);
     setLikes({});
     setFollows({});
+    setPubLikes({});
     setCart({});
     setOrders([]);
     setAddresses([]);
@@ -323,6 +356,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setLikes({});
       setFollows({});
+      setPubLikes({});
       setOrders([]);
       setAddresses([]);
       setDeliveryAddress(null);
@@ -363,6 +397,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setFollows(s => ({ ...s, [id]: !s[id] })));
   };
 
+  // ─── Likes de publications (même schéma optimiste/réconcilié) ──────────
+  const togglePubLike = (id: number) => {
+    setPubLikes(s => ({ ...s, [id]: !s[id] }));
+    publications.togglePublicationLike(id)
+      .then(res => setPubLikes(Object.fromEntries(res.publications_likees.map(p => [p, true]))))
+      .catch(() => setPubLikes(s => ({ ...s, [id]: !s[id] })));
+  };
+
+  const reloadPubLikes = useCallback(async () => {
+    try {
+      const liked = await publications.fetchPublicationsLikees();
+      setPubLikes(Object.fromEntries(liked.map(p => [p.id, true])));
+    } catch {
+      // Utilisateur déconnecté : on n'écrase pas l'état existant.
+    }
+  }, []);
+
   // ─── Panier ────────────────────────────────────────────────
   const addToCart = (id: number, qty = 1) => setCart(s => ({ ...s, [id]: (s[id] || 0) + qty }));
   const cartInc = (id: number) => setCart(s => ({ ...s, [id]: (s[id] || 0) + 1 }));
@@ -392,7 +443,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cartLines, restoMap]);
 
   // ─── Commandes / suivi ─────────────────────────────────────
-  const checkout = async (mode: PaymentMode = 'especes'): Promise<CommandeDTO> => {
+  const checkout = async (
+    mode: PaymentMode = 'especes', utiliserPoints = false,
+  ): Promise<CommandeDTO> => {
     if (!cartLines.length) throw new Error('Panier vide');
     if (!deliveryAddress || !deliveryAddress.adresse) {
       throw new Error('Choisissez un lieu de livraison.');
@@ -407,7 +460,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Coordonnées GPS précises du lieu de livraison → carte du livreur + suivi
       latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
       longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
+      utiliser_points: utiliserPoints,
     });
+    // La dépense de points modifie le solde : on resynchronise le profil.
+    if (utiliserPoints) await refreshUser();
     // On NE vide PAS le panier ici : pour le mobile money la commande n'existe
     // vraiment qu'une fois payée. Le panier est vidé par l'appelant (espèces
     // tout de suite, mobile money seulement après confirmation du paiement).
@@ -431,13 +487,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     mode, colors, toggleTheme,
     notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
-    user, authReady, signIn, register, signOut, updateUser,
+    user, authReady, signIn, register, signOut, updateUser, refreshUser,
     addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
     categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
     userLoc, recommended, recoRestos, positionUsed, reloadRecommendations,
     restoById, dishById, dishesOfResto,
     likes, toggleLike, favList,
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
+    pubLikes, togglePubLike, reloadPubLikes,
     cart, addToCart, cartInc, cartDec, cartRemove, clearCart,
     cartLines, cartCount, subtotal, deliveryFee, total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,

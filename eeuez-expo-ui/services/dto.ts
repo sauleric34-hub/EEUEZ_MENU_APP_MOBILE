@@ -10,7 +10,12 @@ export interface UserDTO {
   telephone?: string;
   allergies?: string;
   avatar?: string | null;
+  /** Fidélité : solde de points et niveau déduit (bronze/argent/or). */
+  points_solde?: number;
+  niveau?: NiveauFidelite;
 }
+
+export type NiveauFidelite = 'bronze' | 'argent' | 'or';
 
 export interface AuthDTO {
   token: string;
@@ -47,6 +52,8 @@ export interface PlatDTO {
   ma_note: number | null;
   nombre_commandes: number;
   nombre_likes: number;
+  /** Date d'ajout du plat — sert au tri « Nouveautés ». */
+  created_at?: string;
 }
 
 export interface MessageDTO {
@@ -132,6 +139,75 @@ export interface CommandeDTO {
   paiement_confirme?: boolean;
   // Suivi cartographique en direct (présent dès qu'une livraison existe).
   suivi?: SuiviDTO | null;
+}
+
+// ─── Publications (fil social) ───────────────────────────────
+export interface AuteurMiniDTO {
+  id: number;
+  prenom: string;
+  nom: string;
+  pseudo: string;
+  avatar: string | null;
+  points: number;
+  niveau: 'bronze' | 'argent' | 'or';
+}
+
+export interface PublicationMediaDTO {
+  id: number;
+  type: 'image' | 'video';
+  url: string;
+  ordre: number;
+}
+
+export interface PublicationPlatDTO {
+  id: number;
+  nom: string;
+  prix: number;
+  image: string | null;
+}
+
+export interface CommentaireDTO {
+  id: number;
+  texte: string;
+  created_at: string;
+  auteur_details: AuteurMiniDTO;
+  peut_supprimer: boolean;
+}
+
+export interface PublicationDTO {
+  id: number;
+  restaurant: number;
+  restaurant_nom: string;
+  restaurant_logo: string | null;
+  texte: string;
+  statut: string;
+  created_at: string;
+  medias: PublicationMediaDTO[];
+  plat: number | null;
+  plat_details: PublicationPlatDTO | null;
+  /** Non nul uniquement pour une contribution client. */
+  auteur_details: AuteurMiniDTO | null;
+  nombre_likes: number;
+  nombre_commentaires: number;
+  est_like: boolean;
+  est_abonne: boolean;
+  peut_supprimer: boolean;
+  /** Présent seulement sur le détail. */
+  commentaires?: CommentaireDTO[];
+}
+
+export interface FeedPageDTO {
+  resultats: PublicationDTO[];
+  /** À renvoyer tel quel pour la page suivante (fige le classement). */
+  curseur: string;
+  a_suivant: boolean;
+}
+
+export interface PublicationLikeToggleDTO {
+  liked: boolean;
+  publication: number;
+  publications_likees: number[];
+  nombre_likes: number;
 }
 
 export interface GeoPointDTO { lat: number; lon: number; }

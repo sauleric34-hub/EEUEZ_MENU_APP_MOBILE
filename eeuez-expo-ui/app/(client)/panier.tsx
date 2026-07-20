@@ -2,17 +2,17 @@
 //  Panier
 // ═══════════════════════════════════════════════════════════
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone } from 'lucide-react-native';
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
-import type { PaymentMode } from '../../services/menu';
-import { initiateMonetbilPayment, cancelOrder } from '../../services/menu';
+import type { PaymentMode, FideliteApercuDTO } from '../../services/menu';
+import { initiateMonetbilPayment, cancelOrder, fetchFideliteApercu } from '../../services/menu';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { MonetbilWebView } from '../../components/MonetbilWebView';
@@ -32,6 +32,40 @@ export default function PanierScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phone, setPhone] = useState(user?.telephone || '');
+
+  // ─── Fidélité ─────────────────────────────────────────
+  // L'aperçu (et donc la réduction) est TOUJOURS calculé par le serveur :
+  // l'app n'applique aucune règle métier de son côté.
+  const [fidelite, setFidelite] = useState<FideliteApercuDTO | null>(null);
+  const [usePoints, setUsePoints] = useState(false);
+
+  useEffect(() => {
+    if (!user || total <= 0) { setFidelite(null); return; }
+    let vivant = true;
+    fetchFideliteApercu(total)
+      .then(res => { if (vivant) setFidelite(res); })
+      .catch(() => { if (vivant) setFidelite(null); });
+    return () => { vivant = false; };
+  }, [user, total]);
+
+  // Rien à convertir → on ne laisse pas la case cochée.
+  useEffect(() => {
+    if (!fidelite || fidelite.reduction <= 0) setUsePoints(false);
+  }, [fidelite]);
+
+  const reduction = usePoints && fidelite ? fidelite.reduction : 0;
+  const totalAPayer = Math.max(0, total - reduction);
+
+  // Petit rebond du total quand la réduction s'applique : le changement de
+  // montant se remarque, au lieu de passer inaperçu.
+  const rebondTotal = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!fidelite || fidelite.reduction <= 0) return;
+    rebondTotal.setValue(0.88);
+    Animated.spring(rebondTotal, {
+      toValue: 1, friction: 4, tension: 150, useNativeDriver: true,
+    }).start();
+  }, [usePoints, rebondTotal, fidelite]);
 
   // ─── État WebView Monetbil ────────────────────────────
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
@@ -73,7 +107,7 @@ export default function PanierScreen() {
     setBusy(true); setError(null);
     try {
       // 1. Créer la commande (toujours)
-      const order = await checkout(mode);
+      const order = await checkout(mode, usePoints);
 
       if (MONETBIL_MODES.includes(mode)) {
         // 2. Pour MTN/Orange Money → initier le paiement Monetbil.
@@ -215,6 +249,47 @@ export default function PanierScreen() {
               )}
 
 
+              {/* Réduction fidélité — le montant vient toujours du serveur */}
+              {fidelite && fidelite.actif && fidelite.solde > 0 && (
+                <PressableScale
+                  onPress={fidelite.reduction > 0 ? () => setUsePoints(v => !v) : undefined}
+                  scaleTo={0.99}
+                  style={{ marginTop: 16 }}
+                >
+                  <View style={[
+                    styles.points,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: usePoints ? Brand.yellow : colors.border,
+                    },
+                  ]}>
+                    <View style={[styles.pointsIcon, { backgroundColor: Brand.yellow + '1f' }]}>
+                      <Sparkles size={18} color={Brand.yellow} strokeWidth={2.3} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>
+                        {fidelite.reduction > 0 ? 'Utiliser mes points' : 'Mes points'}
+                      </Text>
+                      <Text style={[bodyFont(11.5, '600'), { color: colors.muted, marginTop: 2 }]}>
+                        {fidelite.reduction > 0
+                          ? `${fidelite.solde} pts · −${formatPrice(fidelite.reduction)} sur cette commande`
+                          : `${fidelite.solde} pts · minimum ${fidelite.seuil_minimum} pts pour convertir`}
+                      </Text>
+                    </View>
+                    {fidelite.reduction > 0 && (
+                      <View style={[
+                        styles.box,
+                        usePoints
+                          ? { backgroundColor: Brand.yellow, borderColor: Brand.yellow }
+                          : { borderColor: colors.border },
+                      ]}>
+                        {usePoints && <Check size={13} color="#1a1200" strokeWidth={3.2} />}
+                      </View>
+                    )}
+                  </View>
+                </PressableScale>
+              )}
+
               <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.sumRow}>
                   <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Sous-total</Text>
@@ -224,10 +299,27 @@ export default function PanierScreen() {
                   <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Livraison</Text>
                   <Text style={[bodyFont(14, '700'), { color: '#8fd6a8' }]}>{formatPrice(deliveryFee)}</Text>
                 </View>
+                {reduction > 0 && (
+                  <View style={[styles.sumRow, { marginTop: 10 }]}>
+                    <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
+                      Réduction fidélité
+                    </Text>
+                    <Text style={[bodyFont(14, '700'), { color: Brand.yellow }]}>
+                      −{formatPrice(reduction)}
+                    </Text>
+                  </View>
+                )}
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.sumRow}>
                   <Text style={[displayFont(18, '800'), { color: colors.text }]}>Total</Text>
-                  <Text style={[displayFont(22, '800'), { color: Brand.accentLight }]}>{formatPrice(total)}</Text>
+                  <Animated.Text
+                    style={[
+                      displayFont(22, '800'),
+                      { color: Brand.accentLight, transform: [{ scale: rebondTotal }] },
+                    ]}
+                  >
+                    {formatPrice(totalAPayer)}
+                  </Animated.Text>
                 </View>
                 {error && (
                   <View style={styles.errRow}>
@@ -258,7 +350,7 @@ export default function PanierScreen() {
     {paymentUrl && (
       <MonetbilWebView
         paymentUrl={paymentUrl}
-        amount={total}
+        amount={totalAPayer}
         onSuccess={() => {
           setPaymentUrl(null);
           setPendingOrderId(null);
@@ -322,6 +414,12 @@ const styles = StyleSheet.create({
   phoneIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   phoneInput: { flex: 1, paddingVertical: 4 },
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  points: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 13, borderRadius: Radius.md, borderWidth: 1,
+  },
+  pointsIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  box: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.8, alignItems: 'center', justifyContent: 'center' },
   summary: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   sumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   divider: { height: 1, marginVertical: 14 },

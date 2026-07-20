@@ -2,10 +2,13 @@
 //  Accueil (Home)
 // ═══════════════════════════════════════════════════════════
 
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, FlatList, RefreshControl, ActivityIndicator,
+  type ViewToken,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, SlidersHorizontal, Bell, Sun, Moon, Star, TriangleAlert } from 'lucide-react-native';
 import { Brand, Radius } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
@@ -17,6 +20,17 @@ import {
   AccentButton, displayFont, bodyFont,
 } from '../../components/ui';
 import { DishCardWide } from '../../components/cards';
+import { PublicationCard } from '../../components/PublicationCard';
+import { fetchFeed } from '../../services/publications';
+import type { PublicationDTO } from '../../services/dto';
+
+/** Publications montrées juste après « Près de vous » ; le reste défile sous les restaurants. */
+const PUBS_EN_TETE = 5;
+
+/** Une ligne du fil : soit une publication, soit le bloc « Restaurants ». */
+type LigneFil =
+  | { type: 'pub'; pub: PublicationDTO }
+  | { type: 'restos' };
 
 export default function HomeScreen() {
   const {
@@ -31,31 +45,82 @@ export default function HomeScreen() {
   // Suggestions personnalisées (proximité + retours) ; repli : populaires
   const forYou = recommended.length ? recommended : popular;
   const restoList = recoRestos.length ? recoRestos : restaurants;
-  const refreshAll = async () => { await reloadCatalogue(); await reloadRecommendations(); };
 
-  if (dataLoading && !restaurants.length) {
-    return <ScreenBg><SafeAreaView style={{ flex: 1 }}><Loader colors={colors} /></SafeAreaView></ScreenBg>;
-  }
-  if (dataError && !restaurants.length) {
-    return (
-      <ScreenBg><SafeAreaView style={{ flex: 1 }}>
-        <CenterMessage
-          Icon={TriangleAlert} colors={colors}
-          title="Connexion impossible" subtitle={dataError}
-          action={<AccentButton label="Réessayer" onPress={reloadCatalogue} style={{ marginTop: 20, minWidth: 180 }} />}
-        />
-      </SafeAreaView></ScreenBg>
-    );
-  }
+  // ─── Fil de publications (défilement infini) ─────────────────
+  // Le curseur fige le classement : sans lui, la page 2 serait recalculée
+  // et on verrait des doublons.
+  const [pubs, setPubs] = useState<PublicationDTO[]>([]);
+  const [curseur, setCurseur] = useState<string | undefined>();
+  const [page, setPage] = useState(1);
+  const [aSuivant, setASuivant] = useState(false);
+  const [chargePlus, setChargePlus] = useState(false);
 
-  return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={dataLoading} onRefresh={refreshAll} tintColor={Brand.accent} />}
-        >
+  const chargerFeed = useCallback(async (reset = false) => {
+    try {
+      const res = await fetchFeed(reset ? 1 : page, reset ? undefined : curseur);
+      setPubs(prev => (reset ? res.resultats : [...prev, ...res.resultats]));
+      setCurseur(res.curseur);
+      setPage(reset ? 2 : page + 1);
+      setASuivant(res.aSuivant);
+    } catch {
+      if (reset) setPubs([]);
+      setASuivant(false);
+    }
+  }, [page, curseur]);
+
+  useEffect(() => { chargerFeed(true); }, []);   // au montage uniquement
+
+  const chargerSuite = useCallback(async () => {
+    if (chargePlus || !aSuivant) return;
+    setChargePlus(true);
+    try { await chargerFeed(false); } finally { setChargePlus(false); }
+  }, [chargePlus, aSuivant, chargerFeed]);
+
+  const refreshAll = async () => {
+    await reloadCatalogue();
+    await reloadRecommendations();
+    await chargerFeed(true);
+  };
+
+  // Le fil est une seule liste : 5 publications, le bloc « Restaurants »,
+  // puis la suite. Tout étant item, la détection de visibilité couvre chaque
+  // publication (impossible dans un ListHeaderComponent).
+  const lignes = useMemo<LigneFil[]>(() => {
+    const debut: LigneFil[] = pubs.slice(0, PUBS_EN_TETE).map(p => ({ type: 'pub', pub: p }));
+    const suite: LigneFil[] = pubs.slice(PUBS_EN_TETE).map(p => ({ type: 'pub', pub: p }));
+    return [...debut, { type: 'restos' }, ...suite];
+  }, [pubs]);
+
+  // ─── Lecture vidéo : seule la publication qui occupe l'écran est lue ──
+  const [pubActive, setPubActive] = useState<number | null>(null);
+
+  // Le seuil de 60 % garantit qu'une seule carte est « la » visible : une
+  // carte pleine largeur dépasse la moitié de l'écran en hauteur.
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const premiere = viewableItems.find(v => (v.item as LigneFil)?.type === 'pub');
+      setPubActive(premiere ? (premiere.item as { pub: PublicationDTO }).pub.id : null);
+    },
+  ).current;
+
+  // Quitter l'accueil met tout en pause (sinon le son continue en arrière-plan).
+  // On NE remet PAS la publication active à null : la FlatList ne réémet pas
+  // la visibilité au retour, la vidéo resterait donc en pause jusqu'au
+  // prochain défilement. On coupe via un indicateur de focus distinct.
+  const [ecranActif, setEcranActif] = useState(true);
+  useFocusEffect(useCallback(() => {
+    setEcranActif(true);
+    return () => setEcranActif(false);
+  }, []));
+
+  // En-tête de la liste : tout le contenu au-dessus du fil.
+  // Référence stable indispensable — sinon l'en-tête se remonte à chaque
+  // rendu et perd son état (focus, position des carrousels).
+  // NB : ce hook doit rester AVANT tout retour anticipé (règles des hooks).
+  const EnTete = useCallback(() => (
+        <>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.greetRow}>
@@ -116,25 +181,77 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* Restaurants (triés par proximité si position connue) */}
-          <SectionTitle title="Restaurants" colors={colors} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 2, paddingHorizontal: 2 }}>
-            {restoList.map(r => (
-              <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
-                <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
-                  <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
-                  <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
-                    <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                    <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
-                      {r.rating} · {r.distanceKm != null ? formatKm(r.distanceKm) : r.cuisine}
-                    </Text>
-                  </View>
-                </View>
-              </PressableScale>
-            ))}
-          </ScrollView>
-        </ScrollView>
+          {/* Le fil commence ici — les publications sont des items de la liste,
+              pour que la détection de visibilité (lecture vidéo) les couvre. */}
+          {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
+        </>
+  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length]);
+
+  /** Bloc « Restaurants » : intercalé dans le fil, après les 5 premières. */
+  const SectionRestaurants = useCallback(() => (
+    <>
+      <SectionTitle title="Restaurants" colors={colors} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 2, paddingHorizontal: 2 }}>
+        {restoList.map(r => (
+          <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
+            <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
+              <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
+              <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
+                <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
+                <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
+                  {r.rating} · {r.distanceKm != null ? formatKm(r.distanceKm) : r.cuisine}
+                </Text>
+              </View>
+            </View>
+          </PressableScale>
+        ))}
+      </ScrollView>
+      <SectionTitle title="Dans votre communauté" colors={colors} />
+    </>
+  ), [colors, restoList, router]);
+
+  // Écrans de repli — placés après tous les hooks.
+  if (dataLoading && !restaurants.length) {
+    return <ScreenBg><SafeAreaView style={{ flex: 1 }}><Loader colors={colors} /></SafeAreaView></ScreenBg>;
+  }
+  if (dataError && !restaurants.length) {
+    return (
+      <ScreenBg><SafeAreaView style={{ flex: 1 }}>
+        <CenterMessage
+          Icon={TriangleAlert} colors={colors}
+          title="Connexion impossible" subtitle={dataError}
+          action={<AccentButton label="Réessayer" onPress={reloadCatalogue} style={{ marginTop: 20, minWidth: 180 }} />}
+        />
+      </SafeAreaView></ScreenBg>
+    );
+  }
+
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <FlatList
+          data={lignes}
+          keyExtractor={l => (l.type === 'pub' ? `pub-${l.pub.id}` : 'restos')}
+          renderItem={({ item }) =>
+            item.type === 'restos'
+              ? <SectionRestaurants />
+              : <PublicationCard publication={item.pub} actif={ecranActif && item.pub.id === pubActive} />
+          }
+          ListHeaderComponent={EnTete}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={dataLoading} onRefresh={refreshAll} tintColor={Brand.accent} />}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          onEndReached={chargerSuite}
+          onEndReachedThreshold={0.6}
+          ListFooterComponent={
+            chargePlus
+              ? <ActivityIndicator color={Brand.accent} style={{ marginVertical: 20 }} />
+              : null
+          }
+        />
       </SafeAreaView>
     </ScreenBg>
   );

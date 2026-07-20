@@ -2,20 +2,21 @@
 //  Profil client
 // ═══════════════════════════════════════════════════════════
 
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, Alert, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Sun, Moon, Settings, ChefHat, Bike, Check, Clock, Package, X, LogOut, TriangleAlert,
-  CalendarCheck, ChevronRight,
+  CalendarCheck, ChevronRight, Trash2, Award,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice, gradForId, iconForResto, absMedia, iconForPlat } from '../../data/menuData';
-import type { CommandeDTO } from '../../services/dto';
+import { fetchMesPublications, supprimerPublication } from '../../services/publications';
+import type { CommandeDTO, PublicationDTO, NiveauFidelite } from '../../services/dto';
 import { ScreenBg } from '../../components/ScreenBg';
 import {
   IconButton, DishTile, PressableScale, StatusPill, SectionTitle, displayFont, bodyFont,
@@ -71,15 +72,85 @@ function OrderRow({ order }: { order: CommandeDTO }) {
   );
 }
 
+/** Compteur qui grimpe jusqu'à sa valeur — rend les points gagnés tangibles. */
+function PointsAnimes({ valeur, couleur }: { valeur: number; couleur: string }) {
+  const [affiche, setAffiche] = useState(0);
+  const progression = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (valeur <= 0) { setAffiche(0); return; }
+    progression.setValue(0);
+    const abonnement = progression.addListener(({ value }) => {
+      setAffiche(Math.round(value * valeur));
+    });
+    Animated.timing(progression, {
+      toValue: 1,
+      duration: 900,
+      // useNativeDriver impossible : on lit la valeur en JS pour l'afficher.
+      useNativeDriver: false,
+    }).start();
+    return () => progression.removeListener(abonnement);
+  }, [valeur, progression]);
+
+  return <Text style={[displayFont(20, '800'), { color: couleur }]}>{affiche}</Text>;
+}
+
+/** Habillage du badge de fidélité (les seuils, eux, sont côté serveur). */
+const NIVEAUX: Record<NiveauFidelite, { libelle: string; fond: string; bord: string; texte: string }> = {
+  bronze: { libelle: 'Bronze', fond: '#8a5a2b22', bord: '#8a5a2b66', texte: '#c98b46' },
+  argent: { libelle: 'Argent', fond: '#9aa5b122', bord: '#9aa5b166', texte: '#c3ccd6' },
+  or:     { libelle: 'Or',     fond: Brand.yellow + '22', bord: Brand.yellow + '66', texte: Brand.yellow },
+};
+
 export default function ProfilScreen() {
-  const { colors, mode, toggleTheme, user, favList, orders, signOut } = useApp();
+  const { colors, mode, toggleTheme, user, favList, orders, signOut, refreshUser } = useApp();
   const router = useRouter();
   const favCount = favList.length;
+
+  // Mes contributions + solde de points, rechargés à chaque affichage :
+  // les points évoluent côté serveur (likes et commentaires reçus).
+  const [mesPubs, setMesPubs] = useState<PublicationDTO[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let vivant = true;
+      refreshUser();
+      fetchMesPublications()
+        .then(res => { if (vivant) setMesPubs(res); })
+        .catch(() => { if (vivant) setMesPubs([]); });
+      return () => { vivant = false; };
+    }, [refreshUser]),
+  );
+
+  const supprimerPub = (pub: PublicationDTO) => {
+    Alert.alert(
+      'Supprimer',
+      'Cette publication ne sera plus visible nulle part. Action irréversible.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supprimerPublication(pub.id);
+              setMesPubs(prev => prev.filter(p => p.id !== pub.id));
+            } catch {
+              Alert.alert('Erreur', 'Suppression impossible.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const displayName = user
     ? (`${user.first_name} ${user.last_name}`.trim() || user.username || user.email)
     : 'Invité';
   const email = user?.email ?? '';
+  const points = user?.points_solde ?? 0;
+  const niveauStyle = NIVEAUX[user?.niveau ?? 'bronze'];
+  // Le serializer renvoie une URL relative : absMedia() la préfixe.
+  const avatarUri = absMedia(user?.avatar ?? null);
 
   const logout = async () => { await signOut(); router.replace('/'); };
 
@@ -98,23 +169,37 @@ export default function ProfilScreen() {
           {/* Avatar */}
           <View style={styles.avatarWrap}>
             <LinearGradient colors={[Brand.yellow, Brand.accent, Brand.green]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatarRing}>
-              <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.avatar, { borderColor: colors.page }]}>
-                <ChefHat size={40} color="#fff" strokeWidth={1.9} />
-              </LinearGradient>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: colors.page }]} />
+              ) : (
+                <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={[styles.avatar, { borderColor: colors.page }]}>
+                  <ChefHat size={40} color="#fff" strokeWidth={1.9} />
+                </LinearGradient>
+              )}
             </LinearGradient>
             <Text style={[displayFont(21, '800'), { color: colors.text, marginTop: 12 }]}>{displayName}</Text>
             {!!email && <Text style={[bodyFont(13, '500'), { color: colors.muted, marginTop: 3 }]}>{email}</Text>}
+
+            {/* Badge de niveau — gagné via les publications */}
+            <View style={[styles.niveauChip, { backgroundColor: niveauStyle.fond, borderColor: niveauStyle.bord }]}>
+              <Award size={13} color={niveauStyle.texte} strokeWidth={2.5} />
+              <Text style={[bodyFont(11.5, '800'), { color: niveauStyle.texte }]}>
+                {niveauStyle.libelle}
+              </Text>
+            </View>
           </View>
 
           {/* Stats */}
           <View style={styles.statsRow}>
             {[
-              { v: String(orders.length), l: 'Commandes', c: Brand.yellow },
-              { v: String(favCount), l: 'Favoris', c: '#ff6b70' },
-              { v: String(orders.length * 10), l: 'Points', c: Brand.accentLight },
+              { v: String(orders.length), l: 'Commandes', c: Brand.yellow, anime: false },
+              { v: String(favCount), l: 'Favoris', c: '#ff6b70', anime: false },
+              { v: String(points), l: 'Points', c: Brand.accentLight, anime: true },
             ].map(s => (
               <View key={s.l} style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[displayFont(20, '800'), { color: s.c }]}>{s.v}</Text>
+                {s.anime
+                  ? <PointsAnimes valeur={points} couleur={s.c} />
+                  : <Text style={[displayFont(20, '800'), { color: s.c }]}>{s.v}</Text>}
                 <Text style={[bodyFont(11, '600'), { color: colors.muted, marginTop: 2 }]}>{s.l}</Text>
               </View>
             ))}
@@ -137,6 +222,52 @@ export default function ProfilScreen() {
             <View style={[styles.note, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[bodyFont(13, '500'), { color: colors.muted, textAlign: 'center' }]}>Aucun favori pour l'instant.</Text>
             </View>
+          )}
+
+          {/* Mes publications */}
+          {mesPubs.length > 0 && (
+            <>
+              <SectionTitle title="Mes publications" colors={colors} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
+                {mesPubs.map(p => {
+                  const media = p.medias?.[0];
+                  const enAttente = p.statut === 'en_attente';
+                  const refusee = p.statut === 'refusee';
+                  return (
+                    <View key={p.id} style={[styles.favMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <PressableScale
+                        onPress={() => (enAttente || refusee ? undefined : router.push(`/publication/${p.id}`))}
+                      >
+                        <View>
+                          {media ? (
+                            <Image source={{ uri: media.url }} style={{ height: 76, width: '100%' }} />
+                          ) : (
+                            <View style={{ height: 76, backgroundColor: colors.surface2 }} />
+                          )}
+                          {/* Statut de modération */}
+                          <View style={[
+                            styles.pubBadge,
+                            { backgroundColor: enAttente ? Brand.yellow : refusee ? Brand.danger : '#2f8f4e' },
+                          ]}>
+                            <Text style={[bodyFont(9.5, '800'), { color: enAttente ? '#1a1200' : '#fff' }]}>
+                              {enAttente ? 'En attente' : refusee ? 'Refusée' : 'Publiée'}
+                            </Text>
+                          </View>
+                        </View>
+                      </PressableScale>
+                      <View style={{ padding: 9, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted, flex: 1 }]}>
+                          {p.restaurant_nom}
+                        </Text>
+                        <PressableScale onPress={() => supprimerPub(p)}>
+                          <Trash2 size={14} color={Brand.danger} strokeWidth={2.3} />
+                        </PressableScale>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
           )}
 
           {/* Mes réservations */}
@@ -197,6 +328,14 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
   stat: { flex: 1, paddingVertical: 14, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
   favMini: { width: 120, borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
+  pubBadge: {
+    position: 'absolute', top: 6, left: 6,
+    paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 8,
+  },
+  niveauChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10,
+    paddingHorizontal: 11, paddingVertical: 5, borderRadius: Radius.pill, borderWidth: 1,
+  },
   note: { padding: 18, borderRadius: 18, borderWidth: 1, marginTop: 12 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, borderWidth: 1 },
   linkIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

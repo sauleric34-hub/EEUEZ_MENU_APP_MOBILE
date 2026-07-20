@@ -55,6 +55,12 @@ export interface Dish {
   rating: string;
   orders: string;
   likes: string;
+  /** Valeurs numériques brutes — servent au tri et aux filtres. */
+  ordersCount: number;
+  likesCount: number;
+  noteValue: number;
+  /** Horodatage d'ajout (ms) — tri « Nouveautés ». 0 si inconnu. */
+  createdAt: number;
   composition: string[];
   description: string;
   isPopular: boolean;
@@ -140,6 +146,20 @@ export function formatKm(km: number | null | undefined): string {
   return `${km.toFixed(1).replace('.', ',')} km`;
 }
 
+/** Distance à vol d'oiseau entre deux points GPS, en km (formule de haversine). */
+export function distanceKm(
+  lat1: number, lon1: number, lat2: number, lon2: number,
+): number {
+  const R = 6371; // rayon terrestre moyen (km)
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 // ─── Mappers DTO → UI ────────────────────────────────────────
 export function mapResto(d: RestoDTO): Resto {
   return {
@@ -185,6 +205,10 @@ export function mapPlat(d: PlatDTO): Dish {
     rating: d.note ? String(d.note) : '—',
     orders: formatCount(d.nombre_commandes ?? 0),
     likes: formatCount(d.nombre_likes ?? 0),
+    ordersCount: Number(d.nombre_commandes ?? 0),
+    likesCount: Number(d.nombre_likes ?? 0),
+    noteValue: Number(d.note ?? 0),
+    createdAt: d.created_at ? new Date(d.created_at).getTime() || 0 : 0,
     composition,
     description: d.description || '',
     isPopular: d.is_popular,

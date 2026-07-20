@@ -28,12 +28,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "REMPLACER_PAR_VOTRE_CLE_GOOGLE_MAPS_ANDROID"
-        }
-      }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

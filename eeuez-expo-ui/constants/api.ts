@@ -29,3 +29,9 @@ export const USER_KEY = '@menu_user';
 // URL de retour surveillée par le WebView pour détecter la fin du paiement.
 // En prod : 'https://menu.cambus.cm/payment/success/'
 export const MONETBIL_SUCCESS_URL = `${MEDIA_BASE_URL}/payment/success/`;
+
+/** Base publique du site — sert à fabriquer les liens de partage.
+ *  Un lien https est cliquable partout (WhatsApp, SMS…), contrairement à
+ *  « menu:// » que les messageries ne transforment pas en lien. La page web
+ *  rebondit ensuite vers l'app. */
+export const WEB_BASE_URL = MEDIA_BASE_URL;
