@@ -34,6 +34,8 @@ export interface Resto {
   platDuJourId: number | null;
   latitude: number | null;
   longitude: number | null;
+  /** Adresse lisible, affichée sous la carte de la fiche restaurant. */
+  adresse?: string | null;
   fraisLivraison: number;
   prixReservation: number;
   tempsLivraison: number;
@@ -42,6 +44,20 @@ export interface Resto {
   /** Renseignés par le moteur de recommandation (si position connue) */
   distanceKm?: number | null;
   etaMin?: number | null;
+}
+
+export interface OptionComplementDTO {
+  id: number;
+  nom: string;
+  /** 0 = offert. */
+  supplement: number;
+}
+
+export interface GroupeComplementDTO {
+  id: number;
+  nom: string;
+  obligatoire: boolean;
+  options: OptionComplementDTO[];
 }
 
 export interface Dish {
@@ -66,6 +82,10 @@ export interface Dish {
   isPopular: boolean;
   category: string | null;
   fraisLivraison: number;
+  /** Groupes d'options : le client choisit UNE possibilité par groupe. */
+  groupesComplements: GroupeComplementDTO[];
+  /** Ce qui vient avec le plat : information seule, sans choix ni surcoût. */
+  elementsInclus: string[];
   image?: string;
   images: string[];
   myRating: number | null;
@@ -176,6 +196,8 @@ export function mapResto(d: RestoDTO): Resto {
     platDuJourId: d.plat_du_jour ?? null,
     latitude: d.latitude != null ? Number(d.latitude) : null,
     longitude: d.longitude != null ? Number(d.longitude) : null,
+    // « adresse, ville » quand les deux existent, sinon celui qui est renseigné.
+    adresse: [d.adresse, d.ville].filter(Boolean).join(', ') || null,
     fraisLivraison: Number(d.frais_livraison ?? 0),
     prixReservation: Number(d.prix_reservation ?? 0),
     tempsLivraison: d.temps_livraison_moyen ?? 30,
@@ -214,6 +236,8 @@ export function mapPlat(d: PlatDTO): Dish {
     isPopular: d.is_popular,
     category: d.categorie_nom,
     fraisLivraison: Number(d.frais_livraison ?? 0),
+    groupesComplements: d.groupes_complements ?? [],
+    elementsInclus: d.elements_inclus ?? [],
     image: absMedia(d.image),
     images: (d.images ?? []).map(u => absMedia(u)).filter((u): u is string => !!u),
     myRating: d.ma_note ?? null,

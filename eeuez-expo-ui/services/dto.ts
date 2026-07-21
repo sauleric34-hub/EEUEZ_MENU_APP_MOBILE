@@ -40,6 +40,13 @@ export interface PlatDTO {
   prix: string;          // prix de base fixé par le restaurant
   prix_client?: number;  // prix payé par le client (base + pourcentage plateforme)
   frais_livraison?: string; // frais de livraison du plat (fixé par le restaurant)
+  /** Options à choisir : un seul choix par groupe. */
+  groupes_complements?: {
+    id: number; nom: string; obligatoire: boolean;
+    options: { id: number; nom: string; supplement: number }[];
+  }[];
+  /** Ce qui vient avec le plat : information seule. */
+  elements_inclus?: string[];
   image: string | null;
   images: string[];
   is_available: boolean;
@@ -155,7 +162,12 @@ export interface AuteurMiniDTO {
 export interface PublicationMediaDTO {
   id: number;
   type: 'image' | 'video';
+  /** Version allégée servie dans le fil (aperçu ~1080 px côté serveur). */
   url: string;
+  /** Fichier d'origine, pour un affichage plein écran. */
+  url_original: string;
+  /** Miniature en data-URI, affichée pendant le chargement de `url`. */
+  flou: string;
   ordre: number;
 }
 

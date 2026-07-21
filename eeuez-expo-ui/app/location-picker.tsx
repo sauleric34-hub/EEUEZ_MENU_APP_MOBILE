@@ -142,73 +142,83 @@ export default function LocationPicker() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {/* Carte OpenStreetMap (gratuite, sans clé) */}
-      <LeafletPickerMap
-        ref={mapRef}
-        initialLat={center.latitude}
-        initialLng={center.longitude}
-        dark={mode === 'dark'}
-        onCenterChange={onCenterChange}
-      />
+      {/* ─── Région carte : occupe TOUT l'espace au-dessus du panneau ─── */}
+      <View style={styles.mapRegion}>
+        <LeafletPickerMap
+          ref={mapRef}
+          initialLat={center.latitude}
+          initialLng={center.longitude}
+          dark={mode === 'dark'}
+          onCenterChange={onCenterChange}
+        />
 
-      {/* Pin central fixe */}
-      <View pointerEvents="none" style={styles.centerPin}>
-        <MapPin size={40} color={Brand.accent} fill={Brand.accent} strokeWidth={1.5} />
-        <View style={styles.pinShadow} />
+        {/* Pin fixe, centré sur la carte. La pointe indique le point exact
+            de livraison ; le petit disque au sol marque ce point au sol. */}
+        <View pointerEvents="none" style={styles.pinLayer}>
+          <View style={styles.marker}>
+            <MapPin size={46} color={Brand.accent} fill={Brand.accent} strokeWidth={0} />
+            <View style={styles.markerDot} />
+          </View>
+        </View>
+        <View pointerEvents="none" style={styles.pinLayer}>
+          <View style={styles.markerBase} />
+        </View>
+
+        {/* Contrôles superposés à la carte (retour, recherche, ma position) */}
+        <SafeAreaView edges={['top']} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <View style={styles.topBar}>
+            <PressableScale onPress={() => router.back()}>
+              <View style={[styles.iconBtn, { backgroundColor: colors.nav, borderColor: colors.border }, glow('#000', 6)]}>
+                <ChevronLeft size={22} color={colors.text} />
+              </View>
+            </PressableScale>
+            <View style={[styles.searchPill, { backgroundColor: colors.nav, borderColor: colors.border }, glow('#000', 6)]}>
+              <Search size={17} color={Brand.accentLight} strokeWidth={2.3} />
+              <TextInput
+                value={query} onChangeText={onSearch}
+                placeholder="Rechercher un lieu, quartier…" placeholderTextColor={colors.faint}
+                style={[styles.searchInput, { color: colors.text }]}
+              />
+              {searching && <ActivityIndicator size="small" color={Brand.accent} />}
+              {!!query && !searching && (
+                <PressableScale onPress={() => { setQuery(''); setResults([]); }}>
+                  <X size={17} color={colors.faint} />
+                </PressableScale>
+              )}
+            </View>
+          </View>
+
+          {/* Résultats de recherche */}
+          {results.length > 0 && (
+            <View style={[styles.results, { backgroundColor: colors.nav, borderColor: colors.border }, glow('#000', 10)]}>
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {results.map((r, i) => (
+                  <PressableScale key={i} onPress={() => pickResult(r)}>
+                    <View style={[styles.resultRow, { borderBottomColor: colors.border }]}>
+                      <MapPin size={15} color={Brand.accentLight} strokeWidth={2.2} />
+                      <Text numberOfLines={2} style={[bodyFont(13, '500'), { color: colors.text, flex: 1 }]}>{r.label}</Text>
+                    </View>
+                  </PressableScale>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Bouton « ma position », ancré en bas à droite de la carte */}
+          <View style={{ flex: 1 }} pointerEvents="box-none">
+            <PressableScale onPress={useMyLocation} style={styles.locateBtn}>
+              <View style={[styles.iconBtn, { backgroundColor: colors.nav, borderColor: colors.border }, glow(Brand.accent, 14)]}>
+                <LocateFixed size={22} color={Brand.accentLight} strokeWidth={2.2} />
+              </View>
+            </PressableScale>
+          </View>
+        </SafeAreaView>
       </View>
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']} pointerEvents="box-none">
-        {/* Barre haut : retour + recherche */}
-        <View style={styles.topBar}>
-          <PressableScale onPress={() => router.back()}>
-            <View style={[styles.iconBtn, { backgroundColor: colors.nav, borderColor: colors.border }]}>
-              <ChevronLeft size={22} color={colors.text} />
-            </View>
-          </PressableScale>
-          <View style={[styles.searchPill, { backgroundColor: colors.nav, borderColor: colors.border }]}>
-            <Search size={17} color={Brand.accentLight} strokeWidth={2.3} />
-            <TextInput
-              value={query} onChangeText={onSearch}
-              placeholder="Rechercher un lieu, quartier…" placeholderTextColor={colors.faint}
-              style={[styles.searchInput, { color: colors.text }]}
-            />
-            {searching && <ActivityIndicator size="small" color={Brand.accent} />}
-            {!!query && !searching && (
-              <PressableScale onPress={() => { setQuery(''); setResults([]); }}>
-                <X size={17} color={colors.faint} />
-              </PressableScale>
-            )}
-          </View>
-        </View>
-
-        {/* Résultats de recherche */}
-        {results.length > 0 && (
-          <View style={[styles.results, { backgroundColor: colors.nav, borderColor: colors.border }]}>
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {results.map((r, i) => (
-                <PressableScale key={i} onPress={() => pickResult(r)}>
-                  <View style={[styles.resultRow, { borderBottomColor: colors.border }]}>
-                    <MapPin size={15} color={Brand.accentLight} strokeWidth={2.2} />
-                    <Text numberOfLines={2} style={[bodyFont(13, '500'), { color: colors.text, flex: 1 }]}>{r.label}</Text>
-                  </View>
-                </PressableScale>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Bouton ma position */}
-        <View style={{ flex: 1 }} pointerEvents="box-none">
-          <PressableScale onPress={useMyLocation} style={styles.locateBtn}>
-            <View style={[styles.iconBtn, { backgroundColor: colors.nav, borderColor: colors.border }, glow(Brand.accent, 12)]}>
-              <LocateFixed size={22} color={Brand.accentLight} strokeWidth={2.2} />
-            </View>
-          </PressableScale>
-        </View>
-      </SafeAreaView>
-
-      {/* Panneau bas : adresse détectée + enregistrement */}
+      {/* ─── Panneau bas : adresse détectée + enregistrement ─── */}
       <SafeAreaView edges={['bottom']} style={[styles.sheet, { backgroundColor: colors.page, borderColor: colors.border }]}>
+        {/* Poignée : signale un panneau distinct de la carte */}
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
         {/* Adresses enregistrées (accès rapide) */}
         {addresses.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8 }}>
@@ -227,10 +237,15 @@ export default function LocationPicker() {
         )}
 
         <Text style={[bodyFont(11.5, '700'), { color: colors.faint, letterSpacing: 0.5 }]}>LIEU DE LIVRAISON</Text>
-        <View style={styles.addrRow}>
-          <MapPin size={18} color={Brand.accent} strokeWidth={2.3} />
+        <View style={[styles.addrCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.addrPinBadge, { backgroundColor: Brand.accent + '18' }]}>
+            <MapPin size={17} color={Brand.accent} strokeWidth={2.4} />
+          </View>
           {resolving ? (
-            <Text style={[bodyFont(13.5, '500'), { color: colors.muted, flex: 1 }]}>Localisation…</Text>
+            <View style={styles.addrResolving}>
+              <ActivityIndicator size="small" color={Brand.accent} />
+              <Text style={[bodyFont(13, '500'), { color: colors.muted }]}>Localisation…</Text>
+            </View>
           ) : (
             <Text numberOfLines={2} style={[bodyFont(13.5, '600'), { color: colors.text, flex: 1 }]}>{address}</Text>
           )}
@@ -275,8 +290,18 @@ export default function LocationPicker() {
 }
 
 const styles = StyleSheet.create({
-  centerPin: { position: 'absolute', top: '50%', left: '50%', marginLeft: -20, marginTop: -52, alignItems: 'center', zIndex: 5 },
-  pinShadow: { width: 10, height: 4, borderRadius: 5, backgroundColor: 'rgba(0,0,0,0.35)', marginTop: -2 },
+  // La région carte prend tout l'espace restant ; la WebView la remplit
+  // (absoluteFill interne), et le pin se centre donc SUR la carte.
+  mapRegion: { flex: 1, overflow: 'hidden' },
+
+  // Deux couches centrées : le marqueur (pointe vers le centre) et son ombre
+  // au sol (au point exact). marginBottom = hauteur de l'icône, pour que la
+  // pointe — et non le centre du marqueur — tombe pile au centre.
+  pinLayer: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  marker: { marginBottom: 46, alignItems: 'center' },
+  markerDot: { position: 'absolute', top: 12, width: 14, height: 14, borderRadius: 7, backgroundColor: '#fff' },
+  markerBase: { width: 16, height: 6, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.25)' },
+
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8 },
   iconBtn: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   searchPill: {
@@ -291,13 +316,21 @@ const styles = StyleSheet.create({
   locateBtn: { position: 'absolute', right: 16, bottom: 16 },
   sheet: {
     borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1,
-    paddingHorizontal: 20, paddingTop: 18,
+    paddingHorizontal: 20, paddingTop: 10,
+    // Le panneau remonte légèrement sur la carte pour un chevauchement net.
+    marginTop: -20,
   },
+  handle: { alignSelf: 'center', width: 42, height: 5, borderRadius: 3, marginBottom: 14 },
   savedChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 9, borderRadius: Radius.pill, borderWidth: 1,
   },
-  addrRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 12 },
+  addrCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 11,
+    borderWidth: 1, borderRadius: Radius.md, padding: 12, marginTop: 8, marginBottom: 12,
+  },
+  addrPinBadge: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  addrResolving: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   input: {
     borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 14, fontWeight: '500', marginBottom: 10,

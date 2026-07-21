@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   House, UtensilsCrossed, Navigation, ShoppingCart, MessageCircle, User,
@@ -69,6 +69,15 @@ function BottomNav({ state, navigation }: any) {
 }
 
 export default function ClientLayout() {
+  const { user, authReady } = useApp();
+
+  // Garde d'authentification. C'est LUI qui rend la déconnexion fiable :
+  // dès que l'utilisateur disparaît, tout écran client renvoie vers l'accueil
+  // de connexion. Sans ce garde, la navigation manuelle depuis le profil
+  // pouvait être annulée par l'écran d'accueil, qui relisait un utilisateur
+  // pas encore effacé et renvoyait aussitôt dans l'app.
+  if (authReady && !user) return <Redirect href="/" />;
+
   return (
     <Tabs tabBar={props => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="index" />

@@ -91,11 +91,24 @@ export function DishCardGrid({ dish }: { dish: Dish }) {
 
 // ─── Bouton « + » ajouter au panier (pop + coche éphémère) ───
 export function AddButton({ dishId }: { dishId: number }) {
-  const { addToCart } = useApp();
+  const { addToCart, dishById } = useApp();
+  const router = useRouter();
   const pop = useRef(new Animated.Value(1)).current;
   const [justAdded, setJustAdded] = React.useState(false);
 
   const onAdd = () => {
+    // Un plat qui exige un choix (accompagnement, boisson…) ne peut pas être
+    // ajouté en un clic : on ouvre sa fiche pour que le client choisisse,
+    // plutôt que de créer une ligne incomplète que la commande refuserait.
+    const dish = dishById(dishId);
+    const exigeUnChoix = (dish?.groupesComplements ?? []).some(
+      g => g.obligatoire && g.options.length > 0,
+    );
+    if (exigeUnChoix) {
+      router.push(`/dish/${dishId}`);
+      return;
+    }
+
     addToCart(dishId, 1);
     setJustAdded(true);
     Animated.sequence([

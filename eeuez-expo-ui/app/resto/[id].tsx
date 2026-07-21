@@ -10,6 +10,7 @@ import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, I
 import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { mapResto, mapPlat, formatPrice, type Resto, type Dish } from '../../data/menuData';
+import { LocalisationResto } from '../../components/LocalisationResto';
 import { fetchRestaurant, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { DishCardGrid } from '../../components/cards';
@@ -126,6 +127,13 @@ export default function RestoProfile() {
               <Text style={[bodyFont(13, '700'), { color: colors.text }]}>~{resto.tempsLivraison} min</Text>
             </View>
           </View>
+
+          <LocalisationResto
+            nom={resto.name}
+            latitude={resto.latitude}
+            longitude={resto.longitude}
+            adresse={resto.adresse}
+          />
 
           <View style={styles.followRow}>
             <Animated.View style={{ flex: 1, transform: [{ scale: followPop }] }}>

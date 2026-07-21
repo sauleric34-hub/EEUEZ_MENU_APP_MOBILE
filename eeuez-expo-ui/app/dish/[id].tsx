@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Image, Animated,
+  View, Text, StyleSheet, ScrollView, Image, Animated, Alert,
   useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import { formatPrice, mapPlat, type Dish } from '../../data/menuData';
 import { fetchPlat, ratePlat, openConversation } from '../../services/menu';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { StarRating } from '../../components/StarRating';
+import { SelecteurComplements } from '../../components/SelecteurComplements';
 
 function StatCard({ Icon, color, value, label, bg, border }: {
   Icon: any; color: string; value: string; label: string; bg: string; border: string;
@@ -69,13 +70,45 @@ export default function DishDetail() {
   const myRating = rating?.mine ?? dish.myRating;
   const gallery = dish.images.length ? dish.images : [];
 
+  // Compléments retenus : { [groupeId]: optionId }.
+  const [choix, setChoix] = useState<Record<number, number>>({});
+
+  const groupes = dish.groupesComplements ?? [];
+
+  /** Groupes obligatoires encore sans réponse — bloque l'ajout au panier. */
+  const groupesManquants = groupes.filter(
+    g => g.obligatoire && g.options.length > 0 && choix[g.id] == null,
+  );
+
+  /** Détail des options choisies, libellés compris (pour le panier). */
+  const complementsChoisis = groupes.flatMap(groupe => {
+    const option = groupe.options.find(o => o.id === choix[groupe.id]);
+    return option
+      ? [{
+          optionId: option.id,
+          groupeNom: groupe.nom,
+          optionNom: option.nom,
+          supplement: option.supplement,
+        }]
+      : [];
+  });
+
+  const supplement = complementsChoisis.reduce((a, c) => a + c.supplement, 0);
+
   const addAndGo = () => {
+    if (groupesManquants.length) {
+      Alert.alert(
+        'Choix requis',
+        `Veuillez choisir : ${groupesManquants.map(g => g.nom).join(', ')}.`,
+      );
+      return;
+    }
     // Petit pop de confirmation avant de rejoindre le panier
     Animated.sequence([
       Animated.spring(addPop, { toValue: 0.92, useNativeDriver: true, speed: 50, bounciness: 0 }),
       Animated.spring(addPop, { toValue: 1, useNativeDriver: true, speed: 24, bounciness: 16 }),
     ]).start();
-    addToCart(dish.id, qty);
+    addToCart(dish.id, qty, complementsChoisis);
     setTimeout(() => router.push('/(client)/panier'), 180);
   };
 
@@ -189,6 +222,16 @@ export default function DishDetail() {
             </View>
           </PressableScale>
 
+          {/* Compléments à choisir + ce qui vient avec le plat */}
+          {(groupes.length > 0 || dish.elementsInclus.length > 0) && (
+            <SelecteurComplements
+              groupes={groupes}
+              inclus={dish.elementsInclus}
+              choix={choix}
+              onChange={setChoix}
+            />
+          )}
+
           {/* Description */}
           {dish.description ? (
             <>
@@ -265,7 +308,11 @@ export default function DishDetail() {
           <PressableScale onPress={addAndGo}>
             <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.addBtn, glow(Brand.accent, 18)]}>
               <Plus size={17} color="#fff" strokeWidth={2.8} />
-              <Text style={[bodyFont(15, '800'), { color: '#fff' }]}>Ajouter · {formatPrice(dish.price * qty)}</Text>
+              {/* Le montant inclut les suppléments : le client voit tout de
+                  suite ce que son choix change au prix. */}
+              <Text style={[bodyFont(15, '800'), { color: '#fff' }]}>
+                Ajouter · {formatPrice((dish.price + supplement) * qty)}
+              </Text>
             </LinearGradient>
           </PressableScale>
         </Animated.View>

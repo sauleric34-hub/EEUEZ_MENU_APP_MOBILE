@@ -15,7 +15,7 @@ import { ScreenBg } from '../components/ScreenBg';
 import { LogoMark } from '../components/Logo';
 import { AccentButton, PressableScale, displayFont, bodyFont } from '../components/ui';
 
-const DEMO = { email: 'client@menu.cm', password: 'client123' };
+import { DEMO } from '../constants/demo';
 
 export default function SplashScreen() {
   const { colors, user, authReady, signIn } = useApp();
@@ -128,7 +128,9 @@ export default function SplashScreen() {
             <PressableScale onPress={quickDemo}>
               <View style={[styles.faceBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <ScanFace size={22} color={Brand.accent} strokeWidth={2} />
-                <Text style={[bodyFont(12.5, '700'), { color: colors.muted }]}>Connexion démo</Text>
+                <Text style={[bodyFont(12.5, '700'), { color: colors.muted }]}>
+                  Visiter en invité
+                </Text>
               </View>
             </PressableScale>
           </View>

@@ -8,6 +8,7 @@ import {
   Animated, Pressable, View, Text, StyleSheet, ViewStyle, TextStyle,
   StyleProp, ActivityIndicator, Image,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type LucideIcon } from 'lucide-react-native';
 import {
@@ -90,7 +91,15 @@ export function DishTile({ Icon, grad, size, iconSize = 34, radius = Radius.lg, 
       ]}
     >
       {image ? (
-        <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        // expo-image plutôt que Image : cache mémoire + disque, donc une photo
+        // de plat déjà vue ne se retélécharge pas d'un écran à l'autre.
+        <ExpoImage
+          source={{ uri: image }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <Icon size={iconSize} color="#ffffff" strokeWidth={2.1} />
       )}

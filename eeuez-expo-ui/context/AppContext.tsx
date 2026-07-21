@@ -19,8 +19,41 @@ import * as addr from '../services/addresses';
 import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
 import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
+import { estCompteDemo } from '../constants/demo';
 
-export interface CartLine { dish: Dish; qty: number; }
+/** Complément retenu sur une ligne de panier (libellé figé pour l'affichage). */
+export interface ComplementChoisi {
+  optionId: number;
+  groupeNom: string;
+  optionNom: string;
+  supplement: number;
+}
+
+/** Ce qui est réellement stocké dans le panier, sous une clé de ligne. */
+export interface LignePanier {
+  platId: number;
+  qty: number;
+  complements: ComplementChoisi[];
+}
+
+export interface CartLine {
+  /** Identifie la ligne, pas le plat : un même plat peut figurer plusieurs
+   *  fois avec des compléments différents. */
+  cle: string;
+  dish: Dish;
+  qty: number;
+  complements: ComplementChoisi[];
+  /** Somme des suppléments, pour UNE unité. */
+  supplement: number;
+  /** Prix unitaire réellement facturé (plat + suppléments). */
+  prixUnitaire: number;
+}
+
+/** Clé de ligne : « 12:3,7 ». Les identifiants sont triés pour que deux
+ *  sélections identiques faites dans un ordre différent se regroupent. */
+export function cleLigne(platId: number, optionIds: number[]): string {
+  return `${platId}:${[...optionIds].sort((a, b) => a - b).join(',')}`;
+}
 
 /** Lieu de livraison choisi pour la commande en cours. */
 export interface DeliveryTarget {
@@ -47,6 +80,8 @@ interface AppContextValue {
   // auth
   user: UserDTO | null;
   authReady: boolean;
+  /** Compte de démonstration : navigation libre, actions engageantes bloquées. */
+  estDemo: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   register: (p: authService.RegisterParams) => Promise<void>;
   signOut: () => Promise<void>;
@@ -98,11 +133,13 @@ interface AppContextValue {
   reloadPubLikes: () => Promise<void>;
 
   // panier
-  cart: Record<number, number>;
-  addToCart: (id: number, qty?: number) => void;
-  cartInc: (id: number) => void;
-  cartDec: (id: number) => void;
-  cartRemove: (id: number) => void;
+  /** Panier indexé par clé de ligne (plat + compléments), cf. cleLigne(). */
+  cart: Record<string, LignePanier>;
+  addToCart: (platId: number, qty?: number, complements?: ComplementChoisi[]) => void;
+  /** Les trois suivantes prennent une CLÉ DE LIGNE, pas un identifiant de plat. */
+  cartInc: (cle: string) => void;
+  cartDec: (cle: string) => void;
+  cartRemove: (cle: string) => void;
   clearCart: () => void;
   cartLines: CartLine[];
   cartCount: number;
@@ -148,6 +185,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // auth
   const [user, setUser] = useState<UserDTO | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  // Dérivé de l'e-mail : reste juste après un redémarrage de l'app.
+  const estDemo = estCompteDemo(user?.email);
 
   // catalogue
   const [categories, setCategories] = useState<Category[]>([]);
@@ -160,7 +199,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [likes, setLikes] = useState<Record<number, boolean>>({});
   const [follows, setFollows] = useState<Record<number, boolean>>({});
   const [pubLikes, setPubLikes] = useState<Record<number, boolean>>({});
-  const [cart, setCart] = useState<Record<number, number>>({});
+  const [cart, setCart] = useState<Record<string, LignePanier>>({});
   const [orders, setOrders] = useState<CommandeDTO[]>([]);
   const [addresses, setAddresses] = useState<AdresseDTO[]>([]);
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryTarget | null>(null);
@@ -415,23 +454,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ─── Panier ────────────────────────────────────────────────
-  const addToCart = (id: number, qty = 1) => setCart(s => ({ ...s, [id]: (s[id] || 0) + qty }));
-  const cartInc = (id: number) => setCart(s => ({ ...s, [id]: (s[id] || 0) + 1 }));
-  const cartDec = (id: number) => setCart(s => {
-    const q = (s[id] || 0) - 1; const next = { ...s };
-    if (q <= 0) delete next[id]; else next[id] = q;
+  // Le panier est indexé par CLÉ DE LIGNE (plat + compléments choisis), et non
+  // par plat : le même Poulet DG avec des frites et avec du riz sont deux
+  // lignes distinctes, à quantités et prix distincts.
+  const addToCart = (
+    platId: number, qty = 1, complements: ComplementChoisi[] = [],
+  ) => {
+    const cle = cleLigne(platId, complements.map(c => c.optionId));
+    setCart(s => ({
+      ...s,
+      [cle]: {
+        platId,
+        complements,
+        qty: (s[cle]?.qty || 0) + qty,
+      },
+    }));
+  };
+
+  const cartInc = (cle: string) => setCart(s => (
+    s[cle] ? { ...s, [cle]: { ...s[cle], qty: s[cle].qty + 1 } } : s
+  ));
+
+  const cartDec = (cle: string) => setCart(s => {
+    const ligne = s[cle];
+    if (!ligne) return s;
+    const next = { ...s };
+    if (ligne.qty <= 1) delete next[cle];
+    else next[cle] = { ...ligne, qty: ligne.qty - 1 };
     return next;
   });
-  const cartRemove = (id: number) => setCart(s => { const next = { ...s }; delete next[id]; return next; });
+
+  const cartRemove = (cle: string) => setCart(s => {
+    const next = { ...s }; delete next[cle]; return next;
+  });
 
   const cartLines = useMemo<CartLine[]>(
     () => Object.entries(cart)
-      .map(([id, qty]) => { const dish = dishMap.get(Number(id)); return dish ? { dish, qty } : null; })
+      .map(([cle, ligne]) => {
+        const dish = dishMap.get(ligne.platId);
+        if (!dish) return null;
+        const supplement = ligne.complements.reduce((a, c) => a + c.supplement, 0);
+        return {
+          cle, dish, qty: ligne.qty,
+          complements: ligne.complements,
+          supplement,
+          prixUnitaire: dish.price + supplement,
+        };
+      })
       .filter((l): l is CartLine => l !== null),
     [cart, dishMap],
   );
-  const cartCount = useMemo(() => Object.values(cart).reduce((a, b) => a + b, 0), [cart]);
-  const subtotal = useMemo(() => cartLines.reduce((a, l) => a + l.dish.price * l.qty, 0), [cartLines]);
+
+  const cartCount = useMemo(
+    () => Object.values(cart).reduce((a, l) => a + l.qty, 0), [cart],
+  );
+  // Le sous-total inclut les suppléments : c'est ce que le client voit et paie.
+  const subtotal = useMemo(
+    () => cartLines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0), [cartLines],
+  );
   const deliveryFee = useMemo(() => {
     if (!cartLines.length) return 0;
     // Frais de livraison = le plus élevé parmi les plats du panier (une seule livraison).
@@ -453,7 +533,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const restaurant = cartLines[0].dish.restoId;
     const items = cartLines
       .filter(l => l.dish.restoId === restaurant)
-      .map(l => ({ plat_id: l.dish.id, quantite: l.qty }));
+      // On n'envoie QUE les identifiants d'options : le serveur retrouve les
+      // prix lui-même. Transmettre un montant depuis l'app le rendrait
+      // falsifiable.
+      .map(l => ({
+        plat_id: l.dish.id,
+        quantite: l.qty,
+        complements: l.complements.map(c => c.optionId),
+      }));
     const adresseText = [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ');
     const order = await menu.createOrder({
       restaurant, adresse_livraison: adresseText, items, mode_paiement: mode,
@@ -487,7 +574,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     mode, colors, toggleTheme,
     notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
-    user, authReady, signIn, register, signOut, updateUser, refreshUser,
+    user, authReady, estDemo, signIn, register, signOut, updateUser, refreshUser,
     addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
     categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
     userLoc, recommended, recoRestos, positionUsed, reloadRecommendations,

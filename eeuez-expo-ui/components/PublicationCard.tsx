@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image as ExpoImage } from 'expo-image';
 import { Heart, MessageCircle, Play, UtensilsCrossed, Store, Check, Plus, Volume2, VolumeX, Send } from 'lucide-react-native';
 import { Brand, Radius } from '../constants/theme';
 import { WEB_BASE_URL } from '../constants/api';
@@ -45,10 +46,19 @@ function MediaCell({ media, largeur, actif }: {
     return <VideoCell url={media.url} largeur={largeur} actif={actif} />;
   }
   return (
-    <Image
+    <ExpoImage
       source={{ uri: media.url }}
+      // Le flou arrive avec le JSON : il s'affiche donc immédiatement,
+      // sans requête, et l'image nette se fond par-dessus une fois chargée.
+      placeholder={media.flou ? { uri: media.flou } : undefined}
+      placeholderContentFit="cover"
       style={{ width: largeur, height: largeur }}
-      resizeMode="cover"
+      contentFit="cover"
+      transition={220}
+      // Cache mémoire + disque : une image déjà vue ne se retélécharge pas
+      // lorsqu'on remonte le fil.
+      cachePolicy="memory-disk"
+      recyclingKey={String(media.id)}
     />
   );
 }
@@ -97,6 +107,17 @@ export function PublicationCard({ publication: pub, onOpenComments, actif = true
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
   const sonCoupe = useSonCoupe();
+
+  // Précharge les images du carrousel au-delà de celle affichée, pour que le
+  // balayage latéral ne montre jamais de carré vide. On se limite aux deux
+  // suivantes : au-delà, on consommerait des données pour rien.
+  React.useEffect(() => {
+    const aVenir = (pub.medias ?? [])
+      .filter(m => m.type === 'image')
+      .slice(index + 1, index + 3)
+      .map(m => m.url);
+    if (aVenir.length) ExpoImage.prefetch(aVenir, { cachePolicy: 'memory-disk' });
+  }, [pub.medias, index]);
 
   // Apparition en douceur à l'arrivée de la carte dans la liste.
   const apparition = useRef(new Animated.Value(0)).current;

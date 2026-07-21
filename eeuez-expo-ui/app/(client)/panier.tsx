@@ -16,6 +16,7 @@ import { initiateMonetbilPayment, cancelOrder, fetchFideliteApercu } from '../..
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { MonetbilWebView } from '../../components/MonetbilWebView';
+import { useGardeDemo } from '../../hooks/useGardeDemo';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
   { mode: 'mtn_money', label: 'MTN Money', Icon: Smartphone },
@@ -28,6 +29,8 @@ const MONETBIL_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
 export default function PanierScreen() {
   const { colors, cartLines, cartInc, cartDec, cartRemove, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
   const router = useRouter();
+  // Le compte de démonstration peut remplir un panier, mais pas commander.
+  const { bloquer } = useGardeDemo();
   const [mode, setMode] = useState<PaymentMode>('mtn_money');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,23 +155,39 @@ export default function PanierScreen() {
           ) : (
             <>
               <View style={{ gap: 13, marginTop: 20 }}>
-                {cartLines.map(({ dish, qty }) => (
-                  <View key={dish.id} style={[styles.line, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {cartLines.map(({ cle, dish, qty, complements, prixUnitaire }) => (
+                  <View key={cle} style={[styles.line, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <DishTile Icon={dish.icon} grad={dish.grad} image={dish.image} size={64} iconSize={28} radius={16} />
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text }]}>{dish.name}</Text>
-                      <Text style={[displayFont(14, '800'), { color: Brand.accentLight, marginTop: 4 }]}>{formatPrice(dish.price)}</Text>
+
+                      {/* Détail des compléments : le client doit voir ce qu'il
+                          a choisi et ce que chaque option lui coûte. */}
+                      {complements.map(c => (
+                        <View key={c.optionId} style={styles.complementLigne}>
+                          <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted, flex: 1 }]}>
+                            {c.groupeNom} : {c.optionNom}
+                          </Text>
+                          <Text style={[bodyFont(11.5, '700'), { color: c.supplement ? Brand.accentLight : colors.faint }]}>
+                            {c.supplement ? `+${formatPrice(c.supplement)}` : 'offert'}
+                          </Text>
+                        </View>
+                      ))}
+
+                      <Text style={[displayFont(14, '800'), { color: Brand.accentLight, marginTop: 4 }]}>
+                        {formatPrice(prixUnitaire)}
+                      </Text>
                       <View style={[styles.stepper, { backgroundColor: colors.surface2 }]}>
-                        <PressableScale onPress={() => cartDec(dish.id)}>
+                        <PressableScale onPress={() => cartDec(cle)}>
                           <View style={[styles.stepBtn, { backgroundColor: colors.surface }]}><Minus size={16} color={colors.text} strokeWidth={2.6} /></View>
                         </PressableScale>
                         <Text style={[displayFont(14, '800'), { color: colors.text, minWidth: 20, textAlign: 'center' }]}>{qty}</Text>
-                        <PressableScale onPress={() => cartInc(dish.id)}>
+                        <PressableScale onPress={() => cartInc(cle)}>
                           <View style={[styles.stepBtn, { backgroundColor: Brand.accent }]}><Plus size={16} color="#fff" strokeWidth={2.6} /></View>
                         </PressableScale>
                       </View>
                     </View>
-                    <PressableScale onPress={() => cartRemove(dish.id)}>
+                    <PressableScale onPress={() => cartRemove(cle)}>
                       <View style={styles.trash}><Trash2 size={16} color={Brand.danger} strokeWidth={2.2} /></View>
                     </PressableScale>
                   </View>
@@ -332,7 +351,7 @@ export default function PanierScreen() {
                     <ActivityIndicator color="#fff" />
                   </View>
                 ) : (
-                  <PressableScale onPress={submit} style={{ marginTop: 16 }}>
+                  <PressableScale onPress={() => bloquer(submit)} style={{ marginTop: 16 }}>
                     <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.checkout, glow(Brand.accent, 24)]}>
                       <Text style={[bodyFont(15.5, '800'), { color: '#fff' }]}>Finaliser la commande</Text>
                       <ArrowRight size={19} color="#fff" strokeWidth={2.6} />
@@ -395,6 +414,7 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, padding: 4, alignSelf: 'flex-start', marginTop: 8 },
   stepBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  complementLigne: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   trash: { width: 38, height: 38, borderRadius: 19, backgroundColor: Brand.danger + '14', alignItems: 'center', justifyContent: 'center' },
   addrRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
