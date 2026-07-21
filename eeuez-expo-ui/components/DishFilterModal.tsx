@@ -115,9 +115,14 @@ export function DishFilterModal({ visible, value, resultCount, categories, onClo
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: colors.page, borderColor: colors.border }]}>
-        <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
+      {/* Conteneur plein écran : la feuille est ancrée en bas via le parent.
+          Plus fiable que « position:absolute + maxHeight% », qui peut faire
+          collapser un enfant flex:1 sur certains Android — et masquer le
+          bouton d'action. */}
+      <View style={styles.root}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: colors.page, borderColor: colors.border }]}>
+          <SafeAreaView edges={['bottom']} style={{ flexShrink: 1 }}>
           <View style={styles.grabber} />
 
           <View style={styles.header}>
@@ -132,7 +137,11 @@ export function DishFilterModal({ visible, value, resultCount, categories, onClo
             </PressableScale>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 14 }}
+          >
             {/* ── Tri ─────────────────────────────── */}
             <Section title="Trier par" colors={colors} />
             <View style={styles.wrap}>
@@ -264,6 +273,7 @@ export function DishFilterModal({ visible, value, resultCount, categories, onClo
             </PressableScale>
           </View>
         </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );
@@ -301,9 +311,13 @@ function Toggle({ label, Icon, colors, on, onPress }: {
 }
 
 const styles = StyleSheet.create({
+  // Plein écran, feuille ancrée en bas.
+  root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '88%',
+    // maxHeight borne la feuille ; le ScrollView (flexShrink) absorbe le reste,
+    // ce qui garde le bouton d'action toujours visible en bas.
+    maxHeight: '88%',
     borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderBottomWidth: 0,
   },
   grabber: {

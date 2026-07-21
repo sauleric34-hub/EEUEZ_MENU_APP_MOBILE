@@ -113,7 +113,7 @@ export default function PublicationScreen() {
             />
           ) : (
             <>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                 <PublicationCard publication={pub} onOpenComments={() => {}} />
 
                 <Text style={[displayFont(15.5, '700'), { color: colors.text, marginBottom: 12 }]}>
