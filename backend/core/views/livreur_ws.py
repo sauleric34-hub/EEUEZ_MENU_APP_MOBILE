@@ -15,7 +15,13 @@ from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
-from core.models import Livraison, AuditLog
+from core.models import Livraison, AuditLog, Commande
+from core.delivery import (
+    est_livreur_independant, prendre_commande_libre, PriseImpossible,
+)
+
+# Statuts d'une commande prête à être livrée (offerte au pool libre).
+STATUTS_LIBERABLES = ['acceptee', 'en_preparation', 'prete']
 
 
 def livreur_required(view):
@@ -50,6 +56,23 @@ def dashboard(request):
         if liv.commande and liv.commande.restaurant:
             gains_jour += float(liv.commande.restaurant.frais_livraison) * 0.7
 
+    # Missions libres : réservées aux livreurs INDÉPENDANTS. Ce sont les
+    # commandes qu'un restaurant a confiées au pool et que personne n'a encore
+    # prises.
+    independant = est_livreur_independant(livreur)
+    missions_libres = []
+    if independant:
+        missions_libres = (
+            Commande.objects.filter(
+                livraison_libre=True,
+                livraison__isnull=True,
+                paiement_confirme=True,
+                statut__in=STATUTS_LIBERABLES,
+            )
+            .select_related('restaurant', 'client')
+            .order_by('created_at')
+        )
+
     return render(request, 'livreur/dashboard.html', {
         'livreur': livreur,
         'actives': actives,
@@ -60,8 +83,33 @@ def dashboard(request):
         'gain_total': int(livreur.gain_total),
         'nb_total': livreur.nombre_livraisons,
         'resto_attache': livreur.restaurant_attache,
+        'est_independant': independant,
+        'missions_libres': missions_libres,
         'active_page': 'dashboard',
     })
+
+
+# ─── PRENDRE UNE MISSION LIBRE ───────────────────────────────
+@require_POST
+@livreur_required
+def prendre_mission(request, pk):
+    """Un livreur indépendant prend une commande en livraison libre."""
+    try:
+        livraison = prendre_commande_libre(pk, request.user)
+    except PriseImpossible as e:
+        messages.error(request, str(e))
+        return redirect('core:livreur_dashboard')
+
+    AuditLog.objects.create(
+        user=request.user, action='MISSION_LIBRE_PRISE',
+        model_name='Livraison', object_id=str(livraison.pk),
+        description={'commande': livraison.commande_id},
+        ip_address=request.META.get('REMOTE_ADDR'),
+    )
+    messages.success(
+        request, f'Mission #{livraison.commande_id} prise. Bonne route !'
+    )
+    return redirect('core:livreur_dashboard')
 
 
 # ─── CARTE DES MISSIONS ──────────────────────────────────────

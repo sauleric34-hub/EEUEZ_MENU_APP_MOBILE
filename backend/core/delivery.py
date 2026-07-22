@@ -6,7 +6,57 @@
 #  « l'argent gelé » et entre dans le solde disponible du resto.
 # ═══════════════════════════════════════════════════════════
 
+from django.db import transaction
 from django.utils import timezone
+
+
+def est_livreur_independant(utilisateur):
+    """Un livreur indépendant a le rôle « livreur » et n'est attaché à AUCUN
+    restaurant. Ce sont eux qui prennent les commandes en livraison libre."""
+    return bool(
+        utilisateur
+        and getattr(utilisateur, 'role', None) == 'livreur'
+        and getattr(utilisateur, 'restaurant_attache_id', None) is None
+    )
+
+
+class PriseImpossible(Exception):
+    """La commande libre n'a pas pu être prise (déjà prise, non libérée…)."""
+
+
+def prendre_commande_libre(commande_id, livreur):
+    """Attribue une commande en livraison libre à un livreur indépendant.
+
+    Sûr face à la concurrence : deux livreurs qui tapent « Prendre » en même
+    temps ne peuvent pas obtenir la même commande. On verrouille la ligne
+    (select_for_update) puis on revérifie qu'aucune Livraison n'existe déjà.
+
+    Lève PriseImpossible si la commande n'est pas (ou plus) disponible.
+    Renvoie la Livraison créée.
+    """
+    from .models import Commande, Livraison
+
+    if not est_livreur_independant(livreur):
+        raise PriseImpossible("Réservé aux livreurs indépendants.")
+
+    with transaction.atomic():
+        commande = (
+            Commande.objects.select_for_update()
+            .filter(pk=commande_id, livraison_libre=True)
+            .first()
+        )
+        if commande is None:
+            raise PriseImpossible("Cette commande n'est pas en livraison libre.")
+        if Livraison.objects.filter(commande=commande).exists():
+            raise PriseImpossible("Cette commande vient d'être prise par un autre livreur.")
+
+        livraison = Livraison.objects.create(
+            commande=commande, livreur=livreur, statut='assignee',
+        )
+        # La commande sort du statut « en attente d'assignation ».
+        commande.statut = 'en_preparation'
+        commande.save(update_fields=['statut', 'updated_at'])
+        return livraison
 
 
 def finaliser_livraison(livraison):

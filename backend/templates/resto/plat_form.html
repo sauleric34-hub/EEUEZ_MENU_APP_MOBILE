@@ -90,9 +90,95 @@
     </label>
   </div>
 
-  <div style="display:flex;gap:12px;">
+  {# ── Compléments : le client choisit UNE option par groupe ── #}
+  <h3 class="section-title" style="margin-top:26px;">Compléments à choisir</h3>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin:-6px 0 14px;">
+    Chaque groupe propose un choix unique au client (ex. « Accompagnement » : riz ou frites).
+    Laissez le prix vide ou à 0 pour une option offerte.
+  </p>
+  <div id="groupes"></div>
+  <button type="button" class="btn btn-secondary btn-sm" onclick="ajouterGroupe()">+ Ajouter un groupe</button>
+
+  {# ── Inclus : information seule, aucun choix, aucun surcoût ── #}
+  <h3 class="section-title" style="margin-top:26px;">Ce qui vient avec le plat</h3>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin:-6px 0 14px;">
+    Affiché au client à titre d'information (ex. « Servi avec du pain »). Sans choix ni supplément.
+  </p>
+  <div id="inclus"></div>
+  <button type="button" class="btn btn-secondary btn-sm" onclick="ajouterInclus()">+ Ajouter un élément</button>
+
+  <div style="display:flex;gap:12px;margin-top:26px;">
     <button type="submit" class="btn btn-primary">{% if plat %}Enregistrer les modifications{% else %}Publier le plat{% endif %}</button>
     <a href="{% url 'core:resto_plats' %}" class="btn btn-secondary">Annuler</a>
   </div>
 </form>
+
+<script>
+// Les groupes sont indexés par un compteur local : le nom des champs
+// (groupe_nom[3], option_nom[3][]) permet à la vue de reconstituer
+// l'appartenance des options à leur groupe.
+let compteurGroupe = 0;
+
+function echapper(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, c => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+  ));
+}
+
+function ajouterGroupe(nom, obligatoire, options) {
+  const i = compteurGroupe++;
+  const bloc = document.createElement('div');
+  bloc.className = 'glass-card';
+  bloc.style.cssText = 'padding:14px;margin-bottom:12px;';
+  bloc.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input type="text" name="groupe_nom[${i}]" value="${echapper(nom)}"
+             placeholder="Nom du groupe (ex. Accompagnement)" class="input-field" style="flex:1;min-width:200px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;white-space:nowrap;">
+        <input type="checkbox" name="groupe_obligatoire[${i}]" ${obligatoire ? 'checked' : ''}>
+        <span>Choix obligatoire</span>
+      </label>
+      <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.glass-card').remove()">Retirer</button>
+    </div>
+    <div class="options" style="margin-top:10px;"></div>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;">+ Option</button>`;
+
+  const liste = bloc.querySelector('.options');
+  const ajouter = (o) => {
+    const ligne = document.createElement('div');
+    ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;align-items:center;';
+    ligne.innerHTML = `
+      <input type="text" name="option_nom[${i}][]" value="${echapper(o && o.nom)}"
+             placeholder="Nom de l'option" class="input-field" style="flex:1;">
+      <input type="number" name="option_prix[${i}][]" value="${o && o.supplement ? o.supplement : ''}"
+             placeholder="Supplément (F)" min="0" class="input-field" style="width:150px;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">×</button>`;
+    liste.appendChild(ligne);
+  };
+
+  bloc.querySelector('button.btn-secondary:last-of-type').onclick = () => ajouter();
+  (options && options.length ? options : [null]).forEach(ajouter);
+  document.getElementById('groupes').appendChild(bloc);
+}
+
+function ajouterInclus(nom) {
+  const ligne = document.createElement('div');
+  ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;';
+  ligne.innerHTML = `
+    <input type="text" name="inclus_nom[]" value="${echapper(nom)}"
+           placeholder="Ex. Servi avec du pain" class="input-field" style="flex:1;">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">×</button>`;
+  document.getElementById('inclus').appendChild(ligne);
+}
+
+// Pré-remplissage à l'édition d'un plat existant.
+{% for g in groupes %}
+ajouterGroupe(
+  "{{ g.nom|escapejs }}",
+  {{ g.obligatoire|yesno:"true,false" }},
+  [{% for o in g.options.all %}{ nom: "{{ o.nom|escapejs }}", supplement: {{ o.supplement|floatformat:0 }} }{% if not forloop.last %},{% endif %}{% endfor %}]
+);
+{% endfor %}
+{% for e in inclus %}ajouterInclus("{{ e.nom|escapejs }}");{% endfor %}
+</script>
 {% endblock %}

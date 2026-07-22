@@ -12,11 +12,20 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
+    niveau = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'telephone', 'allergies', 'avatar']
-        read_only_fields = ['role']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 'role',
+            'telephone', 'allergies', 'avatar', 'points_solde', 'niveau',
+        ]
+        # Le solde ne se modifie que via le grand livre des points.
+        read_only_fields = ['role', 'points_solde']
+
+    def get_niveau(self, obj):
+        from .fidelite import niveau
+        return niveau(getattr(obj, 'points_solde', 0) or 0)
 
     def get_avatar(self, obj):
         return obj.avatar.url if obj.avatar else None
@@ -80,6 +89,9 @@ class PlatSerializer(serializers.ModelSerializer):
     nombre_likes = serializers.SerializerMethodField()
     composition = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    flou = serializers.SerializerMethodField()
+    groupes_complements = serializers.SerializerMethodField()
+    elements_inclus = serializers.SerializerMethodField()
     prix_client = serializers.SerializerMethodField()
     est_favori = serializers.SerializerMethodField()
 
@@ -87,9 +99,10 @@ class PlatSerializer(serializers.ModelSerializer):
         model = Plat
         fields = [
             'id', 'restaurant', 'restaurant_nom', 'categorie', 'categorie_nom',
-            'nom', 'description', 'prix', 'prix_client', 'frais_livraison', 'image', 'images', 'is_available', 'is_popular',
+            'nom', 'description', 'prix', 'prix_client', 'frais_livraison', 'image', 'images', 'flou',
+            'groupes_complements', 'elements_inclus', 'is_available', 'is_popular',
             'allergies', 'ingredients', 'composition', 'note', 'nombre_notes', 'ma_note',
-            'nombre_commandes', 'nombre_likes', 'est_favori',
+            'nombre_commandes', 'nombre_likes', 'est_favori', 'created_at',
         ]
         read_only_fields = ['restaurant']
 
@@ -126,11 +139,44 @@ class PlatSerializer(serializers.ModelSerializer):
         return mine.note if mine else None
 
     def get_images(self, obj):
+        """Aperçus allégés plutôt que les originaux : c'est ce que l'app
+        affiche, et cela divise le poids téléchargé par ~20."""
         urls = []
         if obj.image:
-            urls.append(obj.image.url)
-        urls.extend(p.image.url for p in obj.photos.all() if p.image)
+            urls.append(obj.url_affichage)
+        urls.extend(p.url_affichage for p in obj.photos.all() if p.image)
         return urls
+
+    def get_flou(self, obj):
+        """Placeholder affiché pendant le chargement de la photo principale."""
+        return obj.flou or ''
+
+    def get_groupes_complements(self, obj):
+        """Options à choisir (un seul choix par groupe).
+
+        Les options indisponibles sont écartées côté serveur : l'application
+        n'a ainsi jamais à connaître cette règle.
+        """
+        return [
+            {
+                'id': groupe.pk,
+                'nom': groupe.nom,
+                'obligatoire': groupe.obligatoire,
+                'options': [
+                    {
+                        'id': option.pk,
+                        'nom': option.nom,
+                        'supplement': int(option.supplement),
+                    }
+                    for option in groupe.options.all() if option.disponible
+                ],
+            }
+            for groupe in obj.groupes_complements.all()
+        ]
+
+    def get_elements_inclus(self, obj):
+        """Ce qui vient avec le plat : information seule, aucun choix."""
+        return [e.nom for e in obj.elements_inclus.all()]
 
     def get_nombre_commandes(self, obj):
         total = obj.lignecommande_set.aggregate(t=Sum('quantite'))['t'] if hasattr(obj, 'lignecommande_set') else None
@@ -189,7 +235,7 @@ class CommandeSerializer(serializers.ModelSerializer):
             'id', 'client', 'client_details', 'restaurant', 'restaurant_details',
             'statut', 'livraison_statut', 'montant_total', 'adresse_livraison',
             'notes', 'delai_estime', 'created_at', 'lignes', 'paiement_confirme',
-            'suivi',
+            'suivi', 'points_utilises', 'reduction_points',
         ]
 
     def get_livraison_statut(self, obj):

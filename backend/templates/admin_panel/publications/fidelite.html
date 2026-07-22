@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Fidélité — Administration{% endblock %}
+{% block topbar_title %}Programme de fidélité{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{% url 'core:admin_publications' %}">Publications</a>
+  <span class="breadcrumb-sep">/</span>
+  <span class="breadcrumb-current">Fidélité</span>
+</div>
+
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Programme de fidélité</h1>
+    <p class="page-subtitle">Gains, conversion en réduction et seuils de niveau. Aucune valeur n'est figée dans le code.</p>
+  </div>
+</div>
+
+<form method="post" class="glass-card anim-fade-up" style="padding:28px;max-width:900px;">
+  {% csrf_token %}
+
+  <h2 class="section-title">Gains</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Publication validée par le restaurant</label>
+      <input type="number" name="points_publication_validee" min="0" value="{{ config.points_publication_validee }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Points versés au client dont la contribution est acceptée.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Like reçu</label>
+      <input type="number" name="points_par_like" min="0" value="{{ config.points_par_like }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Compté une seule fois par personne — retirer son like ne retire pas les points.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Commentaire reçu</label>
+      <input type="number" name="points_par_commentaire" min="0" value="{{ config.points_par_commentaire }}" class="input-field" required>
+    </div>
+  </div>
+
+  <h2 class="section-title" style="margin-top:28px;">Conversion en réduction</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Points par unité</label>
+      <input type="number" name="points_par_unite" min="1" value="{{ config.points_par_unite }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Valeur de l'unité (FCFA)</label>
+      <input type="number" name="valeur_unite" min="0" value="{{ config.valeur_unite }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Minimum convertible (points)</label>
+      <input type="number" name="seuil_minimum_conversion" min="0" value="{{ config.seuil_minimum_conversion }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Plafond de réduction (% de la commande)</label>
+      <input type="number" name="reduction_max_pourcentage" min="0" max="100" value="{{ config.reduction_max_pourcentage }}" class="input-field" required>
+    </div>
+  </div>
+  <div class="stat-row" style="margin-top:8px;">
+    <span class="stat-row-label">Exemple actuel</span>
+    <span class="stat-row-value">{{ config.seuil_minimum_conversion }} points = {{ exemple }} FCFA de réduction</span>
+  </div>
+
+  <h2 class="section-title" style="margin-top:28px;">Niveaux</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Bronze à partir de</label>
+      <input type="number" name="seuil_bronze" min="0" value="{{ config.seuil_bronze }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Argent à partir de</label>
+      <input type="number" name="seuil_argent" min="0" value="{{ config.seuil_argent }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Or à partir de</label>
+      <input type="number" name="seuil_or" min="0" value="{{ config.seuil_or }}" class="input-field" required>
+    </div>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);">
+    Les niveaux sont recalculés à la volée : modifier un seuil reclasse immédiatement tous les utilisateurs.
+  </p>
+
+  <div class="form-group" style="margin-top:24px;">
+    <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+      <input type="checkbox" name="actif" {% if config.actif %}checked{% endif %} style="width:18px;height:18px;">
+      Programme actif
+    </label>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+      Décoché, plus aucun point n'est attribué (les soldes existants sont conservés).
+    </p>
+  </div>
+
+  <div class="btn-group" style="margin-top:26px;">
+    <button type="submit" class="btn btn-primary">Enregistrer</button>
+    <a href="{% url 'core:admin_publications' %}" class="btn btn-secondary">Retour</a>
+  </div>
+</form>
+{% endblock %}

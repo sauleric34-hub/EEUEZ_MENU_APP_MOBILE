@@ -72,15 +72,30 @@
             {% endif %}
             {% if c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
               {% if not c.livraison %}
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="assigner">
-                <select name="livreur" required class="input-field" style="padding:6px 10px;font-size:0.78rem;min-width:120px;">
-                  <option value="">Livreur…</option>
-                  {% for l in livreurs %}<option value="{{ l.pk }}">{{ l.get_full_name|default:l.username }}</option>{% endfor %}
-                </select>
-                <button class="btn btn-secondary btn-sm">🛵 Déléguer</button>
-              </form>
+                {% if livreurs %}
+                <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="assigner">
+                  <select name="livreur" required class="input-field" style="padding:6px 10px;font-size:0.78rem;min-width:120px;">
+                    <option value="">Livreur…</option>
+                    {% for l in livreurs %}<option value="{{ l.pk }}">{{ l.get_full_name|default:l.username }}</option>{% endfor %}
+                  </select>
+                  <button class="btn btn-secondary btn-sm">🛵 Déléguer</button>
+                </form>
+                {% endif %}
+                {# Confier au pool de livreurs indépendants (toujours possible). #}
+                {% if c.livraison_libre %}
+                  <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+                    <input type="hidden" name="action" value="reprendre_libre">
+                    <button class="btn btn-secondary btn-sm" title="Retirer du pool des livreurs indépendants">↩ Retirer du pool</button>
+                  </form>
+                  <span class="badge badge-amber" style="align-self:center;">En livraison libre</span>
+                {% else %}
+                  <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+                    <input type="hidden" name="action" value="liberer">
+                    <button class="btn btn-secondary btn-sm" title="Rendre la commande disponible pour les livreurs indépendants">🌍 Livreur libre</button>
+                  </form>
+                {% endif %}
               {% endif %}
             {% endif %}
           </div>

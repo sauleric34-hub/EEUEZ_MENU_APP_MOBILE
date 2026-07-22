@@ -1,0 +1,165 @@
+{% extends 'resto_base.html' %}
+{% block title %}Publications — {{ resto.nom }}{% endblock %}
+{% block topbar_title %}Publications{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Publications</h1>
+    <p class="page-subtitle">Vos photos, vidéos et actualités — affichées dans le fil d'accueil de l'app</p>
+  </div>
+</div>
+
+<!-- Nouvelle publication -->
+<form method="post" action="{% url 'core:resto_publication_create' %}" enctype="multipart/form-data"
+      class="glass-card anim-fade-up" style="padding:22px;margin-bottom:20px;">
+  {% csrf_token %}
+  <div class="form-group">
+    <label class="form-label">Votre message</label>
+    <textarea name="texte" class="input-field" rows="3"
+              placeholder="Racontez votre plat du jour, une nouveauté, une ambiance…"></textarea>
+  </div>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Photos / vidéos</label>
+      <input type="file" name="medias" accept="image/*,video/*" multiple class="input-field">
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+        10 médias maximum · vidéo limitée à 50 Mo
+      </div>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Plat associé (facultatif)</label>
+      <select name="plat" class="input-select">
+        <option value="">— Aucun —</option>
+        {% for p in plats %}<option value="{{ p.pk }}">{{ p.nom }}</option>{% endfor %}
+      </select>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+        Le client pourra commander ce plat en un clic depuis la publication.
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <button type="submit" class="btn btn-primary">Publier</button>
+    <span style="font-size:0.75rem;color:var(--text-muted);">
+      Une publication ne peut pas être modifiée après envoi — elle peut seulement être retirée.
+    </span>
+  </div>
+</form>
+
+<!-- Onglets -->
+<div class="filter-bar anim-fade-up" style="margin-bottom:16px;">
+  <a href="?onglet=publiees" class="btn {% if onglet != 'attente' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+    Publiées ({{ nb_publiees }})
+  </a>
+  <a href="?onglet=attente" class="btn {% if onglet == 'attente' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+    Contributions en attente ({{ nb_attente }})
+  </a>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:22px;">
+  {% if publications %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;">
+    {% for pub in publications %}
+    <div style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-card);">
+
+      <!-- Médias -->
+      {% if pub.medias.all %}
+      <div style="display:flex;overflow-x:auto;background:#000;">
+        {% for m in pub.medias.all %}
+          {% if m.type == 'video' %}
+          <div style="position:relative;flex:0 0 100%;aspect-ratio:1;">
+            <video src="{{ m.fichier.url }}" style="width:100%;height:100%;object-fit:cover;" muted playsinline preload="metadata"></video>
+            <span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:0.7rem;padding:3px 8px;border-radius:8px;">▶ Vidéo</span>
+          </div>
+          {% else %}
+          <img src="{{ m.fichier.url }}" style="flex:0 0 100%;aspect-ratio:1;object-fit:cover;" alt="">
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div style="padding:14px;">
+        <!-- Auteur : contribution client ou publication du restaurant -->
+        {% if pub.auteur %}
+        <span class="badge badge-blue" style="margin-bottom:8px;display:inline-block;">
+          Contribution de {{ pub.auteur.first_name|default:pub.auteur.username }}
+        </span>
+        {% endif %}
+        {% if pub.statut == 'en_attente' %}
+          <span class="badge badge-amber" style="margin-bottom:8px;display:inline-block;">En attente</span>
+        {% elif pub.statut == 'refusee' %}
+          <span class="badge badge-red" style="margin-bottom:8px;display:inline-block;">Refusée</span>
+        {% endif %}
+
+        {% if pub.texte %}
+        <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.5;margin:0 0 10px;">{{ pub.texte|truncatechars:180 }}</p>
+        {% endif %}
+
+        {% if pub.plat %}
+        <div style="font-size:0.78rem;color:var(--accent-orange);margin-bottom:10px;">🍽 {{ pub.plat.nom }}</div>
+        {% endif %}
+
+        <div class="stat-row" style="border:0;padding:0;margin-bottom:12px;">
+          <span class="stat-row-label" style="font-size:0.78rem;">
+            ♥ {{ pub.likes.count }} · 💬 {{ pub.commentaires.count }}
+          </span>
+          <span class="stat-row-value" style="font-size:0.72rem;color:var(--text-muted);">{{ pub.created_at|date:"d/m/Y H:i" }}</span>
+        </div>
+
+        <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+          {% if pub.statut == 'en_attente' %}
+            <form method="post" style="display:inline;">{% csrf_token %}
+              <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+              <input type="hidden" name="action" value="valider">
+              <button class="btn btn-primary btn-sm">Valider</button>
+            </form>
+            <form method="post" style="display:inline;" onsubmit="return confirm('Refuser cette contribution ?');">{% csrf_token %}
+              <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+              <input type="hidden" name="action" value="refuser">
+              <button class="btn btn-secondary btn-sm">Refuser</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'core:resto_publication_delete' pub.pk %}"
+                  onsubmit="return confirm('Retirer cette publication de l\'application ?');" style="display:inline;">
+              {% csrf_token %}
+              <button class="btn btn-danger btn-sm">Retirer</button>
+            </form>
+          {% endif %}
+        </div>
+
+        <!-- Commentaires modérables -->
+        {% with actifs=pub.commentaires.all %}
+          {% if actifs %}
+          <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            {% for c in actifs %}
+              {% if not c.supprime_par %}
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
+                <div style="flex:1;font-size:0.78rem;color:var(--text-secondary);">
+                  <strong style="color:var(--text-primary);">{{ c.auteur.first_name|default:c.auteur.username }}</strong>
+                  {{ c.texte|truncatechars:90 }}
+                </div>
+                <form method="post" action="{% url 'core:resto_publication_commentaire_delete' c.pk %}"
+                      onsubmit="return confirm('Supprimer ce commentaire ?');">{% csrf_token %}
+                  <button class="btn btn-danger btn-sm" style="padding:2px 6px;font-size:0.7rem;">✕</button>
+                </form>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state" style="text-align:center;color:var(--text-muted);padding:36px;">
+    {% if onglet == 'attente' %}
+      Aucune contribution client en attente.
+    {% else %}
+      Aucune publication. Créez la première ci-dessus — elle apparaîtra dans le fil d'accueil de l'app.
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

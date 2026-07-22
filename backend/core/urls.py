@@ -1,6 +1,8 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
+from core.views import publications_admin
 from core.views import resto_ws, livreur_ws
+from core.views import livreurs_admin
 
 app_name = 'core'
 
@@ -40,6 +42,8 @@ urlpatterns = [
 
     # Deliveries
     path('deliveries/', deliveries.deliveries_view, name='deliveries'),
+    path('livreurs/', livreurs_admin.livreurs_view, name='admin_livreurs'),
+    path('livreurs/<int:pk>/toggle/', livreurs_admin.livreur_toggle, name='admin_livreur_toggle'),
 
     # Reviews
     path('reviews/', reviews.reviews_view, name='reviews'),
@@ -47,6 +51,11 @@ urlpatterns = [
 
     # Logs
     path('logs/', logs.logs_view, name='logs'),
+
+    # ─── Modération des publications (admin) ───
+    path('publications/', publications_admin.publications_view, name='admin_publications'),
+    path('publications/<int:pk>/', publications_admin.publication_detail, name='admin_publication_detail'),
+    path('fidelite/', publications_admin.fidelite_config, name='admin_fidelite'),
     path('logs/export/', logs.export_csv, name='logs_export'),
 
     # Map
@@ -70,11 +79,16 @@ urlpatterns = [
     path('resto/finances/', resto_ws.finances, name='resto_finances'),
     path('resto/galerie/', resto_ws.galerie, name='resto_galerie'),
     path('resto/galerie/<int:pk>/supprimer/', resto_ws.galerie_delete, name='resto_galerie_delete'),
+    path('resto/publications/', resto_ws.publications, name='resto_publications'),
+    path('resto/publications/nouvelle/', resto_ws.publication_create, name='resto_publication_create'),
+    path('resto/publications/<int:pk>/supprimer/', resto_ws.publication_delete, name='resto_publication_delete'),
+    path('resto/publications/commentaires/<int:pk>/supprimer/', resto_ws.publication_commentaire_delete, name='resto_publication_commentaire_delete'),
     path('resto/reservations/', resto_ws.reservations, name='resto_reservations'),
     path('resto/profil/', resto_ws.profil, name='resto_profil'),
 
     # ─── Workspace Livreur ───
     path('livreur/', livreur_ws.dashboard, name='livreur_dashboard'),
+    path('livreur/missions/<int:pk>/prendre/', livreur_ws.prendre_mission, name='livreur_prendre_mission'),
     path('livreur/carte/', livreur_ws.carte, name='livreur_carte'),
     path('livreur/livraisons/<int:pk>/action/', livreur_ws.livraison_action, name='livreur_livraison_action'),
     path('livreur/livraisons/<int:pk>/position/', livreur_ws.position_update, name='livreur_position_update'),

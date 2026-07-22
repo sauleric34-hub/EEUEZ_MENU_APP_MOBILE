@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from . import api_views
 from . import client_views
 from . import reservation_views
+from .views import publication_views
 
 router = DefaultRouter()
 # Viewsets routing
@@ -30,6 +31,7 @@ urlpatterns = [
     path('client/plats/<int:id>', client_views.plat_detail, name='api-client-plat-detail'),
     path('client/categories', client_views.categories_list, name='api-client-categories'),
     path('client/recommandations', client_views.recommandations, name='api-client-recommandations'),
+    path('client/tendances', client_views.tendances, name='api-client-tendances'),
     path('client/plats/<int:id>/noter', client_views.noter_plat, name='api-client-noter-plat'),
 
     # Client — messagerie
@@ -52,6 +54,18 @@ urlpatterns = [
     path('client/reservations', reservation_views.reservations, name='api-client-reservations'),
     path('client/reservations/<int:id>/payer', reservation_views.reservation_payer, name='api-client-reservation-payer'),
     path('client/reservations/<int:id>/ticket', reservation_views.reservation_ticket, name='api-client-reservation-ticket'),
+
+    # ─── Publications (fil social) ─────────────────────────────────────────────
+    path('client/publications/feed', publication_views.feed, name='api-client-pub-feed'),
+    path('client/publications/likees', publication_views.publications_likees, name='api-client-pub-likees'),
+    path('client/publications/mes-publications', publication_views.mes_publications, name='api-client-pub-miennes'),
+    path('client/fidelite', publication_views.fidelite_apercu, name='api-client-fidelite'),
+    path('client/restaurants/<int:id>/publications', publication_views.contribuer, name='api-client-pub-contribuer'),
+    path('client/publications/<int:id>/supprimer', publication_views.publication_delete, name='api-client-pub-supprimer'),
+    path('client/publications/<int:id>', publication_views.publication_detail, name='api-client-pub-detail'),
+    path('client/publications/<int:id>/like', publication_views.toggle_like, name='api-client-pub-like'),
+    path('client/publications/<int:id>/commentaires', publication_views.commentaires, name='api-client-pub-commentaires'),
+    path('client/commentaires/<int:id>', publication_views.commentaire_delete, name='api-client-pub-commentaire-delete'),
 
     # ─── Monetbil — webhook serveur-à-serveur ──────────────────────────────────
     # Note : le routeur DRF enregistre automatiquement l'action initier_paiement

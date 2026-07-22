@@ -150,6 +150,13 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Défaut FERMÉ. Sans cette ligne, DRF retombe sur AllowAny : une vue qui
+    # oublie ses permissions devient publique en silence. Avec ce défaut, le
+    # même oubli renvoie 401 — l'erreur se voit au lieu d'exposer des données.
+    # Les vues réellement publiques déclarent explicitement AllowAny.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
@@ -203,9 +210,45 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
+# ─── Redis : cache + couche WebSocket ────────────────────────
+#
+# Piloté par la variable d'environnement REDIS_URL.
+#   • ABSENTE (dev)  → cache local par-process + WebSockets en mémoire. Simple,
+#     zéro dépendance, MAIS ne fonctionne qu'avec UN seul worker.
+#   • PRÉSENTE (prod) → Redis partagé. C'est ce qui rend le multi-worker viable :
+#     sans lui, une notification envoyée par un worker n'atteint pas un client
+#     connecté à un autre worker (cf. montée en charge).
+#
+# Redis rend ainsi trois services d'une seule brique : cache, channel layer, et
+# (plus tard) broker de tâches asynchrones.
+REDIS_URL = os.environ.get('REDIS_URL', '').strip()
+
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                # Un Redis indisponible ne doit pas faire tomber le site :
+                # on sert alors sans cache plutôt que de renvoyer une erreur.
+                'IGNORE_EXCEPTIONS': True,
+            },
+        }
     }
-}
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+    CHANNEL_LAYERS = {
+        'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'},
+    }
 

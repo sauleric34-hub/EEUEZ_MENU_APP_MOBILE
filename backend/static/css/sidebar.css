@@ -252,16 +252,25 @@
 .topbar-logout:hover { border-color: var(--accent-red); color: var(--accent-red); background: var(--accent-red-dim); }
 .topbar-logout svg { width: 14px; height: 14px; stroke: currentColor; }
 
-/* Mobile sidebar toggle */
+/* Bouton menu (hamburger) — visible uniquement sur mobile.
+   Style « bouton » plein : encadré + fond, pour qu'il soit reconnaissable
+   comme un contrôle, et non pris pour une icône décorative. */
 .sidebar-toggle {
   display: none;
-  background: none;
-  border: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   cursor: pointer;
-  padding: 4px;
+  padding: 0;
+  flex-shrink: 0;
 }
-.sidebar-toggle svg { width: 20px; height: 20px; stroke: currentColor; }
+.sidebar-toggle:active { background: var(--bg-tertiary); }
+.sidebar-toggle svg { width: 22px; height: 22px; stroke: currentColor; }
 
 @media (max-width: 768px) {
   .sidebar {
@@ -269,9 +278,18 @@
     width: 260px;
   }
   .sidebar.open { transform: translateX(0); }
-  .sidebar-toggle { display: flex; }
+  /* !important : garantit l'affichage même si une règle plus spécifique
+     tente de le masquer. Le hamburger ne doit JAMAIS disparaître sur mobile. */
+  .sidebar-toggle { display: flex !important; }
   .main-content { margin-left: 0 !important; }
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 16px; gap: 10px; }
+  /* Le titre ne doit jamais pousser le hamburger hors de l'écran :
+     il rétrécit et se tronque au besoin. */
+  .topbar-left { min-width: 0; flex: 1; }
+  .topbar-title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  }
+  .topbar-right { flex-shrink: 0; }
   .sidebar-overlay {
     display: none;
     position: fixed;
@@ -281,6 +299,11 @@
     backdrop-filter: blur(2px);
   }
   .sidebar-overlay.active { display: block; }
+}
+
+/* Très petits écrans : on masque l'horloge pour laisser la place au titre. */
+@media (max-width: 480px) {
+  .topbar-time { display: none; }
 }
 
 /* ── Mode clair : ombres et séparations visibles ── */

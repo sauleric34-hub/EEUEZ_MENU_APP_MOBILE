@@ -801,7 +801,12 @@ section{position:relative;overflow:hidden}
             <div class="resto-stats">
               <div class="resto-stat">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                <strong>{{ r.note_avg|floatformat:1|default:"—" }}</strong>
+                {% if r.nb_notes %}
+                  <strong>{{ r.note_avg|floatformat:1 }}</strong>
+                  <span style="color:var(--txt3);font-weight:600;">({{ r.nb_notes }})</span>
+                {% else %}
+                  <strong style="color:var(--txt3);">Nouveau</strong>
+                {% endif %}
               </div>
               <div class="resto-stat" style="color:var(--txt2);">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style="stroke:var(--txt3)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg>
@@ -809,7 +814,7 @@ section{position:relative;overflow:hidden}
               </div>
               <div class="resto-stat" style="color:var(--txt2);">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style="stroke:var(--txt3)"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>
-                <strong style="color:var(--txt2);">{{ r.plats.count }} plat{{ r.plats.count|pluralize }}</strong>
+                <strong style="color:var(--txt2);">{{ r.nb_plats }} plat{{ r.nb_plats|pluralize }}</strong>
               </div>
             </div>
           </div>

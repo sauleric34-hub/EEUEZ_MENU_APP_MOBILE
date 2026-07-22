@@ -18,6 +18,12 @@ from core.models import (
     User, RestaurantProfile, Plat, PlatImage, Categorie, Commande, Livraison,
     Conversation, Message, Favori, Abonnement, RetraitFonds, AuditLog,
     RestaurantMedia, Reservation,
+    Publication, PublicationMedia, PublicationCommentaire,
+    GroupeComplement, OptionComplement, ElementInclus,
+)
+from core import fidelite
+from core.publications_utils import (
+    MAX_MEDIAS_PAR_PUBLICATION, creer_medias, valider_medias,
 )
 
 
@@ -137,6 +143,10 @@ def commande_action(request, pk):
     elif action == 'refuser' and commande.statut == 'en_attente':
         commande.statut = 'refusee'
         commande.notes = request.POST.get('raison', commande.notes)
+        # Commande refusée : le client récupère les points qu'il avait engagés.
+        if fidelite.rembourser_points(commande):
+            commande.points_utilises = 0
+            commande.reduction_points = 0
         messages.warning(request, f'Commande #{commande.pk} refusée.')
     elif action == 'preparation' and commande.statut == 'acceptee':
         commande.statut = 'en_preparation'
@@ -155,7 +165,25 @@ def commande_action(request, pk):
             Livraison.objects.create(commande=commande, livreur=livreur, statut='assignee')
         if commande.statut in ('acceptee', 'en_preparation'):
             commande.statut = 'prete'
+        # Confiée à un livreur maison : elle n'est plus offerte au pool libre.
+        commande.livraison_libre = False
         messages.success(request, f'Livraison #{commande.pk} déléguée à {livreur.get_full_name() or livreur.username}.')
+    elif action == 'liberer' and commande.statut in ('acceptee', 'en_preparation', 'prete'):
+        # Confie la commande au pool de livreurs INDÉPENDANTS. Sans effet si
+        # une livraison est déjà en cours.
+        if hasattr(commande, 'livraison'):
+            messages.error(request, 'Cette commande a déjà un livreur assigné.')
+            return redirect('core:resto_commandes')
+        commande.livraison_libre = True
+        messages.success(
+            request,
+            f'Commande #{commande.pk} confiée aux livreurs indépendants. '
+            'Le premier disponible pourra la prendre.',
+        )
+    elif action == 'reprendre_libre' and commande.livraison_libre and not hasattr(commande, 'livraison'):
+        # Le restaurant retire la commande du pool (tant qu'aucun livreur ne l'a prise).
+        commande.livraison_libre = False
+        messages.info(request, f'Commande #{commande.pk} retirée du pool des livreurs indépendants.')
     else:
         messages.error(request, 'Action impossible pour ce statut.')
         return redirect('core:resto_commandes')
@@ -244,14 +272,81 @@ def plat_form(request, pk=None):
             # Photos supplémentaires (galerie)
             for f in request.FILES.getlist('photos'):
                 PlatImage.objects.create(plat=plat, image=f)
+
+            _enregistrer_complements(plat, request.POST)
+            _enregistrer_inclus(plat, request.POST)
+
             messages.success(request, f'Plat « {plat.nom} » enregistré.')
             return redirect('core:resto_plats')
 
     return render(request, 'resto/plat_form.html', {
         'resto': resto, 'plat': plat,
         'categories': Categorie.objects.all(),
+        'groupes': (
+            plat.groupes_complements.prefetch_related('options') if plat else []
+        ),
+        'inclus': plat.elements_inclus.all() if plat else [],
         'active_page': 'plats',
     })
+
+
+def _enregistrer_complements(plat, donnees):
+    """Remplace les groupes de compléments du plat par ceux du formulaire.
+
+    Les groupes arrivent sous forme de listes parallèles, indexées par un
+    identifiant de ligne côté navigateur :
+        groupe_nom[3]="Boisson", option_nom[3][]=["Jus"], option_prix[3][]=["1000"]
+
+    On efface puis recrée plutôt que de rapprocher ligne à ligne : c'est plus
+    simple à suivre, et les commandes passées ne sont pas affectées puisque
+    leurs choix sont recopiés (cf. ChoixLigneCommande).
+    """
+    plat.groupes_complements.all().delete()
+
+    indices = [
+        cle[len('groupe_nom['):-1]
+        for cle in donnees
+        if cle.startswith('groupe_nom[') and cle.endswith(']')
+    ]
+
+    for ordre, index in enumerate(indices):
+        nom = (donnees.get(f'groupe_nom[{index}]') or '').strip()
+        if not nom:
+            continue
+
+        groupe = GroupeComplement.objects.create(
+            plat=plat, nom=nom[:80], ordre=ordre,
+            obligatoire=donnees.get(f'groupe_obligatoire[{index}]') == 'on',
+        )
+
+        noms = donnees.getlist(f'option_nom[{index}][]')
+        prix = donnees.getlist(f'option_prix[{index}][]')
+        for rang, nom_option in enumerate(noms):
+            nom_option = (nom_option or '').strip()
+            if not nom_option:
+                continue
+            brut = (prix[rang] if rang < len(prix) else '') or '0'
+            # Un montant vide ou non numérique vaut « offert » : c'est le cas
+            # le plus courant, et cela évite de bloquer la saisie.
+            supplement = int(brut) if str(brut).strip().isdigit() else 0
+            OptionComplement.objects.create(
+                groupe=groupe, nom=nom_option[:80],
+                supplement=supplement, ordre=rang,
+            )
+
+        # Un groupe sans option n'a pas de sens : il piégerait le client sur
+        # un choix impossible s'il était marqué obligatoire.
+        if not groupe.options.exists():
+            groupe.delete()
+
+
+def _enregistrer_inclus(plat, donnees):
+    """Remplace la liste de ce qui vient avec le plat (information seule)."""
+    plat.elements_inclus.all().delete()
+    for ordre, nom in enumerate(donnees.getlist('inclus_nom[]')):
+        nom = (nom or '').strip()
+        if nom:
+            ElementInclus.objects.create(plat=plat, nom=nom[:120], ordre=ordre)
 
 
 @resto_required
@@ -509,6 +604,118 @@ def galerie_delete(request, pk):
     media.delete()
     messages.info(request, 'Média supprimé.')
     return redirect('core:resto_galerie')
+
+
+# ─── PUBLICATIONS (fil social) ───────────────────────────────
+@resto_required
+def publications(request):
+    """Liste des publications du restaurant + file de validation des
+    contributions clients (onglet « En attente »)."""
+    resto = request.resto
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        pub = get_object_or_404(
+            Publication, pk=request.POST.get('publication_id'), restaurant=resto,
+        )
+        if action == 'valider' and pub.statut == 'en_attente':
+            pub.statut = 'publiee'
+            pub.save(update_fields=['statut'])
+            # Le contributeur est récompensé (une seule fois, même en cas de
+            # re-validation : le grand livre garantit l'unicité).
+            mouvement = fidelite.crediter_publication_validee(pub)
+            if mouvement:
+                messages.success(
+                    request,
+                    f'Publication validée — elle est visible dans l\'app. '
+                    f'{mouvement.montant} points crédités à {pub.auteur.get_full_name() or pub.auteur.username}.',
+                )
+            else:
+                messages.success(request, 'Publication validée — elle est visible dans l\'app.')
+        elif action == 'refuser' and pub.statut == 'en_attente':
+            pub.statut = 'refusee'
+            pub.save(update_fields=['statut'])
+            messages.warning(request, 'Contribution refusée.')
+        else:
+            messages.error(request, 'Action impossible pour ce statut.')
+        return redirect('core:resto_publications')
+
+    onglet = request.GET.get('onglet', 'publiees')
+    base = Publication.objects.du_restaurant(resto).select_related(
+        'auteur', 'plat',
+    ).prefetch_related('medias')
+
+    if onglet == 'attente':
+        liste = base.filter(statut='en_attente')
+    else:
+        liste = base.filter(statut='publiee')
+
+    return render(request, 'resto/publications.html', {
+        'resto': resto,
+        'publications': liste,
+        'onglet': onglet,
+        'nb_publiees': base.filter(statut='publiee').count(),
+        'nb_attente': base.filter(statut='en_attente').count(),
+        'plats': resto.plats.filter(is_visible=True).order_by('nom'),
+        'active_page': 'publications',
+    })
+
+
+@resto_required
+def publication_create(request):
+    """Nouvelle publication du restaurant. Immuable une fois créée."""
+    resto = request.resto
+    if request.method != 'POST':
+        return redirect('core:resto_publications')
+
+    texte = (request.POST.get('texte') or '').strip()
+    fichiers = request.FILES.getlist('medias')
+    if not texte and not fichiers:
+        messages.error(request, 'Ajoutez au moins un texte ou un média.')
+        return redirect('core:resto_publications')
+
+    erreur = valider_medias(fichiers)
+    if erreur:
+        messages.error(request, erreur)
+        return redirect('core:resto_publications')
+
+    plat = None
+    plat_id = request.POST.get('plat')
+    if plat_id:
+        plat = resto.plats.filter(pk=plat_id).first()
+
+    pub = Publication.objects.create(
+        restaurant=resto, auteur=None, texte=texte, plat=plat, statut='publiee',
+    )
+    creer_medias(pub, fichiers)
+    messages.success(request, 'Publication en ligne.')
+    return redirect('core:resto_publications')
+
+
+@resto_required
+def publication_delete(request, pk):
+    """Suppression douce : masquée partout dans l'app, conservée en base et
+    visible par l'administrateur avec le statut « supprimée »."""
+    pub = get_object_or_404(Publication, pk=pk, restaurant=request.resto)
+    pub.supprime_par = 'restaurant'
+    pub.supprime_le = timezone.now()
+    pub.save(update_fields=['supprime_par', 'supprime_le'])
+    messages.info(request, 'Publication retirée de l\'application.')
+    return redirect('core:resto_publications')
+
+
+@resto_required
+def publication_commentaire_delete(request, pk):
+    """Modération d'un commentaire sur une publication du restaurant."""
+    commentaire = get_object_or_404(
+        PublicationCommentaire.objects.select_related('publication'),
+        pk=pk, publication__restaurant=request.resto,
+    )
+    commentaire.supprime_par = 'restaurant'
+    commentaire.supprime_le = timezone.now()
+    commentaire.save(update_fields=['supprime_par', 'supprime_le'])
+    messages.info(request, 'Commentaire supprimé.')
+    return redirect('core:resto_publications')
 
 
 # ─── RÉSERVATIONS ────────────────────────────────────────────

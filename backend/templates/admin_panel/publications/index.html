@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block title %}Publications — Administration{% endblock %}
+{% block topbar_title %}Modération des publications{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Publications</h1>
+    <p class="page-subtitle">
+      {{ total }} publication{{ total|pluralize }} au total ·
+      {{ nb_supprimees }} supprimée{{ nb_supprimees|pluralize }} (conservée{{ nb_supprimees|pluralize }} en base)
+    </p>
+  </div>
+  <a href="{% url 'core:admin_fidelite' %}" class="btn btn-secondary" style="margin-left:auto;">Paramétrage fidélité</a>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:16px;margin-bottom:18px;">
+  <form method="get" class="filter-bar" style="margin:0;">
+    <div class="input-search-wrapper">
+      <input type="text" name="q" value="{{ q }}" placeholder="Texte, restaurant ou auteur…" class="input-search">
+    </div>
+    <select name="etat" class="input-select" onchange="this.form.submit()">
+      <option value="">Tous les états</option>
+      <option value="visibles" {% if etat == 'visibles' %}selected{% endif %}>Visibles</option>
+      <option value="attente" {% if etat == 'attente' %}selected{% endif %}>En attente</option>
+      <option value="supprimees" {% if etat == 'supprimees' %}selected{% endif %}>Supprimées</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    {% if q or etat %}
+      <a href="{% url 'core:admin_publications' %}" class="btn btn-secondary btn-sm">Réinitialiser</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:0;">
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Publication</th>
+          <th>Médias</th>
+          <th>Restaurant</th>
+          <th>Auteur</th>
+          <th>État</th>
+          <th>Engagement</th>
+          <th>Date</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in page_obj %}
+        <tr style="animation-delay:{{ forloop.counter0 }}0ms;">
+          <td style="max-width:280px;">
+            <a href="{% url 'core:admin_publication_detail' p.pk %}" style="color:var(--accent-orange);font-weight:600;">
+              #{{ p.pk }}
+            </a>
+            <div style="color:var(--text-muted);font-size:0.8rem;margin-top:3px;">
+              {{ p.texte|truncatechars:70|default:"—" }}
+            </div>
+          </td>
+          {# Aperçu des médias : permet de repérer un contenu à modérer sans
+             ouvrir chaque publication une par une. Les vidéos sont signalées
+             par un chevron ; leur lecture se fait sur la page de détail. #}
+          <td>
+            {% if p.medias.all %}
+              <div style="display:flex;gap:5px;align-items:center;">
+                {% for m in p.medias.all|slice:":3" %}
+                  <a href="{% url 'core:admin_publication_detail' p.pk %}"
+                     style="position:relative;display:block;width:46px;height:46px;border-radius:8px;overflow:hidden;background:var(--bg-tertiary);flex:none;">
+                    {% if m.type == 'video' %}
+                      <span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:0.9rem;">▶</span>
+                    {% else %}
+                      <img src="{{ m.url_affichage }}" alt="" style="width:100%;height:100%;object-fit:cover;">
+                    {% endif %}
+                  </a>
+                {% endfor %}
+                {% if p.medias.all|length > 3 %}
+                  <span style="color:var(--text-muted);font-size:0.78rem;">+{{ p.medias.all|length|add:"-3" }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <span style="color:var(--text-muted);font-size:0.8rem;">—</span>
+            {% endif %}
+          </td>
+          <td>{{ p.restaurant.nom|default:"—" }}</td>
+          <td>
+            {% if p.auteur %}
+              <span style="color:var(--accent-blue);">@{{ p.auteur.get_full_name|default:p.auteur.username }}</span>
+              <div style="color:var(--text-muted);font-size:0.75rem;">{{ p.auteur.points_solde }} pts</div>
+            {% else %}
+              <span style="color:var(--text-muted);">Restaurant</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.supprime_par %}
+              <span class="badge badge-red">Supprimée ({{ p.get_supprime_par_display|default:p.supprime_par }})</span>
+            {% elif p.statut == 'publiee' %}
+              <span class="badge badge-green">Visible</span>
+            {% elif p.statut == 'en_attente' %}
+              <span class="badge badge-amber">En attente</span>
+            {% else %}
+              <span class="badge badge-gray">{{ p.get_statut_display }}</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            ♥ {{ p.nb_likes }} · 💬 {{ p.nb_commentaires }}
+          </td>
+          <td style="white-space:nowrap;color:var(--text-muted);font-size:0.82rem;">
+            {{ p.created_at|date:"d/m/Y H:i" }}
+          </td>
+          <td>
+            <div class="btn-group" style="justify-content:flex-end;flex-wrap:wrap;gap:6px;">
+              <a href="{% url 'core:admin_publication_detail' p.pk %}" class="btn btn-secondary btn-sm">Voir</a>
+              {% if p.supprime_par %}
+                <form method="post" style="display:inline;">{% csrf_token %}
+                  <input type="hidden" name="publication_id" value="{{ p.pk }}">
+                  <input type="hidden" name="action" value="restaurer">
+                  <button class="btn btn-amber btn-sm">Restaurer</button>
+                </form>
+              {% endif %}
+              <form method="post" style="display:inline;"
+                    onsubmit="return confirm('Supprimer DÉFINITIVEMENT la publication #{{ p.pk }} ? Cette action est irréversible et retire les points gagnés.');">
+                {% csrf_token %}
+                <input type="hidden" name="publication_id" value="{{ p.pk }}">
+                <input type="hidden" name="action" value="supprimer_definitivement">
+                <button class="btn btn-danger btn-sm">Détruire</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8">
+            <div class="empty-state">Aucune publication ne correspond à ces critères.</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="pagination">
+  {% if page_obj.has_previous %}
+    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&etat={{ etat }}&q={{ q }}">‹</a>
+  {% endif %}
+  <span class="page-link" style="pointer-events:none;">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+    <a class="page-link" href="?page={{ page_obj.next_page_number }}&etat={{ etat }}&q={{ q }}">›</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

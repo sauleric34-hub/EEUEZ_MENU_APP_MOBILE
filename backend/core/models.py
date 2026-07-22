@@ -1,5 +1,8 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from core.medias_utils import ApercuMixin
 from django.utils import timezone
 
 
@@ -20,6 +23,11 @@ class User(AbstractUser):
     restaurant_attache = models.ForeignKey(
         'RestaurantProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='livreurs',
     )
+    # Fidélité : cache du solde (la vérité est dans MouvementPoints).
+    points_solde = models.PositiveIntegerField(default=0)
+    # Graine de mélange du fil de publications : propre à l'utilisateur et
+    # stable dans le temps, pour que son ordre lui soit personnel.
+    feed_seed = models.UUIDField(default=uuid.uuid4, editable=False)
 
     class Meta:
         verbose_name = 'Utilisateur'
@@ -27,6 +35,11 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.role})"
+
+    @property
+    def niveau_fidelite(self):
+        from .models_fidelite import ParametrageFidelite
+        return ParametrageFidelite.get_solo().niveau(self.points_solde)
 
 
 class RestaurantProfile(models.Model):
@@ -47,6 +60,10 @@ class RestaurantProfile(models.Model):
     frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=500)
     # Prix par défaut d'une réservation de table (modifiable par le restaurant)
     prix_reservation = models.DecimalField(max_digits=10, decimal_places=0, default=5000)
+    # Note moyenne DÉNORMALISÉE : recalculée à chaque nouvelle note (signal) et
+    # par la commande recalculer_notes. Sert à servir une liste de restaurants
+    # sans requête par restaurant — indispensable sous charge (voir plus bas).
+    note_cache = models.DecimalField(max_digits=3, decimal_places=1, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -58,27 +75,54 @@ class RestaurantProfile(models.Model):
 
     @property
     def note_moyenne(self):
-        """Note du restaurant = moyenne des notes de ses plats, pondérée par
-        le nombre de commandes de chaque plat (les plats les plus commandés
-        pèsent davantage). 0 si aucun plat n'a encore de note."""
+        """Note du restaurant, servie depuis le cache dénormalisé.
+
+        Aucune requête ici : c'était l'ancien coût (N requêtes par restaurant),
+        qui rendait la sérialisation d'une liste de restaurants explosive sous
+        charge. Le calcul réel vit dans recalculer_note(), déclenché à chaque
+        nouvelle note.
+        """
+        return float(self.note_cache)
+
+    def calculer_note(self):
+        """Recalcule la note pondérée SANS l'enregistrer. Renvoie un float.
+
+        Note = moyenne des notes de plats, pondérée par le nombre de commandes
+        de chaque plat (les plats les plus commandés pèsent davantage). Le tout
+        en UNE requête (annotations), là où l'ancienne version en faisait deux
+        par plat.
+        """
         from django.db.models import Avg, Sum
-        total_weighted = 0.0
-        total_weight = 0.0
-        simple = []
-        for plat in self.plats.all():
-            avg = plat.notes.aggregate(a=Avg('note'))['a']
-            if avg is None:
-                continue
-            orders = plat.lignecommande_set.aggregate(t=Sum('quantite'))['t'] or 0
-            weight = orders + 1  # +1 : un plat noté mais jamais commandé compte un minimum
-            total_weighted += float(avg) * weight
-            total_weight += weight
-            simple.append(float(avg))
-        if total_weight:
-            return round(total_weighted / total_weight, 1)
-        if simple:
-            return round(sum(simple) / len(simple), 1)
-        return 0
+        from django.db.models.functions import Coalesce
+        from django.db.models import Value
+
+        plats = self.plats.annotate(
+            avg_note=Avg('notes__note'),
+            nb_commandes=Coalesce(Sum('lignecommande__quantite'), Value(0)),
+        ).filter(avg_note__isnull=False).values_list('avg_note', 'nb_commandes')
+
+        total_pondere = 0.0
+        total_poids = 0.0
+        simples = []
+        for avg, nb in plats:
+            poids = (nb or 0) + 1  # +1 : un plat noté jamais commandé compte un minimum
+            total_pondere += float(avg) * poids
+            total_poids += poids
+            simples.append(float(avg))
+
+        if total_poids:
+            return round(total_pondere / total_poids, 1)
+        if simples:
+            return round(sum(simples) / len(simples), 1)
+        return 0.0
+
+    def recalculer_note(self, sauver=True):
+        """Met à jour note_cache. Idempotent, sûr à appeler en boucle."""
+        self.note_cache = self.calculer_note()
+        if sauver:
+            # update_fields ciblé : n'écrit que la colonne concernée.
+            super().save(update_fields=['note_cache'])
+        return self.note_cache
 
     @property
     def total_commandes(self):
@@ -89,6 +133,11 @@ class RestaurantProfile(models.Model):
         from django.db.models import Sum
         result = self.commandes.filter(statut='livree').aggregate(total=Sum('montant_total'))
         return result['total'] or 0
+
+    @property
+    def nb_publications_attente(self):
+        """Contributions clients à valider — affiché en pastille dans la sidebar."""
+        return self.publications.filter(statut='en_attente', supprime_par='').count()
 
 
 class Categorie(models.Model):
@@ -104,7 +153,7 @@ class Categorie(models.Model):
         return self.nom
 
 
-class Plat(models.Model):
+class Plat(ApercuMixin, models.Model):
     restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='plats')
     categorie = models.ForeignKey(Categorie, on_delete=models.SET_NULL, null=True, blank=True)
     nom = models.CharField(max_length=200)
@@ -165,13 +214,22 @@ class Commande(models.Model):
     # restaurant (elle n'existe réellement qu'une fois payée).
     paiement_confirme = models.BooleanField(default=True)
     montant_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    # La commission peut devenir négative : c'est la plateforme qui finance la
+    # réduction fidélité, jamais le restaurant ni le livreur.
     commission_eeuez = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     montant_restaurant = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    # Fidélité : points dépensés et réduction correspondante (en FCFA).
+    points_utilises = models.PositiveIntegerField(default=0)
+    reduction_points = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     adresse_livraison = models.CharField(max_length=300, blank=True)
     latitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     notes = models.TextField(blank=True)
     delai_estime = models.PositiveIntegerField(null=True, blank=True)
+    # Livraison libre : le restaurant a confié cette commande au pool de
+    # livreurs INDÉPENDANTS (non attachés à un restaurant). Tant qu'aucune
+    # Livraison n'existe, tout livreur indépendant peut la prendre.
+    livraison_libre = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -265,7 +323,7 @@ class Avis(models.Model):
         return f"Avis {self.note}/5 — {self.restaurant}"
 
 
-class PlatImage(models.Model):
+class PlatImage(ApercuMixin, models.Model):
     """Photo supplémentaire d'un plat (galerie)."""
     plat = models.ForeignKey(Plat, on_delete=models.CASCADE, related_name='photos')
     image = models.ImageField(upload_to='plats/')
@@ -518,3 +576,18 @@ class Reservation(models.Model):
 
     def __str__(self):
         return f"Réservation #{self.pk} — {self.nom} @ {self.restaurant.nom}"
+
+
+# ─── Publications (fil social) ───────────────────────────────
+# Modèles séparés dans models_publications.py pour ne pas alourdir ce fichier ;
+# ré-exportés ici pour que « from core.models import Publication » fonctionne.
+from .models_publications import (  # noqa: E402,F401
+    Publication, PublicationQuerySet, PublicationMedia,
+    PublicationLike, PublicationCommentaire,
+)
+from .models_fidelite import MouvementPoints, ParametrageFidelite  # noqa: E402,F401
+
+# ─── Compléments et éléments inclus des plats ────────────────
+from .models_complements import (  # noqa: E402,F401
+    GroupeComplement, OptionComplement, ChoixLigneCommande, ElementInclus,
+)

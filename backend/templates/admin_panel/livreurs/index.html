@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Livreurs indépendants — Menu Admin{% endblock %}
+{% block topbar_title %}Livreurs indépendants{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Livreurs indépendants</h1>
+    <p class="page-subtitle">
+      Livreurs sans restaurant attaché — ils prennent les commandes en « livraison libre ».
+    </p>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid" style="margin-bottom:24px;">
+  <div class="kpi-card" style="--kpi-color:var(--accent-orange);">
+    <div class="kpi-value" data-count="{{ total }}">0</div>
+    <div class="kpi-label">Livreurs indépendants</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-green);">
+    <div class="kpi-value" data-count="{{ actifs }}">0</div>
+    <div class="kpi-label">Actifs</div>
+  </div>
+</div>
+
+<div class="charts-grid-2" style="align-items:start;">
+  <!-- Création -->
+  <div class="glass-card" style="padding:22px;">
+    <h2 class="chart-title" style="margin-bottom:16px;">Créer un livreur indépendant</h2>
+    <form method="post" action="{% url 'core:admin_livreurs' %}" style="display:flex;flex-direction:column;gap:12px;">
+      {% csrf_token %}
+      <div class="grid-2" style="gap:12px;">
+        <div>
+          <label class="input-label">Prénom</label>
+          <input type="text" name="first_name" class="input-field" placeholder="Jean">
+        </div>
+        <div>
+          <label class="input-label">Nom</label>
+          <input type="text" name="last_name" class="input-field" placeholder="Kamga">
+        </div>
+      </div>
+      <div>
+        <label class="input-label">E-mail (identifiant de connexion) *</label>
+        <input type="email" name="email" required class="input-field" placeholder="livreur@exemple.cm">
+      </div>
+      <div>
+        <label class="input-label">Téléphone</label>
+        <input type="tel" name="telephone" class="input-field" placeholder="6XX XXX XXX">
+      </div>
+      <div>
+        <label class="input-label">Mot de passe *</label>
+        <input type="text" name="password" required minlength="6" class="input-field" placeholder="6 caractères minimum">
+        <p style="color:var(--text-muted);font-size:0.78rem;margin-top:4px;">
+          Communiquez-le au livreur ; il pourra le changer ensuite.
+        </p>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:4px;">+ Créer le livreur</button>
+    </form>
+  </div>
+
+  <!-- Liste -->
+  <div class="glass-card" style="padding:0;overflow:hidden;">
+    <div class="table-header" style="padding:18px 22px;">
+      <div class="chart-title">Livreurs enregistrés</div>
+      <div class="chart-subtitle">{{ total }} au total</div>
+    </div>
+    <div class="table-wrapper" style="border:none;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Livreur</th><th>Contact</th><th>En cours</th><th>Livraisons</th><th>État</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for l in livreurs %}
+          <tr>
+            <td class="td-primary">
+              {{ l.get_full_name|default:l.username }}
+              <div style="color:var(--text-muted);font-size:0.78rem;">{{ l.email }}</div>
+            </td>
+            <td>{{ l.telephone|default:"—" }}</td>
+            <td>
+              {% if l.nb_en_cours %}<span class="badge badge-amber">{{ l.nb_en_cours }}</span>{% else %}—{% endif %}
+            </td>
+            <td>{{ l.nombre_livraisons }}</td>
+            <td>
+              {% if l.is_active %}
+                <span class="badge badge-green">Actif</span>
+              {% else %}
+                <span class="badge badge-red">Désactivé</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right;">
+              <form method="post" action="{% url 'core:admin_livreur_toggle' l.pk %}" style="display:inline;"
+                    onsubmit="return confirm('{% if l.is_active %}Désactiver{% else %}Réactiver{% endif %} ce livreur ?');">
+                {% csrf_token %}
+                <button class="btn btn-secondary btn-sm">
+                  {% if l.is_active %}Désactiver{% else %}Réactiver{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">
+            Aucun livreur indépendant. Créez-en un avec le formulaire.
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

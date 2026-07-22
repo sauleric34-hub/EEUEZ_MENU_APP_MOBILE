@@ -35,6 +35,45 @@
   </div>
 </div>
 
+<!-- Missions libres (livreurs indépendants uniquement) -->
+{% if est_independant %}
+<div class="page-header anim-fade-up" style="margin-top:8px;">
+  <div>
+    <h2 class="chart-title" style="font-size:1.05rem;">Missions libres disponibles</h2>
+    <p class="page-subtitle" style="margin-top:2px;">Commandes confiées par les restaurants — la première prise l'emporte.</p>
+  </div>
+</div>
+
+{% for c in missions_libres %}
+<div class="glass-card anim-fade-up" style="padding:20px;margin-bottom:14px;border-left:4px solid var(--accent-orange);">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+    <div style="min-width:0;">
+      <div style="font-weight:700;">Commande #{{ c.pk }}</div>
+      <div style="color:var(--text-secondary);font-size:0.85rem;margin-top:3px;">
+        {{ c.restaurant.nom }}{% if c.restaurant.ville %} · {{ c.restaurant.ville }}{% endif %}
+      </div>
+      <div style="color:var(--text-muted);font-size:0.82rem;margin-top:6px;display:flex;align-items:center;gap:6px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        {{ c.adresse_livraison|default:"Adresse communiquée à la prise" }}
+      </div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <div style="font-weight:800;color:var(--accent-green);">+{{ c.restaurant.frais_livraison }} F</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);">gain estimé (70 %)</div>
+    </div>
+  </div>
+  <form method="post" action="{% url 'core:livreur_prendre_mission' c.pk %}" style="margin-top:14px;">
+    {% csrf_token %}
+    <button class="btn btn-primary" style="width:100%;">🛵 Prendre cette mission</button>
+  </form>
+</div>
+{% empty %}
+<div class="glass-card anim-fade-up" style="padding:24px;text-align:center;color:var(--text-muted);margin-bottom:16px;">
+  Aucune mission libre pour le moment. Elles apparaîtront ici dès qu'un restaurant en confiera une.
+</div>
+{% endfor %}
+{% endif %}
+
 <!-- Missions actives -->
 {% if actives %}
 <div class="page-header anim-fade-up" style="margin-top:8px;">

@@ -6,7 +6,10 @@ from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from django.db.models import Avg
+from datetime import timedelta
+
+from django.db.models import Avg, Count, Sum
+from django.utils import timezone
 
 from .models import (
     RestaurantProfile, Plat, Categorie, Commande, Favori, Abonnement, Avis,
@@ -348,3 +351,55 @@ def create_avis(request, commande_id):
         commentaire=request.data.get('commentaire', ''),
     )
     return Response(AvisSerializer(avis).data, status=status.HTTP_201_CREATED)
+
+
+# ─── Tendances (pour l'écran Notifications / découverte) ─────────────────────
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tendances(request):
+    """
+    GET /api/client/tendances?jours=7
+    Renvoie les plats les plus commandés sur la période (7 jours par défaut),
+    les plats les plus aimés, et des recommandations personnalisées.
+    """
+    try:
+        jours = max(1, min(90, int(request.GET.get('jours', 7))))
+    except (TypeError, ValueError):
+        jours = 7
+    depuis = timezone.now() - timedelta(days=jours)
+    base = Plat.objects.filter(is_available=True, is_visible=True).select_related('restaurant', 'categorie')
+    ctx = {'request': request}
+
+    # Les plus commandés sur la période (uniquement les commandes payées).
+    top_commandes = (
+        base.filter(
+            lignecommande__commande__created_at__gte=depuis,
+            lignecommande__commande__paiement_confirme=True,
+        )
+        .annotate(volume=Sum('lignecommande__quantite'))
+        .filter(volume__gt=0)
+        .order_by('-volume')[:10]
+    )
+
+    # Les plus aimés (tous temps confondus).
+    top_likes = (
+        base.annotate(nb_likes=Count('favoris', distinct=True))
+        .filter(nb_likes__gt=0)
+        .order_by('-nb_likes')[:10]
+    )
+
+    # Recommandations : proximité + popularité (réutilise le moteur existant).
+    lat = _parse_coord(request.GET.get('lat'))
+    lon = _parse_coord(request.GET.get('lon'))
+    try:
+        # recommander_plats renvoie des tuples (plat, score, distance, detail)
+        reco_plats = [row[0] for row in recommendation.recommander_plats(lat, lon, limit=10)]
+    except Exception:
+        reco_plats = []
+
+    return Response({
+        'periode_jours': jours,
+        'top_commandes': PlatSerializer(top_commandes, many=True, context=ctx).data,
+        'top_likes': PlatSerializer(top_likes, many=True, context=ctx).data,
+        'recommandations': PlatSerializer(reco_plats, many=True, context=ctx).data,
+    })

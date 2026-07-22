@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Publication #{{ pub.pk }} — Administration{% endblock %}
+{% block topbar_title %}Publication #{{ pub.pk }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{% url 'core:admin_publications' %}">Publications</a>
+  <span class="breadcrumb-sep">/</span>
+  <span class="breadcrumb-current">#{{ pub.pk }}</span>
+</div>
+
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">{{ pub.restaurant.nom|default:"Restaurant supprimé" }}</h1>
+    <p class="page-subtitle">
+      {% if pub.auteur %}
+        Contribution de @{{ pub.auteur.get_full_name|default:pub.auteur.username }}
+        ({{ pub.auteur.email }}) · {{ pub.auteur.points_solde }} points
+      {% else %}
+        Publication du restaurant
+      {% endif %}
+      · {{ pub.created_at|date:"d/m/Y H:i" }}
+    </p>
+  </div>
+  <div style="margin-left:auto;">
+    {% if pub.supprime_par %}
+      <span class="badge badge-red">Supprimée par {{ pub.supprime_par }}{% if pub.supprime_le %} le {{ pub.supprime_le|date:"d/m/Y" }}{% endif %}</span>
+    {% elif pub.statut == 'publiee' %}
+      <span class="badge badge-green">Visible</span>
+    {% else %}
+      <span class="badge badge-amber">{{ pub.get_statut_display }}</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2" style="gap:18px;align-items:start;">
+  <div class="glass-card anim-fade-up" style="padding:22px;">
+    <h2 class="section-title">Contenu</h2>
+    <p style="color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;">{{ pub.texte|default:"(aucun texte)" }}</p>
+
+    {% if pub.plat %}
+      <div class="stat-row" style="margin-top:16px;">
+        <span class="stat-row-label">Plat associé</span>
+        <span class="stat-row-value">{{ pub.plat.nom }} — {{ pub.plat.prix }} F</span>
+      </div>
+    {% endif %}
+
+    {% if medias %}
+      <h3 class="section-title" style="margin-top:22px;">Médias ({{ medias|length }})</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+        {% for m in medias %}
+          <div style="position:relative;border-radius:var(--radius);overflow:hidden;background:var(--bg-tertiary);">
+            {% if m.type == 'video' %}
+              {# controls : sans eux, la modération voyait une image figée sans
+                 pouvoir visionner la vidéo — donc sans pouvoir la modérer. #}
+              <video src="{{ m.fichier.url }}" controls playsinline preload="metadata"
+                     style="width:100%;height:190px;object-fit:contain;background:#000;display:block;"></video>
+              <span class="badge badge-blue" style="position:absolute;top:8px;left:8px;pointer-events:none;">▶ Vidéo</span>
+            {% else %}
+              {# L'aperçu s'affiche vite ; le lien ouvre l'original en pleine
+                 résolution, nécessaire pour juger un détail litigieux. #}
+              <a href="{{ m.fichier.url }}" target="_blank" rel="noopener noreferrer" title="Ouvrir en taille réelle">
+                <img src="{{ m.url_affichage }}" alt=""
+                     style="width:100%;height:190px;object-fit:cover;display:block;">
+              </a>
+              <span class="badge badge-gray" style="position:absolute;top:8px;left:8px;pointer-events:none;">Photo</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="glass-card anim-fade-up" style="padding:22px;">
+    <h2 class="section-title">Commentaires ({{ commentaires|length }})</h2>
+    {% for c in commentaires %}
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:0.85rem;">
+            {{ c.auteur.get_full_name|default:c.auteur.username|default:"Utilisateur supprimé" }}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">· {{ c.created_at|date:"d/m/Y H:i" }}</span>
+          </div>
+          <div style="color:var(--text-secondary);font-size:0.88rem;margin-top:4px;white-space:pre-wrap;">{{ c.texte }}</div>
+        </div>
+        <form method="post" action="{% url 'core:admin_publications' %}"
+              onsubmit="return confirm('Supprimer ce commentaire ?');">
+          {% csrf_token %}
+          <input type="hidden" name="commentaire_id" value="{{ c.pk }}">
+          <input type="hidden" name="action" value="supprimer_commentaire">
+          <button class="btn btn-danger btn-sm" style="padding:4px 9px;">✕</button>
+        </form>
+      </div>
+    {% empty %}
+      <div class="empty-state" style="padding:24px 0;">Aucun commentaire.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="glass-card anim-fade-up" style="padding:22px;margin-top:18px;">
+  <h2 class="section-title">Zone dangereuse</h2>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:14px;">
+    La suppression définitive efface la publication, ses médias et ses commentaires de la base
+    de données, et retire les points que l'auteur a gagnés grâce à elle. Elle est irréversible.
+  </p>
+  <form method="post" action="{% url 'core:admin_publications' %}"
+        onsubmit="return confirm('Supprimer DÉFINITIVEMENT la publication #{{ pub.pk }} ? Irréversible.');">
+    {% csrf_token %}
+    <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+    <input type="hidden" name="action" value="supprimer_definitivement">
+    <button class="btn btn-danger">Supprimer définitivement</button>
+  </form>
+</div>
+{% endblock %}

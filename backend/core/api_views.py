@@ -1,9 +1,11 @@
+from core.permissions import EstLivreur
 from rest_framework import status, views, viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -20,8 +22,13 @@ from .serializers import (
     CommandeSerializer, LivraisonSerializer
 )
 from .utils import geo
-from .delivery import finaliser_livraison
+from .delivery import (
+    finaliser_livraison, prendre_commande_libre, PriseImpossible,
+    est_livreur_independant,
+)
+from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
 from .monetbil import initier_widget
+from . import fidelite
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -133,7 +140,14 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Commande.objects.filter(client=self.request.user).order_by('-created_at')
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
+        """Création d'une commande.
+
+        Toute la méthode est transactionnelle : si le débit des points échoue
+        (solde insuffisant, concurrence), la commande entière est annulée —
+        jamais de commande réduite sans points débités, ni l'inverse.
+        """
         user = request.user
         data = request.data
         restaurant_id = data.get('restaurant')
@@ -181,11 +195,29 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             except (Plat.DoesNotExist, KeyError):
                 continue
             qte = max(1, int(item.get('quantite', 1)))
-            prix_base = int(plat.prix)
-            prix_client = plat.prix_client  # prix de base majoré du pourcentage
-            LigneCommande.objects.create(
+
+            # Compléments : le supplément est recalculé depuis la base, jamais
+            # repris de la requête — sinon un client modifié se paierait des
+            # options gratuites.
+            try:
+                descriptions, supplement = resoudre_choix(
+                    plat, item.get('complements'),
+                )
+            except ComplementInvalide as e:
+                commande.delete()
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+            supplement = int(supplement)
+            prix_base = int(plat.prix) + supplement
+            # Le supplément s'ajoute après la majoration plateforme : il est
+            # reversé au restaurant tel quel, sans commission.
+            prix_client = plat.prix_client + supplement
+
+            ligne = LigneCommande.objects.create(
                 commande=commande, plat=plat, quantite=qte, prix_unitaire=prix_client,
             )
+            enregistrer_choix(ligne, descriptions)
+
             sous_total_client += prix_client * qte
             sous_total_base += prix_base * qte
             frais_plats.append(float(plat.frais_livraison))
@@ -202,6 +234,22 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         # Le restaurant ne perçoit que ses prix de base ; la majoration revient à la plateforme
         commande.montant_restaurant = sous_total_base
         commande.commission_eeuez = sous_total_client - sous_total_base
+
+        # ── Réduction fidélité ────────────────────────────────────────────
+        # Le montant est TOUJOURS recalculé côté serveur : le client demande
+        # seulement à utiliser ses points, il n'en fixe jamais la valeur.
+        if data.get('utiliser_points'):
+            points, reduction = fidelite.calculer_reduction(user, commande.montant_total)
+            if reduction > 0:
+                mouvement = fidelite.depenser_points(user, commande, points)
+                if mouvement:
+                    commande.points_utilises = points
+                    commande.reduction_points = reduction
+                    commande.montant_total = commande.montant_total - reduction
+                    # La plateforme finance la réduction sur sa marge : la part
+                    # du restaurant et les frais du livreur restent intacts.
+                    commande.commission_eeuez = commande.commission_eeuez - reduction
+
         # Mobile money : commande non confirmée tant que le paiement n'a pas abouti.
         commande.paiement_confirme = (mode_paiement == 'especes')
         commande.save()
@@ -226,6 +274,8 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
                 {'error': 'Commande déjà payée — annulation impossible.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Les points engagés sont rendus avant la destruction de la commande.
+        fidelite.rembourser_points(commande)
         commande.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -341,50 +391,62 @@ class RestaurantCommandeViewSet(viewsets.ModelViewSet):
 
 # --- LIVREUR ---
 class LivreurMissionViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    
+    # EstLivreur et non IsAuthenticated : ces actions déplacent de l'argent
+    # (finaliser_livraison crédite le livreur et débloque la part du
+    # restaurant). Un simple compte client ne doit pas y accéder.
+    permission_classes = [EstLivreur]
+
+    @staticmethod
+    def _mission_du_livreur(pk, utilisateur):
+        """Récupère la livraison SI elle appartient bien à ce livreur.
+
+        Le filtre sur le livreur est le cœur du contrôle : sans lui, un livreur
+        authentifié pourrait piloter — et encaisser — les missions des autres.
+        """
+        return Livraison.objects.filter(
+            commande_id=pk, livreur=utilisateur,
+        ).first()
+
     def list(self, request):
-        # Liste des missions disponibles
-        commandes = Commande.objects.filter(statut__in=['acceptee', 'prete'], livraison__isnull=True)
+        # Missions LIBRES uniquement : commandes confiées par les restaurants au
+        # pool des livreurs indépendants, et pas encore prises. Un livreur
+        # attaché à un restaurant reçoit ses missions par son restaurant, pas ici.
+        if not est_livreur_independant(request.user):
+            return Response([])
+        commandes = Commande.objects.filter(
+            livraison_libre=True,
+            livraison__isnull=True,
+            paiement_confirme=True,
+            statut__in=['acceptee', 'en_preparation', 'prete'],
+        ).order_by('created_at')
         return Response(CommandeSerializer(commandes, many=True).data)
-        
+
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
+        # Prise sûre face à la concurrence (verrou + re-vérification) : deux
+        # livreurs ne peuvent pas obtenir la même mission.
         try:
-            commande = Commande.objects.get(id=pk)
-        except Commande.DoesNotExist:
-            return Response({"error": "Commande introuvable"}, status=404)
-            
-        if commande.statut not in ['acceptee', 'prete'] or hasattr(commande, 'livraison'):
-            return Response({"error": "Déjà assignée ou statut invalide"}, status=400)
-            
-        livraison = Livraison.objects.create(
-            commande=commande,
-            livreur=request.user,
-            statut='assignee'
-        )
-        commande.statut = 'en_preparation'
-        commande.save()
+            livraison = prendre_commande_libre(pk, request.user)
+        except PriseImpossible as e:
+            return Response({"error": str(e)}, status=400)
         return Response(LivraisonSerializer(livraison).data)
         
     @action(detail=True, methods=['put'])
     def collected(self, request, pk=None):
-        try:
-            livraison = Livraison.objects.get(commande_id=pk)
-        except Livraison.DoesNotExist:
+        livraison = self._mission_du_livreur(pk, request.user)
+        if not livraison:
             return Response({"error": "Livraison introuvable"}, status=404)
-            
+
         livraison.statut = 'en_collecte'
-        livraison.save()
+        livraison.save(update_fields=['statut'])
         livraison.commande.statut = 'en_livraison'
-        livraison.commande.save()
+        livraison.commande.save(update_fields=['statut', 'updated_at'])
         return Response(LivraisonSerializer(livraison).data)
-        
+
     @action(detail=True, methods=['put'])
     def delivered(self, request, pk=None):
-        try:
-            livraison = Livraison.objects.get(commande_id=pk)
-        except Livraison.DoesNotExist:
+        livraison = self._mission_du_livreur(pk, request.user)
+        if not livraison:
             return Response({"error": "Livraison introuvable"}, status=404)
 
         # Finalise via le helper partagé (crédite le livreur, débloque l'argent resto)
