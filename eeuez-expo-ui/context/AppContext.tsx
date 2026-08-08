@@ -15,6 +15,7 @@ import {
 import * as authService from '../services/auth';
 import * as menu from '../services/menu';
 import { setAuthExpiredHandler } from '../services/http';
+import { useToast } from './ToastContext';
 import * as addr from '../services/addresses';
 import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
@@ -155,7 +156,8 @@ interface AppContextValue {
 
   // commandes / suivi
   orders: CommandeDTO[];
-  reloadOrders: () => Promise<void>;
+  /** Résout à false en cas d'échec, plutôt que d'échouer silencieusement. */
+  reloadOrders: () => Promise<boolean>;
   checkout: (mode?: PaymentMode, utiliserPoints?: boolean) => Promise<CommandeDTO>;
   activeOrder: CommandeDTO | null;
   trackStep: number;
@@ -166,6 +168,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 const PREFS_KEY = '@menu_prefs';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const toast = useToast();
   const [mode, setMode] = useState<ThemeMode>('dark');
   const [notifsEnabled, setNotifsEnabledState] = useState(true);
   const [promoEnabled, setPromoEnabledState] = useState(true);
@@ -183,7 +186,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
   const persistPrefs = (patch: Record<string, unknown>) => {
-    AsyncStorage.mergeItem(PREFS_KEY, JSON.stringify(patch)).catch(() => {});
+    AsyncStorage.mergeItem(PREFS_KEY, JSON.stringify(patch)).catch(() => {
+      toast.error('Ce réglage n\'a pas pu être enregistré.');
+    });
   };
   const setNotifsEnabled = (v: boolean) => { setNotifsEnabledState(v); persistPrefs({ notifs: v }); };
   const setPromoEnabled = (v: boolean) => { setPromoEnabledState(v); persistPrefs({ promo: v }); };
@@ -307,14 +312,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const reloadOrders = useCallback(async () => {
+  // Renvoie false en cas d'échec plutôt que de laisser l'appelant deviner :
+  // le rafraîchissement en tâche de fond (polling) ignore ce résultat
+  // volontairement (pas de toast à chaque coupure passagère), mais une
+  // action explicite (pull-to-refresh) peut s'en servir pour prévenir l'utilisateur.
+  const reloadOrders = useCallback(async (): Promise<boolean> => {
     try {
       const all = await menu.fetchOrders();
       // On masque les commandes dont le paiement mobile money n'a pas abouti :
       // tant que ce n'est pas payé, ce n'est pas une commande (ça reste au panier).
       setOrders(all.filter(o => o.paiement_confirme !== false));
+      return true;
     } catch {
       setOrders([]);
+      return false;
     }
   }, []);
 
@@ -454,13 +465,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLikes(s => ({ ...s, [id]: !s[id] }));
     menu.toggleFavori(id)
       .then(res => setLikes(Object.fromEntries(res.favoris.map(p => [p, true]))))
-      .catch(() => setLikes(s => ({ ...s, [id]: !s[id] })));
+      .catch(() => {
+        setLikes(s => ({ ...s, [id]: !s[id] }));
+        toast.error("Impossible d'enregistrer ce favori. Réessayez.");
+      });
   };
   const toggleFollow = (id: number) => {
     setFollows(s => ({ ...s, [id]: !s[id] }));
     menu.toggleAbonnement(id)
       .then(res => setFollows(Object.fromEntries(res.abonnements.map(r => [r, true]))))
-      .catch(() => setFollows(s => ({ ...s, [id]: !s[id] })));
+      .catch(() => {
+        setFollows(s => ({ ...s, [id]: !s[id] }));
+        toast.error("Impossible de mettre à jour l'abonnement. Réessayez.");
+      });
   };
 
   // ─── Likes de publications (même schéma optimiste/réconcilié) ──────────
@@ -468,7 +485,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPubLikes(s => ({ ...s, [id]: !s[id] }));
     publications.togglePublicationLike(id)
       .then(res => setPubLikes(Object.fromEntries(res.publications_likees.map(p => [p, true]))))
-      .catch(() => setPubLikes(s => ({ ...s, [id]: !s[id] })));
+      .catch(() => {
+        setPubLikes(s => ({ ...s, [id]: !s[id] }));
+        toast.error("Impossible d'enregistrer ce j'aime. Réessayez.");
+      });
   };
 
   const reloadPubLikes = useCallback(async () => {

@@ -11,7 +11,7 @@ import { ChevronLeft, CalendarCheck, Users, Clock, CreditCard, Ticket, Hourglass
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
-import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
+import { PressableScale, CascadeReveal, CenterMessage, displayFont, bodyFont } from '../components/ui';
 import { CamerPayWebView } from '../components/CamerPayWebView';
 import { fetchReservations, payReservation, openTicket } from '../services/reservations';
 import { formatPrice } from '../data/menuData';
@@ -32,6 +32,9 @@ export default function ReservationsScreen() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Distinct du chargement initial (list === null) : reflète le pull-to-refresh
+  // manuel, pour que l'indicateur natif du RefreshControl s'affiche vraiment.
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try { setList(await fetchReservations()); }
@@ -39,6 +42,12 @@ export default function ReservationsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   const pay = async (r: ReservationDTO) => {
     setBusyId(r.id); setError(null);
@@ -84,16 +93,18 @@ export default function ReservationsScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.content}
-            refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={Brand.accent} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.accent} />}
           >
             {error && <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', marginBottom: 12 }]}>{error}</Text>}
-            {list.map(r => {
+            {list.map((r, i) => {
               const ui = STATUT_UI[r.statut] ?? STATUT_UI.en_attente;
               return (
-                <View key={r.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <CascadeReveal key={r.id} index={i}>
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={styles.row}>
                     <Text style={[displayFont(16, '800'), { color: colors.text, flex: 1 }]}>{r.restaurant_nom || 'Restaurant'}</Text>
                     <View style={[styles.badge, { backgroundColor: ui.color + '22' }]}>
+                      <View style={[styles.badgeDot, { backgroundColor: ui.color }]} />
                       <ui.Icon size={13} color={ui.color} strokeWidth={2.4} />
                       <Text style={[bodyFont(11.5, '800'), { color: ui.color }]}>{ui.label}</Text>
                     </View>
@@ -130,6 +141,7 @@ export default function ReservationsScreen() {
                     </PressableScale>
                   )}
                 </View>
+              </CascadeReveal>
               );
             })}
           </ScrollView>
@@ -155,6 +167,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   card: { padding: 16, borderRadius: 22, borderWidth: 1, marginBottom: 14 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.pill },
+  badgeDot: { width: 6, height: 6, borderRadius: 3 },
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
   info: { flexDirection: 'row', alignItems: 'center', gap: 6, width: '45%' },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: Radius.pill },

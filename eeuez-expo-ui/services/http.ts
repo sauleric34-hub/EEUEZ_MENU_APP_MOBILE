@@ -157,3 +157,38 @@ export async function apiUpload<T>(path: string, form: FormData, method: 'POST' 
     throw new ApiError('Envoi impossible. Vérifiez votre connexion.', 0);
   }
 }
+
+/**
+ * Variante de `apiUpload` qui rapporte une progression réelle (0 → 1) via
+ * XMLHttpRequest — `fetch` n'expose aucun événement de progression d'envoi
+ * en React Native. Volontairement plus simple que `apiUpload` : pas de
+ * relance automatique sur 401 (cas rare pour un envoi qui suit une session
+ * déjà active), les appelants gardent `apiUpload` pour tout le reste.
+ */
+export function apiUploadWithProgress<T>(
+  path: string, form: FormData, onProgress: (fraction: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE_URL}${path}`);
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(e.loaded / e.total);
+        };
+        xhr.onload = () => {
+          let data: unknown = null;
+          try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { /* réponse non-JSON */ }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
+          else reject(new ApiError(extractError(data, xhr.status), xhr.status));
+        };
+        xhr.onerror = () => reject(new ApiError('Envoi impossible. Vérifiez votre connexion.', 0));
+        xhr.send(form);
+      } catch {
+        reject(new ApiError('Envoi impossible. Vérifiez votre connexion.', 0));
+      }
+    })();
+  });
+}

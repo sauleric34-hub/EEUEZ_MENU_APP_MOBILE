@@ -18,9 +18,13 @@ import { useApp } from '../../context/AppContext';
 import { fetchConversations, fetchMessages, sendMessage, sendMessageMedia } from '../../services/menu';
 import type { ConversationDTO, MessageDTO } from '../../services/dto';
 import { iconForPlat, gradForId, absMedia, formatPrice } from '../../data/menuData';
-import { DishTile, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
+import { DishTile, PressableScale, FadeSlideIn, Loader, displayFont, bodyFont } from '../../components/ui';
+import { useToast } from '../../context/ToastContext';
 
 const POLL_MS = 6000;
+
+/** Message optimiste : affiché avant confirmation serveur, en opacité réduite. */
+type ChatMessage = MessageDTO & { pending?: boolean };
 
 // Résout une URL d'image (locale = telle quelle, serveur = base média)
 function resolveImage(uri: string | null): string | undefined {
@@ -30,13 +34,14 @@ function resolveImage(uri: string | null): string | undefined {
 }
 
 export default function ChatScreen() {
-  const { colors } = useApp();
+  const { colors, restoById } = useApp();
+  const toast = useToast();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const convId = Number(id);
 
   const [conv, setConv] = useState<ConversationDTO | null>(null);
-  const [messages, setMessages] = useState<MessageDTO[] | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -64,8 +69,9 @@ export default function ChatScreen() {
     if (!texte || sending) return;
     setSending(true);
     setDraft('');
-    const optimistic: MessageDTO = {
+    const optimistic: ChatMessage = {
       id: -Date.now(), sender: 'client', texte, image: null, is_read: true, created_at: new Date().toISOString(),
+      pending: true,
     };
     setMessages(m => [...(m ?? []), optimistic]);
     try {
@@ -74,6 +80,7 @@ export default function ChatScreen() {
     } catch {
       setMessages(m => (m ?? []).filter(x => x.id !== optimistic.id));
       setDraft(texte);
+      toast.error("Message non envoyé. Vérifiez votre connexion.");
     } finally {
       setSending(false);
     }
@@ -92,8 +99,9 @@ export default function ChatScreen() {
 
     const uri = res.assets[0].uri;
     setSending(true);
-    const optimistic: MessageDTO = {
+    const optimistic: ChatMessage = {
       id: -Date.now(), sender: 'client', texte: '', image: uri, is_read: true, created_at: new Date().toISOString(),
+      pending: true,
     };
     setMessages(m => [...(m ?? []), optimistic]);
     try {
@@ -101,6 +109,7 @@ export default function ChatScreen() {
       loadMessages();
     } catch {
       setMessages(m => (m ?? []).filter(x => x.id !== optimistic.id));
+      toast.error("Photo non envoyée. Vérifiez votre connexion.");
     } finally {
       setSending(false);
     }
@@ -109,6 +118,9 @@ export default function ChatScreen() {
   const p = conv?.plat_details;
   const Icon = p ? iconForPlat(p.nom, p.categorie_nom) : null;
   const headImage = p ? (p.images?.length ? absMedia(p.images[0]) : absMedia(p.image)) : undefined;
+  // Statut réel du restaurant (pas de présence en ligne à proprement parler,
+  // mais au moins une information vraie plutôt qu'un « En ligne » fictif).
+  const resto = conv ? restoById(conv.restaurant) : undefined;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -136,10 +148,19 @@ export default function ChatScreen() {
                       <Text style={[bodyFont(11.5, '600'), { color: colors.faint }]}> · {formatPrice(Number(p.prix_client ?? p.prix))}</Text>
                     </View>
                   </View>
-                  <View style={[styles.online, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>
-                    <View style={styles.onlineDot} />
-                    <Text style={[bodyFont(10.5, '700'), { color: '#8fd6a8' }]}>En ligne</Text>
-                  </View>
+                  {resto && (
+                    <View style={[
+                      styles.online,
+                      resto.isOpen
+                        ? { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }
+                        : { backgroundColor: colors.surface2, borderColor: colors.border },
+                    ]}>
+                      <View style={[styles.onlineDot, { backgroundColor: resto.isOpen ? Brand.green : colors.faint }]} />
+                      <Text style={[bodyFont(10.5, '700'), { color: resto.isOpen ? '#8fd6a8' : colors.faint }]}>
+                        {resto.isOpen ? 'Ouvert' : 'Fermé'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </PressableScale>
             ) : (
@@ -166,14 +187,21 @@ export default function ChatScreen() {
                     )}
                   </>
                 );
-                return mine ? (
-                  <LinearGradient key={m.id} colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={bubbleStyle}>
-                    {content}
-                  </LinearGradient>
-                ) : (
-                  <View key={m.id} style={[bubbleStyle, { backgroundColor: colors.surface2 }]}>
-                    {content}
-                  </View>
+                return (
+                  <FadeSlideIn key={m.id}>
+                    {mine ? (
+                      <LinearGradient
+                        colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={[bubbleStyle, m.pending && styles.pendingBubble]}
+                      >
+                        {content}
+                      </LinearGradient>
+                    ) : (
+                      <View style={[bubbleStyle, { backgroundColor: colors.surface2 }, m.pending && styles.pendingBubble]}>
+                        {content}
+                      </View>
+                    )}
+                  </FadeSlideIn>
                 );
               })}
             </ScrollView>
@@ -220,12 +248,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.pill, borderWidth: 1,
   },
-  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Brand.green },
+  onlineDot: { width: 7, height: 7, borderRadius: 4 },
   msgList: { padding: 18, gap: 10, flexGrow: 1, justifyContent: 'flex-end' },
   bubble: { maxWidth: '80%', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 18 },
   bubbleImg: { padding: 4, overflow: 'hidden' },
   bubbleIn: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   bubbleOut: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  pendingBubble: { opacity: 0.55 },
   msgImage: { width: 200, height: 200, borderRadius: 14 },
   inputRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,

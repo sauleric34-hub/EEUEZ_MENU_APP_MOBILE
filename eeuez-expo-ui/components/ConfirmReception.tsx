@@ -4,9 +4,9 @@
 //  Sa validation termine la livraison et débloque le paiement resto.
 // ═══════════════════════════════════════════════════════════
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Modal, TextInput, ActivityIndicator, Platform,
+  View, Text, StyleSheet, Modal, TextInput, ActivityIndicator, Platform, Animated, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,12 +28,37 @@ type Tab = 'scan' | 'code';
 
 export function ConfirmReception({ visible, orderId, onClose, onConfirmed }: Props) {
   const { colors } = useApp();
+  const { height: winHeight } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>('scan');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
+  const checkPop = useRef(new Animated.Value(0)).current;
+
+  // Modal plein écran pilotée à la main (au lieu du `animationType="slide"`
+  // natif) pour que le fond sombre derrière la feuille se fonde aussi à
+  // l'ouverture ET à la fermeture, pas seulement la feuille.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      // Nouvelle session de scan à chaque ouverture.
+      setConfirmed(false);
+      setError(null);
+      setCode('');
+      scannedRef.current = false;
+      checkPop.setValue(0);
+      progress.setValue(0);
+      Animated.timing(progress, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else if (mounted) {
+      Animated.timing(progress, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setMounted(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const submit = async (value: string) => {
     const clean = value.trim();
@@ -41,11 +66,18 @@ export function ConfirmReception({ visible, orderId, onClose, onConfirmed }: Pro
     setBusy(true); setError(null);
     try {
       await confirmReception(orderId, clean);
-      onConfirmed();
+      setBusy(false);
+      // Confirmation visuelle (coche animée) avant que la modal ne se
+      // referme, plutôt qu'une fermeture instantanée et silencieuse.
+      setConfirmed(true);
+      Animated.sequence([
+        Animated.spring(checkPop, { toValue: 1.15, useNativeDriver: true, speed: 40, bounciness: 12 }),
+        Animated.spring(checkPop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }),
+      ]).start();
+      setTimeout(onConfirmed, 900);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Code invalide. Réessayez.');
       scannedRef.current = false; // autorise un nouveau scan après erreur
-    } finally {
       setBusy(false);
     }
   };
@@ -59,8 +91,13 @@ export function ConfirmReception({ visible, orderId, onClose, onConfirmed }: Pro
   const switchTab = (t: Tab) => { setTab(t); setError(null); scannedRef.current = false; };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={{ flex: 1, backgroundColor: colors.page }}>
+    <Modal visible={mounted} animationType="none" onRequestClose={onClose} transparent>
+      <View style={{ flex: 1 }}>
+        <Animated.View pointerEvents="none" style={[styles.scrim, { opacity: progress }]} />
+        <Animated.View style={[
+          { flex: 1, backgroundColor: colors.page },
+          { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [winHeight, 0] }) }] },
+        ]}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           {/* Header */}
           <View style={styles.header}>
@@ -170,12 +207,32 @@ export function ConfirmReception({ visible, orderId, onClose, onConfirmed }: Pro
             </Text>
           </View>
         </SafeAreaView>
+        </Animated.View>
+
+        {/* Confirmation visuelle avant la fermeture automatique */}
+        {confirmed && (
+          <View style={styles.successOverlay} pointerEvents="none">
+            <Animated.View style={[styles.successBadge, glow(Brand.accent, 24), { transform: [{ scale: checkPop }] }]}>
+              <Check size={38} color="#fff" strokeWidth={3} />
+            </Animated.View>
+            <Text style={[displayFont(18, '800'), { color: '#fff', marginTop: 18 }]}>Réception confirmée !</Text>
+          </View>
+        )}
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8,12,9,0.88)', alignItems: 'center', justifyContent: 'center',
+  },
+  successBadge: {
+    width: 88, height: 88, borderRadius: 44, backgroundColor: Brand.accent,
+    alignItems: 'center', justifyContent: 'center',
+  },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 20, paddingTop: 8 },
   iconBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   tabs: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginTop: 18 },

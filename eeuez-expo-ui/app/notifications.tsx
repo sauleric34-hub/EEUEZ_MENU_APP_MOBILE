@@ -2,8 +2,8 @@
 //  Notifications — événements réels des commandes du client
 // ═══════════════════════════════════════════════════════════
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -12,12 +12,13 @@ import {
   Flame, Heart, Sparkles,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Brand, Radius } from '../constants/theme';
+import { Brand, Radius, type Palette } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { formatPrice, mapPlat, type Dish } from '../data/menuData';
 import { fetchTendances } from '../services/menu';
 import { ScreenBg } from '../components/ScreenBg';
-import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
+import { PressableScale, CascadeReveal, CenterMessage, displayFont, bodyFont } from '../components/ui';
+import { SkeletonBlock } from '../components/Skeleton';
 import { DishCardWide } from '../components/cards';
 
 export const NOTIFS_SEEN_KEY = '@menu_notifs_seen';
@@ -52,6 +53,7 @@ export default function NotificationsScreen() {
   const { colors, orders, reloadOrders, notifsEnabled, promoEnabled, userLoc } = useApp();
   const router = useRouter();
   const [tendances, setTendances] = useState<Tendances | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     reloadOrders();
@@ -60,27 +62,39 @@ export default function NotificationsScreen() {
   }, [reloadOrders]);
 
   // Tendances de la semaine (plats les plus commandés / aimés / recommandés)
-  useEffect(() => {
-    let alive = true;
-    fetchTendances(userLoc)
-      .then(d => {
-        if (!alive) return;
-        setTendances({
-          topCommandes: (d.top_commandes ?? []).map(mapPlat),
-          topLikes: (d.top_likes ?? []).map(mapPlat),
-          reco: (d.recommandations ?? []).map(mapPlat),
-        });
-      })
-      .catch(() => { if (alive) setTendances(null); });
-    return () => { alive = false; };
+  const chargerTendances = useCallback(async () => {
+    try {
+      const d = await fetchTendances(userLoc);
+      setTendances({
+        topCommandes: (d.top_commandes ?? []).map(mapPlat),
+        topLikes: (d.top_likes ?? []).map(mapPlat),
+        reco: (d.recommandations ?? []).map(mapPlat),
+      });
+    } catch {
+      setTendances(null);
+    }
   }, [userLoc]);
+
+  useEffect(() => { chargerTendances(); }, [chargerTendances]);
+
+  // Le statut d'une commande est ce qu'il y a de plus sensible au temps réel
+  // sur cet écran : un tirer-pour-rafraîchir manuel s'imposait.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([reloadOrders(), chargerTendances()]);
+    setRefreshing(false);
+  };
 
   const items = notifsEnabled ? orders : [];
 
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.accent} />}
+        >
           <View style={styles.header}>
             <PressableScale onPress={() => router.back()}>
               <View style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -148,21 +162,49 @@ export default function NotificationsScreen() {
           )}
 
           {/* ─── Découverte : tendances de la semaine ─────────────── */}
-          <TrendSection
-            title="Les plus commandés cette semaine" Icon={Flame} color={Brand.yellow}
-            dishes={tendances?.topCommandes} colors={colors}
-          />
-          <TrendSection
-            title="Les plus aimés" Icon={Heart} color="#ff6b70"
-            dishes={tendances?.topLikes} colors={colors}
-          />
-          <TrendSection
-            title="Recommandés pour vous" Icon={Sparkles} color={Brand.accentLight}
-            dishes={tendances?.reco} colors={colors}
-          />
+          {tendances === null ? (
+            <>
+              <TrendSectionSkeleton colors={colors} />
+              <TrendSectionSkeleton colors={colors} />
+              <TrendSectionSkeleton colors={colors} />
+            </>
+          ) : (
+            <>
+              <TrendSection
+                title="Les plus commandés cette semaine" Icon={Flame} color={Brand.yellow}
+                dishes={tendances.topCommandes} colors={colors}
+              />
+              <TrendSection
+                title="Les plus aimés" Icon={Heart} color="#ff6b70"
+                dishes={tendances.topLikes} colors={colors}
+              />
+              <TrendSection
+                title="Recommandés pour vous" Icon={Sparkles} color={Brand.accentLight}
+                dishes={tendances.reco} colors={colors}
+              />
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>
+  );
+}
+
+/** Squelette d'une section tendances, le temps du chargement — évite le
+ *  « pop » brutal des carrousels une fois les données arrivées. */
+function TrendSectionSkeleton({ colors }: { colors: Palette }) {
+  return (
+    <View style={{ marginTop: 26 }}>
+      <View style={styles.trendHead}>
+        <SkeletonBlock width={32} height={32} radius={11} colors={colors} />
+        <SkeletonBlock width={170} height={17} radius={6} colors={colors} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 13 }}>
+        {[0, 1, 2].map(i => (
+          <SkeletonBlock key={i} width={210} height={205} radius={Radius.xl} colors={colors} />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -183,7 +225,9 @@ function TrendSection({ title, Icon, color, dishes, colors }: {
         horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 13, paddingRight: 4 }}
       >
-        {dishes.map(d => <DishCardWide key={d.id} dish={d} />)}
+        {dishes.map((d, i) => (
+          <CascadeReveal key={d.id} index={i}><DishCardWide dish={d} /></CascadeReveal>
+        ))}
       </ScrollView>
     </View>
   );

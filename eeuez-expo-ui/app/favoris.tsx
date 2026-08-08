@@ -2,8 +2,8 @@
 //  Favoris — plats aimés et publications likées
 // ═══════════════════════════════════════════════════════════
 
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Animated, View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,7 +11,7 @@ import { HeartOff, UtensilsCrossed, Newspaper } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
-import { PressableScale, displayFont, bodyFont } from '../components/ui';
+import { PressableScale, CascadeReveal, displayFont, bodyFont } from '../components/ui';
 import { DishCardGrid } from '../components/cards';
 import { PublicationCard } from '../components/PublicationCard';
 import { fetchPublicationsLikees } from '../services/publications';
@@ -22,8 +22,22 @@ type Onglet = 'plats' | 'publications';
 export default function FavorisScreen() {
   const { colors, favList, pubLikes } = useApp();
   const [onglet, setOnglet] = useState<Onglet>('plats');
+  // Distinct de `onglet` : la pastille active bouge tout de suite au tap,
+  // le contenu (lui) attend la fin du fondu de sortie avant de basculer —
+  // fondu enchaîné plutôt qu'un remplacement sec.
+  const [ongletAffiche, setOngletAffiche] = useState<Onglet>('plats');
+  const fondu = useRef(new Animated.Value(1)).current;
   const [pubs, setPubs] = useState<PublicationDTO[]>([]);
   const [chargement, setChargement] = useState(false);
+
+  const changerOnglet = (next: Onglet) => {
+    if (next === onglet) return;
+    setOnglet(next);
+    Animated.timing(fondu, { toValue: 0, duration: 140, useNativeDriver: true }).start(() => {
+      setOngletAffiche(next);
+      Animated.timing(fondu, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    });
+  };
 
   // Rechargé à chaque affichage : un like posé ailleurs doit se refléter ici.
   useFocusEffect(
@@ -43,7 +57,7 @@ export default function FavorisScreen() {
 
   const nbPlats = favList.length;
   const nbPubs = pubsAffichees.length;
-  const label = onglet === 'plats'
+  const label = ongletAffiche === 'plats'
     ? (nbPlats > 0 ? `${nbPlats} plat${nbPlats > 1 ? 's' : ''} aimé${nbPlats > 1 ? 's' : ''}` : 'Votre liste est vide')
     : (nbPubs > 0 ? `${nbPubs} publication${nbPubs > 1 ? 's' : ''} aimée${nbPubs > 1 ? 's' : ''}` : 'Aucune publication aimée');
 
@@ -60,7 +74,7 @@ export default function FavorisScreen() {
               ([cle, texte, Icon]) => {
                 const actif = onglet === cle;
                 return (
-                  <PressableScale key={cle} onPress={() => setOnglet(cle)} style={{ flex: 1 }} scaleTo={0.97}>
+                  <PressableScale key={cle} onPress={() => changerOnglet(cle)} style={{ flex: 1 }} scaleTo={0.97}>
                     {actif ? (
                       <LinearGradient
                         colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -81,39 +95,41 @@ export default function FavorisScreen() {
             )}
           </View>
 
-          {onglet === 'plats' ? (
-            nbPlats > 0 ? (
-              <View style={styles.grid}>
-                {favList.map(d => (
-                  <View key={d.id} style={styles.cell}><DishCardGrid dish={d} /></View>
+          <Animated.View style={{ opacity: fondu }}>
+            {ongletAffiche === 'plats' ? (
+              nbPlats > 0 ? (
+                <View style={styles.grid}>
+                  {favList.map((d, i) => (
+                    <CascadeReveal key={d.id} index={i} style={styles.cell}><DishCardGrid dish={d} /></CascadeReveal>
+                  ))}
+                </View>
+              ) : (
+                <Vide
+                  colors={colors}
+                  titre="Aucun favori"
+                  texte="Touchez le cœur sur un plat pour le retrouver ici."
+                />
+              )
+            ) : chargement && pubs.length === 0 ? (
+              <ActivityIndicator color={Brand.accent} style={{ marginTop: 40 }} />
+            ) : nbPubs > 0 ? (
+              <View style={{ marginTop: 20 }}>
+                {/* Pas de lecture automatique ici : cette page empile les cartes
+                    dans un ScrollView, toutes les vidéos se déclencheraient
+                    ensemble et le son se superposerait. Une touche ouvre le
+                    détail, où la vidéo est lue seule. */}
+                {pubsAffichees.map(p => (
+                  <PublicationCard key={p.id} publication={p} actif={false} />
                 ))}
               </View>
             ) : (
               <Vide
                 colors={colors}
-                titre="Aucun favori"
-                texte="Touchez le cœur sur un plat pour le retrouver ici."
+                titre="Aucune publication"
+                texte="Aimez une publication dans l'accueil pour la retrouver ici."
               />
-            )
-          ) : chargement && pubs.length === 0 ? (
-            <ActivityIndicator color={Brand.accent} style={{ marginTop: 40 }} />
-          ) : nbPubs > 0 ? (
-            <View style={{ marginTop: 20 }}>
-              {/* Pas de lecture automatique ici : cette page empile les cartes
-                  dans un ScrollView, toutes les vidéos se déclencheraient
-                  ensemble et le son se superposerait. Une touche ouvre le
-                  détail, où la vidéo est lue seule. */}
-              {pubsAffichees.map(p => (
-                <PublicationCard key={p.id} publication={p} actif={false} />
-              ))}
-            </View>
-          ) : (
-            <Vide
-              colors={colors}
-              titre="Aucune publication"
-              texte="Aimez une publication dans l'accueil pour la retrouver ici."
-            />
-          )}
+            )}
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>

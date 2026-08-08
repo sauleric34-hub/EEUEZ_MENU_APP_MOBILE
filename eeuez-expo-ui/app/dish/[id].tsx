@@ -4,19 +4,22 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Image, Animated, Alert,
+  View, Text, StyleSheet, ScrollView, Image, Animated, Easing, Alert,
   useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, { ZoomIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft, Heart, Flame, Star, ChevronRight, MessageCircle, Store, Plus, Minus, Bike, Clock,
+  ShoppingCart,
 } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice, mapPlat, type Dish } from '../../data/menuData';
 import { fetchPlat, ratePlat, openConversation } from '../../services/menu';
+import { useToast } from '../../context/ToastContext';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { StarRating } from '../../components/StarRating';
 import { SelecteurComplements } from '../../components/SelecteurComplements';
@@ -35,8 +38,23 @@ function StatCard({ Icon, color, value, label, bg, border }: {
   );
 }
 
+/** Point de pagination de la galerie : la largeur s'anime au lieu de
+ *  changer de style d'un bloc quand il devient actif/inactif. */
+function GalleryDot({ active }: { active: boolean }) {
+  const width = useRef(new Animated.Value(active ? 22 : 8)).current;
+  useEffect(() => {
+    Animated.timing(width, {
+      toValue: active ? 22 : 8, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start();
+  }, [active, width]);
+  return (
+    <Animated.View style={[styles.dot, { width, backgroundColor: active ? Brand.accent : 'rgba(255,255,255,0.55)' }]} />
+  );
+}
+
 export default function DishDetail() {
   const { colors, likes, toggleLike, addToCart, dishById, restoById, user } = useApp();
+  const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -46,9 +64,25 @@ export default function DishDetail() {
   const [qty, setQty] = useState(1);
   const [imgIndex, setImgIndex] = useState(0);
   const [rating, setRating] = useState<{ note: string; mine: number | null } | null>(null);
-  const [rateErr, setRateErr] = useState<string | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
   const addPop = useRef(new Animated.Value(1)).current;
+
+  // ─── Icône qui « s'envole » du bouton Ajouter ──────────────
+  // Confirmation ludique de l'ajout. La tab bar n'est pas visible sur cet
+  // écran (Stack séparé des onglets) : plutôt que de viser une icône
+  // invisible, l'icône part vers le haut-droite et se dissipe.
+  const addBtnRef = useRef<View>(null);
+  const [flight, setFlight] = useState<{ x: number; y: number } | null>(null);
+  const flightAnim = useRef(new Animated.Value(0)).current;
+  const launchFlight = () => {
+    addBtnRef.current?.measureInWindow((x, y, w, h) => {
+      setFlight({ x: x + w / 2, y: y + h / 2 });
+      flightAnim.setValue(0);
+      Animated.timing(flightAnim, {
+        toValue: 1, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }).start(() => setFlight(null));
+    });
+  };
 
   useEffect(() => {
     // On re-fetch systématiquement : le détail porte ma_note (authentifié)
@@ -108,6 +142,7 @@ export default function DishDetail() {
       Animated.spring(addPop, { toValue: 0.92, useNativeDriver: true, speed: 50, bounciness: 0 }),
       Animated.spring(addPop, { toValue: 1, useNativeDriver: true, speed: 24, bounciness: 16 }),
     ]).start();
+    launchFlight();
     addToCart(dish.id, qty, complementsChoisis);
     setTimeout(() => router.push('/(client)/panier'), 180);
   };
@@ -117,13 +152,11 @@ export default function DishDetail() {
   };
 
   const rate = async (note: number) => {
-    setRateErr(null);
     try {
       const res = await ratePlat(dish.id, note);
       setRating({ note: String(res.note), mine: res.ma_note });
     } catch (e) {
-      // On surface l'erreur (session expirée / réseau) au lieu de la masquer.
-      setRateErr(e instanceof Error ? e.message : 'Impossible d\'enregistrer la note.');
+      toast.error(e instanceof Error ? e.message : "Impossible d'enregistrer la note.");
     }
   };
 
@@ -134,7 +167,9 @@ export default function DishDetail() {
     try {
       const conv = await openConversation(dish.id);
       router.push(`/chat/${conv.id}`);
-    } catch { /* non connecté ou hors-ligne */ }
+    } catch {
+      toast.error(user ? "Impossible d'ouvrir la discussion. Réessayez." : 'Connectez-vous pour discuter avec le restaurant.');
+    }
     finally { setOpeningChat(false); }
   };
 
@@ -142,7 +177,11 @@ export default function DishDetail() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 170 }}>
         {/* ── Galerie / hero ── */}
-        <View style={styles.hero}>
+        {/* Entrée en « zoom in » à l'arrivée sur la fiche : pas une vraie
+            transition partagée avec la carte d'origine (l'API sharedTransitionTag
+            n'existe plus dans Reanimated 4), mais un geste d'ouverture soigné
+            qui reste dans le même esprit. */}
+        <Reanimated.View entering={ZoomIn.duration(420)} style={styles.hero}>
           {gallery.length > 0 ? (
             <>
               <ScrollView
@@ -155,14 +194,7 @@ export default function DishDetail() {
               </ScrollView>
               {gallery.length > 1 && (
                 <View style={styles.dots}>
-                  {gallery.map((_, i) => (
-                    <View key={i} style={[
-                      styles.dot,
-                      i === imgIndex
-                        ? { backgroundColor: Brand.accent, width: 22 }
-                        : { backgroundColor: 'rgba(255,255,255,0.55)' },
-                    ]} />
-                  ))}
+                  {gallery.map((_, i) => <GalleryDot key={i} active={i === imgIndex} />)}
                 </View>
               )}
             </>
@@ -172,7 +204,7 @@ export default function DishDetail() {
             </LinearGradient>
           )}
           <KenteStripe height={8} style={styles.heroStripe} />
-        </View>
+        </Reanimated.View>
 
         <View style={{ padding: 20 }}>
           <View style={styles.titleRow}>
@@ -259,9 +291,6 @@ export default function DishDetail() {
             <View style={[styles.rateBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[displayFont(16, '700'), { color: colors.text, marginBottom: 12 }]}>Notez ce plat</Text>
               <StarRating value={myRating} onRate={rate} colors={colors} />
-              {rateErr && (
-                <Text style={[bodyFont(12, '600'), { color: '#ff6b70', marginTop: 8, textAlign: 'center' }]}>{rateErr}</Text>
-              )}
             </View>
           )}
 
@@ -305,6 +334,7 @@ export default function DishDetail() {
           </PressableScale>
         </View>
         <Animated.View style={{ flex: 1, transform: [{ scale: addPop }] }}>
+          <View ref={addBtnRef} collapsable={false}>
           <PressableScale onPress={addAndGo}>
             <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.addBtn, glow(Brand.accent, 18)]}>
               <Plus size={17} color="#fff" strokeWidth={2.8} />
@@ -315,8 +345,30 @@ export default function DishDetail() {
               </Text>
             </LinearGradient>
           </PressableScale>
+          </View>
         </Animated.View>
       </View>
+
+      {/* Icône qui s'envole du bouton Ajouter, confirmation ludique */}
+      {flight && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.flyIcon,
+            {
+              left: flight.x - 16, top: flight.y - 16,
+              opacity: flightAnim.interpolate({ inputRange: [0, 0.15, 1], outputRange: [1, 1, 0] }),
+              transform: [
+                { translateY: flightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -260] }) },
+                { translateX: flightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 60] }) },
+                { scale: flightAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.3] }) },
+              ],
+            },
+          ]}
+        >
+          <ShoppingCart size={16} color="#fff" strokeWidth={2.4} />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -374,5 +426,9 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
     paddingVertical: 15, borderRadius: Radius.pill,
+  },
+  flyIcon: {
+    position: 'absolute', width: 32, height: 32, borderRadius: 16, zIndex: 70,
+    backgroundColor: Brand.accent, alignItems: 'center', justifyContent: 'center',
   },
 });

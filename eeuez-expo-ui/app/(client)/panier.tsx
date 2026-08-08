@@ -3,13 +3,15 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated, PanResponder,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
-import { useApp } from '../../context/AppContext';
+import { useApp, type CartLine } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
 import type { PaymentMode, FideliteApercuDTO } from '../../services/menu';
 import { initiateCamerPayPayment, cancelOrder, fetchFideliteApercu } from '../../services/menu';
@@ -17,6 +19,7 @@ import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { CamerPayWebView } from '../../components/CamerPayWebView';
 import { useGardeDemo } from '../../hooks/useGardeDemo';
+import { animateListChange } from '../../lib/layoutAnimation';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
   { mode: 'mtn_money', label: 'MTN Money', Icon: Smartphone },
@@ -26,8 +29,123 @@ const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = 
 /** Modes qui nécessitent le widget CamerPay (tous les modes actuels) */
 const CAMERPAY_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
 
+const SWIPE_DELETE_THRESHOLD = 96;
+const GAP = 13;
+
+/** Une ligne de panier : glisser vers la gauche pour supprimer (plutôt qu'un
+ *  petit bouton ×), avec fondu + collapse de hauteur à la sortie. Le chiffre
+ *  de quantité fait un bref « bump » à chaque tap +/-. */
+function CartLineRow({ line }: { line: CartLine }) {
+  const { colors, cartInc, cartDec, cartRemove } = useApp();
+  const { cle, dish, qty, complements, prixUnitaire } = line;
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const collapse = useRef(new Animated.Value(1)).current; // 1 = taille normale, 0 = effondrée
+  const qtyBump = useRef(new Animated.Value(1)).current;
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  const enSuppression = useRef(false);
+
+  const bumpQty = () => {
+    Animated.sequence([
+      Animated.spring(qtyBump, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 12 }),
+      Animated.spring(qtyBump, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }),
+    ]).start();
+  };
+
+  const snapBack = () => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+  };
+
+  const supprimer = () => {
+    if (enSuppression.current) return;
+    enSuppression.current = true;
+    Animated.parallel([
+      Animated.timing(translateX, { toValue: -420, duration: 200, useNativeDriver: true }),
+      Animated.timing(collapse, { toValue: 0, duration: 220, useNativeDriver: false }),
+    ]).start(() => {
+      animateListChange();
+      cartRemove(cle);
+    });
+  };
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => translateX.setValue(Math.min(0, g.dx)),
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -SWIPE_DELETE_THRESHOLD) supprimer();
+        else snapBack();
+      },
+      onPanResponderTerminate: snapBack,
+    }),
+  ).current;
+
+  const deleteOpacity = translateX.interpolate({
+    inputRange: [-SWIPE_DELETE_THRESHOLD, 0], outputRange: [1, 0], extrapolate: 'clamp',
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.lineWrap,
+        measuredHeight != null && {
+          height: collapse.interpolate({ inputRange: [0, 1], outputRange: [0, measuredHeight] }),
+          marginBottom: collapse.interpolate({ inputRange: [0, 1], outputRange: [0, GAP] }),
+          opacity: collapse,
+        },
+      ]}
+    >
+      <View onLayout={e => { if (measuredHeight == null) setMeasuredHeight(e.nativeEvent.layout.height); }}>
+        {/* Zone de suppression révélée derrière la ligne pendant le glissement */}
+        <Animated.View style={[styles.deleteZone, { opacity: deleteOpacity }]}>
+          <Trash2 size={20} color="#fff" strokeWidth={2.3} />
+        </Animated.View>
+
+        <Animated.View
+          {...pan.panHandlers}
+          style={[styles.line, { backgroundColor: colors.surface, borderColor: colors.border, transform: [{ translateX }] }]}
+        >
+          <DishTile Icon={dish.icon} grad={dish.grad} image={dish.image} size={64} iconSize={28} radius={16} />
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text }]}>{dish.name}</Text>
+
+            {/* Détail des compléments : le client doit voir ce qu'il
+                a choisi et ce que chaque option lui coûte. */}
+            {complements.map(c => (
+              <View key={c.optionId} style={styles.complementLigne}>
+                <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted, flex: 1 }]}>
+                  {c.groupeNom} : {c.optionNom}
+                </Text>
+                <Text style={[bodyFont(11.5, '700'), { color: c.supplement ? Brand.accentLight : colors.faint }]}>
+                  {c.supplement ? `+${formatPrice(c.supplement)}` : 'offert'}
+                </Text>
+              </View>
+            ))}
+
+            <Text style={[displayFont(14, '800'), { color: Brand.accentLight, marginTop: 4 }]}>
+              {formatPrice(prixUnitaire)}
+            </Text>
+            <View style={[styles.stepper, { backgroundColor: colors.surface2 }]}>
+              <PressableScale onPress={() => { bumpQty(); animateListChange(); cartDec(cle); }}>
+                <View style={[styles.stepBtn, { backgroundColor: colors.surface }]}><Minus size={16} color={colors.text} strokeWidth={2.6} /></View>
+              </PressableScale>
+              <Animated.Text style={[displayFont(14, '800'), { color: colors.text, minWidth: 20, textAlign: 'center', transform: [{ scale: qtyBump }] }]}>
+                {qty}
+              </Animated.Text>
+              <PressableScale onPress={() => { bumpQty(); cartInc(cle); }}>
+                <View style={[styles.stepBtn, { backgroundColor: Brand.accent }]}><Plus size={16} color="#fff" strokeWidth={2.6} /></View>
+              </PressableScale>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function PanierScreen() {
-  const { colors, cartLines, cartInc, cartDec, cartRemove, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
+  const { colors, cartLines, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
   const router = useRouter();
   // Le compte de démonstration peut remplir un panier, mais pas commander.
   const { bloquer } = useGardeDemo();
@@ -69,6 +187,19 @@ export default function PanierScreen() {
       toValue: 1, friction: 4, tension: 150, useNativeDriver: true,
     }).start();
   }, [usePoints, rebondTotal, fidelite]);
+
+  // Même rebond sur les frais de livraison : ils changent silencieusement
+  // quand une ligne est ajoutée/retirée (le plus élevé du panier l'emporte).
+  const rebondLivraison = useRef(new Animated.Value(1)).current;
+  const dernierFrais = useRef(deliveryFee);
+  useEffect(() => {
+    if (dernierFrais.current === deliveryFee) return;
+    dernierFrais.current = deliveryFee;
+    rebondLivraison.setValue(0.88);
+    Animated.spring(rebondLivraison, {
+      toValue: 1, friction: 4, tension: 150, useNativeDriver: true,
+    }).start();
+  }, [deliveryFee, rebondLivraison]);
 
   // ─── État WebView CamerPay ────────────────────────────
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
@@ -154,44 +285,8 @@ export default function PanierScreen() {
             </View>
           ) : (
             <>
-              <View style={{ gap: 13, marginTop: 20 }}>
-                {cartLines.map(({ cle, dish, qty, complements, prixUnitaire }) => (
-                  <View key={cle} style={[styles.line, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <DishTile Icon={dish.icon} grad={dish.grad} image={dish.image} size={64} iconSize={28} radius={16} />
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text }]}>{dish.name}</Text>
-
-                      {/* Détail des compléments : le client doit voir ce qu'il
-                          a choisi et ce que chaque option lui coûte. */}
-                      {complements.map(c => (
-                        <View key={c.optionId} style={styles.complementLigne}>
-                          <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted, flex: 1 }]}>
-                            {c.groupeNom} : {c.optionNom}
-                          </Text>
-                          <Text style={[bodyFont(11.5, '700'), { color: c.supplement ? Brand.accentLight : colors.faint }]}>
-                            {c.supplement ? `+${formatPrice(c.supplement)}` : 'offert'}
-                          </Text>
-                        </View>
-                      ))}
-
-                      <Text style={[displayFont(14, '800'), { color: Brand.accentLight, marginTop: 4 }]}>
-                        {formatPrice(prixUnitaire)}
-                      </Text>
-                      <View style={[styles.stepper, { backgroundColor: colors.surface2 }]}>
-                        <PressableScale onPress={() => cartDec(cle)}>
-                          <View style={[styles.stepBtn, { backgroundColor: colors.surface }]}><Minus size={16} color={colors.text} strokeWidth={2.6} /></View>
-                        </PressableScale>
-                        <Text style={[displayFont(14, '800'), { color: colors.text, minWidth: 20, textAlign: 'center' }]}>{qty}</Text>
-                        <PressableScale onPress={() => cartInc(cle)}>
-                          <View style={[styles.stepBtn, { backgroundColor: Brand.accent }]}><Plus size={16} color="#fff" strokeWidth={2.6} /></View>
-                        </PressableScale>
-                      </View>
-                    </View>
-                    <PressableScale onPress={() => cartRemove(cle)}>
-                      <View style={styles.trash}><Trash2 size={16} color={Brand.danger} strokeWidth={2.2} /></View>
-                    </PressableScale>
-                  </View>
-                ))}
+              <View style={{ marginTop: 20 }}>
+                {cartLines.map(line => <CartLineRow key={line.cle} line={line} />)}
               </View>
 
               {/* Lieu de livraison (GPS précis) */}
@@ -316,7 +411,9 @@ export default function PanierScreen() {
                 </View>
                 <View style={[styles.sumRow, { marginTop: 10 }]}>
                   <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Livraison</Text>
-                  <Text style={[bodyFont(14, '700'), { color: '#8fd6a8' }]}>{formatPrice(deliveryFee)}</Text>
+                  <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
+                    {formatPrice(deliveryFee)}
+                  </Animated.Text>
                 </View>
                 {reduction > 0 && (
                   <View style={[styles.sumRow, { marginTop: 10 }]}>
@@ -369,7 +466,9 @@ export default function PanierScreen() {
     {paymentUrl && (
       <CamerPayWebView
         paymentUrl={paymentUrl}
+        orderId={pendingOrderId ?? undefined}
         amount={totalAPayer}
+        onRetry={() => { if (pendingOrderId != null) launchPayment(pendingOrderId); }}
         onSuccess={() => {
           setPaymentUrl(null);
           setPendingOrderId(null);
@@ -411,11 +510,15 @@ const styles = StyleSheet.create({
   emptyIcon: { width: 96, height: 96, borderRadius: 32, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   emptyTxt: { textAlign: 'center', maxWidth: 220, marginTop: 6, lineHeight: 19 },
   browseBtn: { paddingHorizontal: 26, paddingVertical: 14, borderRadius: Radius.pill },
+  lineWrap: { borderRadius: 20, overflow: 'hidden' },
+  deleteZone: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: Brand.danger,
+    alignItems: 'flex-end', justifyContent: 'center', paddingRight: 26,
+  },
   line: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, padding: 4, alignSelf: 'flex-start', marginTop: 8 },
   stepBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   complementLigne: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  trash: { width: 38, height: 38, borderRadius: 19, backgroundColor: Brand.danger + '14', alignItems: 'center', justifyContent: 'center' },
   addrRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 14, paddingVertical: 13, borderRadius: Radius.md, borderWidth: 1,

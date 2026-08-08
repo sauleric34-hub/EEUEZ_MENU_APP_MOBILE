@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -14,6 +14,7 @@ import { Brand, Radius } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, displayFont, bodyFont } from '../components/ui';
+import { useToast } from '../context/ToastContext';
 
 const APP_VERSION = '1.0.0';
 const SUPPORT_EMAIL = 'support@menu.cm';
@@ -55,6 +56,7 @@ export default function SettingsScreen() {
     colors, mode, toggleTheme, user, signOut,
     notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
   } = useApp();
+  const toast = useToast();
   const router = useRouter();
 
   const switchColors = {
@@ -62,7 +64,21 @@ export default function SettingsScreen() {
     thumbColor: Brand.accent,
   };
 
-  const logout = async () => { await signOut(); router.replace('/'); };
+  const logout = () => {
+    // Action irréversible en un seul tap : une confirmation s'impose.
+    Alert.alert(
+      'Se déconnecter ?',
+      'Vous devrez ressaisir vos identifiants pour retrouver votre compte.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se déconnecter',
+          style: 'destructive',
+          onPress: async () => { await signOut(); router.replace('/'); },
+        },
+      ],
+    );
+  };
 
   return (
     <ScreenBg>
@@ -105,7 +121,7 @@ export default function SettingsScreen() {
             <Row
               Icon={CircleHelp} iconColor={Brand.green} label="Aide & support"
               value={SUPPORT_EMAIL} colors={colors}
-              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {})}
+              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => toast.error(`Aucune messagerie configurée. Écrivez-nous à ${SUPPORT_EMAIL}.`))}
             />
             <Row Icon={ShieldCheck} iconColor={Brand.green} label="Confidentialité" value="Vos données restent au Cameroun" colors={colors} />
             <Row Icon={Info} iconColor={Brand.green} label="Version de l'application" value={APP_VERSION} colors={colors} last />

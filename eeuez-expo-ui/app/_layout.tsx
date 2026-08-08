@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../context/AppContext';
+import { ToastProvider } from '../context/ToastContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 function ThemedStatusBar() {
@@ -9,10 +11,26 @@ function ThemedStatusBar() {
   return <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />;
 }
 
+// Sur navigateur, l'app garde son design mobile mais dans une colonne
+// centrée à largeur maximale (façon app installée), au lieu de s'étirer sur
+// toute la largeur de l'écran. Ne change rien sur natif (iOS/Android).
+const WEB_MAX_WIDTH = 480;
+
+function WebFrame({ children }: { children: React.ReactNode }) {
+  if (Platform.OS !== 'web') return <>{children}</>;
+  return (
+    <View style={webStyles.outer}>
+      <View style={webStyles.inner}>{children}</View>
+    </View>
+  );
+}
+
 export default function RootLayout() {
   return (
     <ErrorBoundary>
     <SafeAreaProvider>
+      <WebFrame>
+      <ToastProvider>
       <AppProvider>
         <ThemedStatusBar />
         <Stack screenOptions={{ headerShown: false }}>
@@ -33,7 +51,14 @@ export default function RootLayout() {
           <Stack.Screen name="reservations" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </AppProvider>
+      </ToastProvider>
+      </WebFrame>
     </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
+
+const webStyles = StyleSheet.create({
+  outer: { flex: 1, alignItems: 'center', backgroundColor: '#080c09' },
+  inner: { flex: 1, width: '100%', maxWidth: WEB_MAX_WIDTH, position: 'relative', overflow: 'hidden' },
+});

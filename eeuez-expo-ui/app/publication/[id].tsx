@@ -2,7 +2,7 @@
 //  Détail d'une publication + commentaires
 // ═══════════════════════════════════════════════════════════
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, Image,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
@@ -13,10 +13,11 @@ import { ChevronLeft, Send, Trash2, User as UserIcon, MessageSquare } from 'luci
 import { Brand, Radius } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { ScreenBg } from '../../components/ScreenBg';
-import { PressableScale, Loader, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { PressableScale, FadeSlideIn, Loader, CenterMessage, displayFont, bodyFont } from '../../components/ui';
 import { PublicationCard } from '../../components/PublicationCard';
 import { fetchPublication, postCommentaire } from '../../services/publications';
 import { apiRequest } from '../../services/http';
+import { animateListChange } from '../../lib/layoutAnimation';
 import type { PublicationDTO, CommentaireDTO } from '../../services/dto';
 
 function tempsEcoule(iso: string): string {
@@ -39,6 +40,7 @@ export default function PublicationScreen() {
   const [chargement, setChargement] = useState(true);
   const [texte, setTexte] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -61,9 +63,12 @@ export default function PublicationScreen() {
     setEnvoi(true);
     try {
       const nouveau = await postCommentaire(pubId, contenu);
+      animateListChange();
       setCommentaires(prev => [...prev, nouveau]);
       setTexte('');
       setPub(p => (p ? { ...p, nombre_commentaires: p.nombre_commentaires + 1 } : p));
+      // Le nouveau commentaire arrive en bas de liste : on l'amène à l'écran.
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     } catch (e) {
       Alert.alert('Erreur', e instanceof Error ? e.message : "Impossible d'envoyer le commentaire.");
     } finally {
@@ -80,6 +85,7 @@ export default function PublicationScreen() {
         onPress: async () => {
           try {
             await apiRequest(`/client/commentaires/${commentaire.id}`, { method: 'DELETE', auth: true });
+            animateListChange();
             setCommentaires(prev => prev.filter(c => c.id !== commentaire.id));
             setPub(p => (p ? { ...p, nombre_commentaires: Math.max(0, p.nombre_commentaires - 1) } : p));
           } catch {
@@ -113,7 +119,7 @@ export default function PublicationScreen() {
             />
           ) : (
             <>
-              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+              <ScrollView ref={scrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                 <PublicationCard publication={pub} onOpenComments={() => {}} />
 
                 <Text style={[displayFont(15.5, '700'), { color: colors.text, marginBottom: 12 }]}>
@@ -126,7 +132,7 @@ export default function PublicationScreen() {
                   </Text>
                 ) : (
                   commentaires.map(c => (
-                    <View key={c.id} style={styles.commentaire}>
+                    <FadeSlideIn key={c.id} style={styles.commentaire}>
                       {c.auteur_details.avatar ? (
                         <Image source={{ uri: c.auteur_details.avatar }} style={styles.avatar} />
                       ) : (
@@ -150,7 +156,7 @@ export default function PublicationScreen() {
                           <Trash2 size={15} color={Brand.danger} strokeWidth={2.2} />
                         </PressableScale>
                       )}
-                    </View>
+                    </FadeSlideIn>
                   ))
                 )}
               </ScrollView>

@@ -7,7 +7,8 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, Animated, Image,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,12 +26,18 @@ import { PressableScale, displayFont, bodyFont } from '../components/ui';
 
 const ALLERGY_CHOICES = ['Arachides', 'Gluten', 'Lactose', 'Fruits de mer', 'Œufs', 'Soja'];
 
-function Field({ Icon, colors, ...inputProps }: {
-  Icon: LucideIcon; colors: any;
+type FieldKey = 'firstName' | 'lastName' | 'email' | 'phone' | 'password' | 'confirm';
+
+function Field({ Icon, colors, invalid, ...inputProps }: {
+  Icon: LucideIcon; colors: any; invalid?: boolean;
 } & React.ComponentProps<typeof TextInput>) {
   return (
-    <View style={[styles.field, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Icon size={17} color={Brand.accentLight} strokeWidth={2.2} />
+    <View style={[
+      styles.field,
+      { backgroundColor: colors.surface, borderColor: invalid ? Brand.danger : colors.border },
+      invalid && styles.fieldInvalid,
+    ]}>
+      <Icon size={17} color={invalid ? Brand.danger : Brand.accentLight} strokeWidth={2.2} />
       <TextInput
         placeholderTextColor={colors.faint}
         style={[styles.fieldInput, { color: colors.text }]}
@@ -43,6 +50,10 @@ function Field({ Icon, colors, ...inputProps }: {
 export default function RegisterScreen() {
   const { colors, register, updateUser } = useApp();
   const router = useRouter();
+  const { width: winWidth } = useWindowDimensions();
+  // Largeur d'un panneau = largeur de la zone de contenu (mêmes marges que
+  // `styles.content`), pour que le glissement reste aligné sur les champs.
+  const panelWidth = winWidth - 48;
 
   const [step, setStep] = useState<1 | 2>(1);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -56,31 +67,40 @@ export default function RegisterScreen() {
   const [otherAllergy, setOtherAllergy] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<FieldKey | null>(null);
+  const [succes, setSucces] = useState(false);
+  const [panelHeights, setPanelHeights] = useState<{ step1: number | null; step2: number | null }>({
+    step1: null, step2: null,
+  });
 
   const slide = useRef(new Animated.Value(0)).current;
+  const checkPop = useRef(new Animated.Value(0)).current;
+  const succesFade = useRef(new Animated.Value(0)).current;
 
   const goToStep = (next: 1 | 2) => {
     setError(null);
-    Animated.timing(slide, { toValue: next === 2 ? 1 : 0, duration: 260, useNativeDriver: true }).start();
+    setFieldError(null);
+    Animated.timing(slide, { toValue: next === 2 ? 1 : 0, duration: 320, useNativeDriver: true }).start();
     setStep(next);
   };
 
-  const validateStep1 = (): string | null => {
-    if (!firstName.trim()) return 'Veuillez saisir votre prénom.';
-    if (!lastName.trim()) return 'Veuillez saisir votre nom.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Adresse email invalide.';
-    if (!/^[0-9+\s-]{8,15}$/.test(phone.trim())) return 'Numéro de téléphone invalide (ex : 699 00 00 00).';
+  const validateStep1 = (): { field: FieldKey; message: string } | null => {
+    if (!firstName.trim()) return { field: 'firstName', message: 'Veuillez saisir votre prénom.' };
+    if (!lastName.trim()) return { field: 'lastName', message: 'Veuillez saisir votre nom.' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return { field: 'email', message: 'Adresse email invalide.' };
+    if (!/^[0-9+\s-]{8,15}$/.test(phone.trim())) return { field: 'phone', message: 'Numéro de téléphone invalide (ex : 699 00 00 00).' };
     return null;
   };
-  const validateStep2 = (): string | null => {
-    if (password.length < 6) return 'Le mot de passe doit faire au moins 6 caractères.';
-    if (password !== confirm) return 'Les deux mots de passe ne correspondent pas.';
+  const validateStep2 = (): { field: FieldKey; message: string } | null => {
+    if (password.length < 6) return { field: 'password', message: 'Le mot de passe doit faire au moins 6 caractères.' };
+    if (password !== confirm) return { field: 'confirm', message: 'Les deux mots de passe ne correspondent pas.' };
     return null;
   };
 
   const next = () => {
     const invalid = validateStep1();
-    if (invalid) { setError(invalid); return; }
+    if (invalid) { setError(invalid.message); setFieldError(invalid.field); return; }
+    setFieldError(null);
     goToStep(2);
   };
 
@@ -98,9 +118,10 @@ export default function RegisterScreen() {
 
   const submit = async () => {
     const invalid = validateStep2();
-    if (invalid) { setError(invalid); return; }
+    if (invalid) { setError(invalid.message); setFieldError(invalid.field); return; }
     setBusy(true);
     setError(null);
+    setFieldError(null);
     const allAllergies = [...allergies, ...(otherAllergy.trim() ? [otherAllergy.trim()] : [])].join(', ');
     try {
       await register({
@@ -115,15 +136,39 @@ export default function RegisterScreen() {
       if (avatarUri) {
         try { await updateUser({ avatarUri }); } catch { /* non bloquant */ }
       }
-      router.replace('/(client)');
+      setBusy(false);
+      // Confirmation visuelle avant la redirection, plutôt qu'un retour
+      // instantané et silencieux vers l'accueil.
+      setSucces(true);
+      Animated.parallel([
+        Animated.timing(succesFade, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.spring(checkPop, { toValue: 1.15, useNativeDriver: true, speed: 40, bounciness: 12 }),
+          Animated.spring(checkPop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }),
+        ]),
+      ]).start();
+      setTimeout(() => router.replace('/(client)'), 900);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec de l\'inscription');
-    } finally {
       setBusy(false);
     }
   };
 
   const stepTitles = ['Vos informations', 'Sécurité & santé'];
+
+  const translateX = slide.interpolate({ inputRange: [0, 1], outputRange: [0, -panelWidth] });
+  const wrapperHeight = panelHeights.step1 != null && panelHeights.step2 != null
+    ? Math.max(panelHeights.step1, panelHeights.step2)
+    : (panelHeights.step1 ?? panelHeights.step2 ?? undefined);
+
+  const onLayoutStep1 = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setPanelHeights(prev => (prev.step1 === h ? prev : { ...prev, step1: h }));
+  };
+  const onLayoutStep2 = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setPanelHeights(prev => (prev.step2 === h ? prev : { ...prev, step2: h }));
+  };
 
   return (
     <ScreenBg>
@@ -154,72 +199,111 @@ export default function RegisterScreen() {
               </Animated.View>
             </View>
 
-            {step === 1 ? (
-              <View style={{ marginTop: 24, gap: 12 }}>
-                {/* Photo de profil (facultative) */}
-                <View style={{ alignItems: 'center', marginBottom: 6 }}>
-                  <PressableScale onPress={pickAvatar} scaleTo={0.94}>
-                    <View style={[styles.avatarRing, { borderColor: Brand.accent + '55' }]}>
-                      {avatarUri ? (
-                        <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
-                      ) : (
-                        <View style={[styles.avatarImg, styles.avatarEmpty, { backgroundColor: colors.surface }]}>
-                          <User size={34} color={colors.faint} strokeWidth={1.8} />
-                        </View>
-                      )}
-                      <View style={[styles.avatarBadge, glow(Brand.accent, 10)]}>
-                        <Camera size={15} color="#fff" strokeWidth={2.4} />
-                      </View>
-                    </View>
-                  </PressableScale>
-                  <Text style={[bodyFont(12, '600'), { color: colors.muted, marginTop: 8 }]}>
-                    {avatarUri ? 'Modifier la photo' : 'Ajouter une photo (facultatif)'}
-                  </Text>
-                </View>
-                <Field Icon={User} colors={colors} value={firstName} onChangeText={setFirstName} placeholder="Prénom" />
-                <Field Icon={User} colors={colors} value={lastName} onChangeText={setLastName} placeholder="Nom" />
-                <Field Icon={Mail} colors={colors} value={email} onChangeText={setEmail} placeholder="Email" autoCapitalize="none" keyboardType="email-address" />
-                <Field Icon={Phone} colors={colors} value={phone} onChangeText={setPhone} placeholder="Téléphone (ex : 699 00 00 00)" keyboardType="phone-pad" />
-              </View>
-            ) : (
-              <View style={{ marginTop: 24, gap: 12 }}>
-                <Field Icon={Lock} colors={colors} value={password} onChangeText={setPassword} placeholder="Mot de passe (min. 6 caractères)" secureTextEntry />
-                <Field Icon={Lock} colors={colors} value={confirm} onChangeText={setConfirm} placeholder="Confirmer le mot de passe" secureTextEntry />
-
-                <View style={[styles.allergyBox, { backgroundColor: Brand.yellow + '0d', borderColor: Brand.yellow + '30' }]}>
-                  <View style={styles.allergyHead}>
-                    <TriangleAlert size={16} color={Brand.yellow} strokeWidth={2.3} />
-                    <Text style={[bodyFont(13, '800'), { color: Brand.yellow }]}>Allergies alimentaires</Text>
-                  </View>
-                  <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 4 }]}>
-                    Les restaurants en tiendront compte dans vos commandes.
-                  </Text>
-                  <View style={styles.allergyChips}>
-                    {ALLERGY_CHOICES.map(a => {
-                      const on = allergies.includes(a);
-                      return (
-                        <PressableScale key={a} onPress={() => toggleAllergy(a)} scaleTo={0.93}>
-                          <View style={[
-                            styles.chip,
-                            on
-                              ? { backgroundColor: Brand.yellow, borderColor: Brand.yellow }
-                              : { backgroundColor: colors.surface, borderColor: colors.border },
-                          ]}>
-                            {on && <Check size={13} color="#1c1710" strokeWidth={3} />}
-                            <Text style={[bodyFont(12.5, '700'), { color: on ? '#1c1710' : colors.muted }]}>{a}</Text>
+            {/* Glissement horizontal réel du contenu entre les deux étapes :
+                les deux panneaux vivent côte à côte dans une rangée deux fois
+                plus large que l'écran, et on la translate. La hauteur du
+                conteneur est fixée sur la plus grande des deux mesures, pour
+                qu'aucun contenu ne soit jamais rogné. */}
+            <View style={{ marginTop: 24, overflow: 'hidden', height: wrapperHeight }}>
+              <Animated.View style={{ flexDirection: 'row', width: panelWidth * 2, transform: [{ translateX }] }}>
+                <View
+                  style={{ width: panelWidth, gap: 12 }}
+                  onLayout={onLayoutStep1}
+                  pointerEvents={step === 1 ? 'auto' : 'none'}
+                >
+                  {/* Photo de profil (facultative) */}
+                  <View style={{ alignItems: 'center', marginBottom: 6 }}>
+                    <PressableScale onPress={pickAvatar} scaleTo={0.94}>
+                      <View style={[styles.avatarRing, { borderColor: Brand.accent + '55' }]}>
+                        {avatarUri ? (
+                          <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+                        ) : (
+                          <View style={[styles.avatarImg, styles.avatarEmpty, { backgroundColor: colors.surface }]}>
+                            <User size={34} color={colors.faint} strokeWidth={1.8} />
                           </View>
-                        </PressableScale>
-                      );
-                    })}
+                        )}
+                        <View style={[styles.avatarBadge, glow(Brand.accent, 10)]}>
+                          <Camera size={15} color="#fff" strokeWidth={2.4} />
+                        </View>
+                      </View>
+                    </PressableScale>
+                    <Text style={[bodyFont(12, '600'), { color: colors.muted, marginTop: 8 }]}>
+                      {avatarUri ? 'Modifier la photo' : 'Ajouter une photo (facultatif)'}
+                    </Text>
                   </View>
-                  <TextInput
-                    value={otherAllergy} onChangeText={setOtherAllergy}
-                    placeholder="Autre allergie… (facultatif)" placeholderTextColor={colors.faint}
-                    style={[styles.otherInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+                  <Field
+                    Icon={User} colors={colors} value={firstName} placeholder="Prénom"
+                    invalid={fieldError === 'firstName'}
+                    onChangeText={t => { setFirstName(t); if (fieldError === 'firstName') setFieldError(null); }}
+                  />
+                  <Field
+                    Icon={User} colors={colors} value={lastName} placeholder="Nom"
+                    invalid={fieldError === 'lastName'}
+                    onChangeText={t => { setLastName(t); if (fieldError === 'lastName') setFieldError(null); }}
+                  />
+                  <Field
+                    Icon={Mail} colors={colors} value={email} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
+                    invalid={fieldError === 'email'}
+                    onChangeText={t => { setEmail(t); if (fieldError === 'email') setFieldError(null); }}
+                  />
+                  <Field
+                    Icon={Phone} colors={colors} value={phone} placeholder="Téléphone (ex : 699 00 00 00)" keyboardType="phone-pad"
+                    invalid={fieldError === 'phone'}
+                    onChangeText={t => { setPhone(t); if (fieldError === 'phone') setFieldError(null); }}
                   />
                 </View>
-              </View>
-            )}
+
+                <View
+                  style={{ width: panelWidth, gap: 12 }}
+                  onLayout={onLayoutStep2}
+                  pointerEvents={step === 2 ? 'auto' : 'none'}
+                >
+                  <Field
+                    Icon={Lock} colors={colors} value={password} placeholder="Mot de passe (min. 6 caractères)" secureTextEntry
+                    invalid={fieldError === 'password'}
+                    onChangeText={t => { setPassword(t); if (fieldError === 'password') setFieldError(null); }}
+                  />
+                  <Field
+                    Icon={Lock} colors={colors} value={confirm} placeholder="Confirmer le mot de passe" secureTextEntry
+                    invalid={fieldError === 'confirm'}
+                    onChangeText={t => { setConfirm(t); if (fieldError === 'confirm') setFieldError(null); }}
+                  />
+
+                  <View style={[styles.allergyBox, { backgroundColor: Brand.yellow + '0d', borderColor: Brand.yellow + '30' }]}>
+                    <View style={styles.allergyHead}>
+                      <TriangleAlert size={16} color={Brand.yellow} strokeWidth={2.3} />
+                      <Text style={[bodyFont(13, '800'), { color: Brand.yellow }]}>Allergies alimentaires</Text>
+                    </View>
+                    <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 4 }]}>
+                      Les restaurants en tiendront compte dans vos commandes.
+                    </Text>
+                    <View style={styles.allergyChips}>
+                      {ALLERGY_CHOICES.map(a => {
+                        const on = allergies.includes(a);
+                        return (
+                          <PressableScale key={a} onPress={() => toggleAllergy(a)} scaleTo={0.93}>
+                            <View style={[
+                              styles.chip,
+                              on
+                                ? { backgroundColor: Brand.yellow, borderColor: Brand.yellow }
+                                : { backgroundColor: colors.surface, borderColor: colors.border },
+                            ]}>
+                              {on && <Check size={13} color="#1c1710" strokeWidth={3} />}
+                              <Text style={[bodyFont(12.5, '700'), { color: on ? '#1c1710' : colors.muted }]}>{a}</Text>
+                            </View>
+                          </PressableScale>
+                        );
+                      })}
+                    </View>
+                    <TextInput
+                      value={otherAllergy} onChangeText={setOtherAllergy}
+                      placeholder="Autre allergie… (facultatif)" placeholderTextColor={colors.faint}
+                      style={[styles.otherInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+            </View>
 
             {error && (
               <View style={styles.errRow}>
@@ -252,6 +336,16 @@ export default function RegisterScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Confirmation visuelle avant la redirection finale */}
+      {succes && (
+        <Animated.View style={[styles.successOverlay, { opacity: succesFade }]} pointerEvents="none">
+          <Animated.View style={[styles.successBadge, glow(Brand.accent, 24), { transform: [{ scale: checkPop }] }]}>
+            <Check size={38} color="#fff" strokeWidth={3} />
+          </Animated.View>
+          <Text style={[displayFont(18, '800'), { color: '#fff', marginTop: 18 }]}>Compte créé !</Text>
+        </Animated.View>
+      )}
     </ScreenBg>
   );
 }
@@ -266,6 +360,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 11,
     paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1,
   },
+  fieldInvalid: { borderWidth: 1.5 },
   fieldInput: { flex: 1, fontSize: 15, fontWeight: '600', paddingVertical: 14 },
   avatarRing: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, padding: 3, alignItems: 'center', justifyContent: 'center' },
   avatarImg: { width: 84, height: 84, borderRadius: 42 },
@@ -289,5 +384,13 @@ const styles = StyleSheet.create({
   mainBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 16, borderRadius: Radius.pill,
+  },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8,12,9,0.88)', alignItems: 'center', justifyContent: 'center',
+  },
+  successBadge: {
+    width: 88, height: 88, borderRadius: 44, backgroundColor: Brand.accent,
+    alignItems: 'center', justifyContent: 'center',
   },
 });

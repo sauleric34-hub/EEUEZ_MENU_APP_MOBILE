@@ -8,17 +8,19 @@ import {
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, SlidersHorizontal, Bell, Sun, Moon, Star, TriangleAlert } from 'lucide-react-native';
-import { Brand, Radius } from '../../constants/theme';
+import { Brand, Radius, hexToRgba } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatKm } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
 import { LogoMark } from '../../components/Logo';
 import {
-  PressableScale, IconButton, DishTile, SectionTitle, Loader, CenterMessage,
-  AccentButton, displayFont, bodyFont,
+  PressableScale, IconButton, DishTile, SectionTitle, CenterMessage,
+  AccentButton, FadeSlideIn, displayFont, bodyFont,
 } from '../../components/ui';
+import { SkeletonBlock } from '../../components/Skeleton';
 import { DishCardWide } from '../../components/cards';
 import { PromoBanner } from '../../components/PromoBanner';
 import { PublicationCard } from '../../components/PublicationCard';
@@ -156,7 +158,13 @@ export default function HomeScreen() {
           <PromoBanner banners={bannieres} />
 
           {/* Catégories */}
-          {categories.length > 0 && (
+          {dataLoading && !categories.length ? (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonBlock key={i} width={78} height={74} radius={20} colors={colors} />
+              ))}
+            </View>
+          ) : categories.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 22 }} contentContainerStyle={{ gap: 10 }}>
               {categories.map(cat => (
                 <PressableScale key={cat.id} onPress={goPlats}>
@@ -170,7 +178,16 @@ export default function HomeScreen() {
           )}
 
           {/* Pour vous — suggestions personnalisées */}
-          {forYou.length > 0 && (
+          {dataLoading && !forYou.length ? (
+            <>
+              <SkeletonBlock width={130} height={20} radius={6} colors={colors} style={{ marginTop: 26, marginBottom: 14 }} />
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonBlock key={i} width={210} height={205} radius={Radius.xl} colors={colors} />
+                ))}
+              </View>
+            </>
+          ) : forYou.length > 0 && (
             <>
               <SectionTitle
                 title={positionUsed ? 'Près de vous' : 'Pour vous'}
@@ -182,7 +199,9 @@ export default function HomeScreen() {
                 </Text>
               )}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4, paddingHorizontal: 2 }}>
-                {forYou.slice(0, 10).map(d => <DishCardWide key={d.id} dish={d} />)}
+                {forYou.slice(0, 10).map((d, i) => (
+                  <FadeSlideIn key={d.id} index={i}><DishCardWide dish={d} /></FadeSlideIn>
+                ))}
               </ScrollView>
             </>
           )}
@@ -191,36 +210,54 @@ export default function HomeScreen() {
               pour que la détection de visibilité (lecture vidéo) les couvre. */}
           {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
         </>
-  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres]);
+  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres, dataLoading]);
 
   /** Bloc « Restaurants » : intercalé dans le fil, après les 5 premières. */
   const SectionRestaurants = useCallback(() => (
     <>
       <SectionTitle title="Restaurants" colors={colors} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 2, paddingHorizontal: 2 }}>
-        {restoList.map(r => (
-          <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
-            <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
-              <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
-              <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
-                <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
-                  {r.rating} · {r.distanceKm != null ? formatKm(r.distanceKm) : r.cuisine}
-                </Text>
-              </View>
-            </View>
-          </PressableScale>
-        ))}
-      </ScrollView>
+      {dataLoading && !restoList.length ? (
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonBlock key={i} width={150} height={140} radius={22} colors={colors} />
+          ))}
+        </View>
+      ) : (
+        <View style={{ position: 'relative' }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 2, paddingHorizontal: 2, paddingRight: 28 }}>
+            {restoList.map(r => (
+              <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
+                <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
+                  <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
+                  <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
+                    <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
+                    <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
+                      {r.rating} · {r.distanceKm != null ? formatKm(r.distanceKm) : r.cuisine}
+                    </Text>
+                  </View>
+                </View>
+              </PressableScale>
+            ))}
+          </ScrollView>
+          {/* Dégradé de bord discret : signale qu'il y a plus à découvrir en scrollant. */}
+          {restoList.length > 2 && (
+            <LinearGradient
+              pointerEvents="none"
+              colors={[hexToRgba(colors.page, 0), colors.page]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.edgeFade}
+            />
+          )}
+        </View>
+      )}
       <SectionTitle title="Dans votre communauté" colors={colors} />
     </>
-  ), [colors, restoList, router]);
+  ), [colors, restoList, router, dataLoading]);
 
-  // Écrans de repli — placés après tous les hooks.
-  if (dataLoading && !restaurants.length) {
-    return <ScreenBg><SafeAreaView style={{ flex: 1 }}><Loader colors={colors} /></SafeAreaView></ScreenBg>;
-  }
+  // Écran de repli — placé après tous les hooks. Le chargement initial du
+  // catalogue reste dans le flux normal (squelettes par section, cf. EnTete /
+  // SectionRestaurants) : seule une vraie erreur bloque tout l'écran.
   if (dataError && !restaurants.length) {
     return (
       <ScreenBg><SafeAreaView style={{ flex: 1 }}>
@@ -276,4 +313,5 @@ const styles = StyleSheet.create({
   },
   cat: { width: 78, alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1 },
   restoMini: { width: 150, padding: 14, borderRadius: 22, borderWidth: 1 },
+  edgeFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 32 },
 });

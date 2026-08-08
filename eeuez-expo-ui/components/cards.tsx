@@ -11,13 +11,14 @@ import { Brand, Radius, cardShadow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { formatPrice, formatKm, type Dish, type Resto } from '../data/menuData';
 import { PressableScale, DishTile, displayFont, bodyFont } from './ui';
+import { animateListChange } from '../lib/layoutAnimation';
 
 // ─── Cœur like ───────────────────────────────────────────────
 function LikeHeart({ id }: { id: number }) {
   const { likes, toggleLike } = useApp();
   const liked = !!likes[id];
   return (
-    <PressableScale onPress={() => toggleLike(id)}>
+    <PressableScale onPress={() => { animateListChange(); toggleLike(id); }}>
       <View style={s.heart}>
         <Heart size={16} strokeWidth={2.4}
           color={liked ? Brand.accent : '#fff'}

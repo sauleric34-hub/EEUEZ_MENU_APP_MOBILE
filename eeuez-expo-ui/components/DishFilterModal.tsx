@@ -4,8 +4,8 @@
 //  (prix max, note mini, populaires, livraison offerte, ouverts).
 // ═══════════════════════════════════════════════════════════
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Modal, ScrollView, Pressable, Animated, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -93,10 +93,28 @@ interface Props {
 
 export function DishFilterModal({ visible, value, resultCount, categories, onClose, onChange }: Props) {
   const { colors } = useApp();
+  const { height: winHeight } = useWindowDimensions();
   const [draft, setDraft] = useState<DishFilters>(value);
+  // La Modal native (`animationType="slide"`) ne glisse que la feuille : le
+  // scrim apparaît/disparaît d'un coup. On pilote donc les deux à la main
+  // avec une seule valeur, y compris à la fermeture (la Modal reste montée
+  // le temps du fondu de sortie avant de se démonter réellement).
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
 
   // Repart de l'état courant à chaque ouverture.
   useEffect(() => { if (visible) setDraft(value); }, [visible]);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      progress.setValue(0);
+      Animated.timing(progress, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else if (mounted) {
+      Animated.timing(progress, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setMounted(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const set = <K extends keyof DishFilters>(k: K, v: DishFilters[K]) =>
     setDraft(d => ({ ...d, [k]: v }));
@@ -114,14 +132,19 @@ export function DishFilterModal({ visible, value, resultCount, categories, onClo
   const reset = () => setDraft(DEFAULT_FILTERS);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={mounted} animationType="none" transparent onRequestClose={onClose}>
       {/* Conteneur plein écran : la feuille est ancrée en bas via le parent.
           Plus fiable que « position:absolute + maxHeight% », qui peut faire
           collapser un enfant flex:1 sur certains Android — et masquer le
           bouton d'action. */}
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.page, borderColor: colors.border }]}>
+        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        </Animated.View>
+        <Animated.View style={[
+          styles.sheet, { backgroundColor: colors.page, borderColor: colors.border },
+          { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [winHeight, 0] }) }] },
+        ]}>
           <SafeAreaView edges={['bottom']} style={{ flexShrink: 1 }}>
           <View style={styles.grabber} />
 
@@ -273,7 +296,7 @@ export function DishFilterModal({ visible, value, resultCount, categories, onClo
             </PressableScale>
           </View>
         </SafeAreaView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

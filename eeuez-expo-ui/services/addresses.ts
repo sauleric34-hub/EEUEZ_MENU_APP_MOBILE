@@ -34,30 +34,29 @@ export interface PlaceResult {
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 
-/** Recherche d'un lieu par texte (priorité Cameroun). */
+/**
+ * Recherche d'un lieu par texte (priorité Cameroun).
+ * Laisse l'erreur remonter en cas d'échec réseau/serveur, pour que
+ * l'appelant distingue « aucun résultat » d'un géocodage indisponible.
+ */
 export async function searchPlaces(query: string): Promise<PlaceResult[]> {
   const q = query.trim();
   if (q.length < 3) return [];
-  try {
-    const url = `${NOMINATIM}/search?q=${encodeURIComponent(q)}&format=json&limit=8&countrycodes=cm&addressdetails=1`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'MenuApp/1.0' } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { display_name: string; lat: string; lon: string }[];
-    return data.map(p => ({ label: p.display_name, latitude: Number(p.lat), longitude: Number(p.lon) }));
-  } catch {
-    return [];
-  }
+  const url = `${NOMINATIM}/search?q=${encodeURIComponent(q)}&format=json&limit=8&countrycodes=cm&addressdetails=1`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'MenuApp/1.0' } });
+  if (!res.ok) throw new Error('Recherche de lieu indisponible');
+  const data = (await res.json()) as { display_name: string; lat: string; lon: string }[];
+  return data.map(p => ({ label: p.display_name, latitude: Number(p.lat), longitude: Number(p.lon) }));
 }
 
-/** Adresse lisible à partir de coordonnées GPS (reverse geocoding). */
+/**
+ * Adresse lisible à partir de coordonnées GPS (reverse geocoding).
+ * Laisse l'erreur remonter (voir `searchPlaces` ci-dessus).
+ */
 export async function reverseGeocode(lat: number, lon: number): Promise<string> {
-  try {
-    const url = `${NOMINATIM}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'MenuApp/1.0' } });
-    if (!res.ok) return '';
-    const data = (await res.json()) as { display_name?: string };
-    return data.display_name || '';
-  } catch {
-    return '';
-  }
+  const url = `${NOMINATIM}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'MenuApp/1.0' } });
+  if (!res.ok) throw new Error('Géocodage indisponible');
+  const data = (await res.json()) as { display_name?: string };
+  return data.display_name || '';
 }

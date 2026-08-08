@@ -2,8 +2,8 @@
 //  Suivi de livraison en direct
 // ═══════════════════════════════════════════════════════════
 
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, View, Text, StyleSheet, ScrollView, Linking, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -16,9 +16,11 @@ import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
 import { ConfirmReception } from '../components/ConfirmReception';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
+import { useToast } from '../context/ToastContext';
 
 export default function TrackingScreen() {
   const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
+  const toast = useToast();
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,6 +29,21 @@ export default function TrackingScreen() {
   const suivi = activeOrder?.suivi ?? null;
   // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
   const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
+
+  // ─── Fondu enchaîné entre l'aperçu stylisé (SVG) et la vraie carte ──
+  // Les deux calques restent montés le temps du fondu, puis celui qui vient
+  // de disparaître se démonte (pas de WebView inutile une fois basculé).
+  const mapFade = useRef(new Animated.Value(showLiveMap ? 1 : 0)).current;
+  const [renderStyled, setRenderStyled] = useState(!showLiveMap);
+  const [renderLive, setRenderLive] = useState(showLiveMap);
+  useEffect(() => {
+    if (showLiveMap) setRenderLive(true); else setRenderStyled(true);
+    Animated.timing(mapFade, {
+      toValue: showLiveMap ? 1 : 0, duration: 420, easing: Easing.inOut(Easing.cubic), useNativeDriver: true,
+    }).start(() => {
+      if (showLiveMap) setRenderStyled(false); else setRenderLive(false);
+    });
+  }, [showLiveMap, mapFade]);
 
   // Rafraîchit dès l'ouverture de l'écran, puis en continu tant qu'il est affiché.
   // useFocusEffect (au lieu de useEffect) garantit un refresh immédiat à chaque
@@ -41,8 +58,13 @@ export default function TrackingScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await reloadOrders(); } finally { setRefreshing(false); }
-  }, [reloadOrders]);
+    try {
+      const ok = await reloadOrders();
+      if (!ok) toast.error('Impossible de rafraîchir le suivi. Vérifiez votre connexion.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadOrders, toast]);
 
   // Ouvre le composeur téléphonique avec le numéro du livreur (nettoyé des espaces).
   const callDriver = useCallback((phone?: string) => {
@@ -89,16 +111,14 @@ export default function TrackingScreen() {
             </View>
           </View>
 
-          {/* Carte — vraie carte en direct pendant la livraison, sinon aperçu */}
+          {/* Carte — vraie carte en direct pendant la livraison, sinon aperçu.
+              Fondu enchaîné entre les deux plutôt qu'un basculement brutal. */}
           <View style={[styles.map, { borderColor: colors.border }]}>
-            {showLiveMap ? (
-              <LiveDeliveryMap
-                driver={suivi?.livreur_position ?? null}
-                destination={suivi?.destination ?? null}
-                dark={mode === 'dark'}
-              />
-            ) : (
-              <>
+            {renderStyled && (
+              <Animated.View style={[
+                StyleSheet.absoluteFill,
+                { opacity: mapFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+              ]}>
                 <LinearGradient colors={['#0f1a13', '#0a120d']} start={{ x: 0.2, y: 0.1 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
                 <Svg width="100%" height="100%" viewBox="0 0 340 200" style={StyleSheet.absoluteFill}>
                   <Path d="M40 165 C 110 150, 130 60, 210 60 S 300 45, 305 40" fill="none"
@@ -106,13 +126,22 @@ export default function TrackingScreen() {
                 </Svg>
                 <View style={styles.startDot} />
                 <View style={styles.destWrap}>
-                  <View style={styles.destPing} />
+                  <PingDot />
                   <MapPin size={20} color={Brand.accent} fill={Brand.accent} strokeWidth={1.5} />
                 </View>
                 <View style={styles.scooter}>
                   <View style={styles.scooterBadge}><Bike size={24} color="#fff" strokeWidth={2.2} /></View>
                 </View>
-              </>
+              </Animated.View>
+            )}
+            {renderLive && (
+              <Animated.View style={[StyleSheet.absoluteFill, { opacity: mapFade }]}>
+                <LiveDeliveryMap
+                  driver={suivi?.livreur_position ?? null}
+                  destination={suivi?.destination ?? null}
+                  dark={mode === 'dark'}
+                />
+              </Animated.View>
             )}
           </View>
 
@@ -174,14 +203,7 @@ export default function TrackingScreen() {
                 return (
                   <View key={i} style={styles.stepRow}>
                     <View style={styles.stepAxis}>
-                      <View style={[
-                        styles.dot,
-                        { backgroundColor: dotBg, borderColor: dotBorder },
-                        active && { shadowColor: Brand.accent, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
-                      ]}>
-                        {done && <Check size={15} color="#fff" strokeWidth={3} />}
-                        {active && <View style={styles.activeDot} />}
-                      </View>
+                      <TimelineDot done={done} active={active} dotBg={dotBg} dotBorder={dotBorder} />
                       {!last && <View style={[styles.line, { backgroundColor: done ? Brand.green : colors.border }]} />}
                     </View>
                     <View style={{ flex: 1, paddingBottom: 16 }}>
@@ -205,6 +227,57 @@ export default function TrackingScreen() {
         />
       )}
     </ScreenBg>
+  );
+}
+
+/** Anneau qui pulse (radar) sur le point de destination — signale un suivi « en direct ». */
+function PingDot() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+  return <Animated.View style={[styles.destPing, { opacity, transform: [{ scale }] }]} />;
+}
+
+/** Point de la timeline — celui de l'étape active pulse (anneau qui se dilate en boucle). */
+function TimelineDot({ done, active, dotBg, dotBorder }: {
+  done: boolean; active: boolean; dotBg: string; dotBorder: string;
+}) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!active) return;
+    const loop = Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [active, pulse]);
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
+
+  return (
+    <View style={styles.dotWrap}>
+      {active && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.dotRing, { borderColor: Brand.accent, opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
+        />
+      )}
+      <View style={[
+        styles.dot,
+        { backgroundColor: dotBg, borderColor: dotBorder },
+        active && { shadowColor: Brand.accent, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+      ]}>
+        {done && <Check size={15} color="#fff" strokeWidth={3} />}
+        {active && <View style={styles.activeDot} />}
+      </View>
+    </View>
   );
 }
 
@@ -232,6 +305,8 @@ const styles = StyleSheet.create({
   progress: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   stepRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   stepAxis: { alignItems: 'center', alignSelf: 'stretch' },
+  dotWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  dotRing: { position: 'absolute', width: 34, height: 34, borderRadius: 17, borderWidth: 2 },
   dot: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   activeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
   line: { width: 2.5, flex: 1, minHeight: 24, marginVertical: 2, borderRadius: 2 },

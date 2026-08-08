@@ -4,7 +4,7 @@
 //  en filet de sécurité au cas où une URL relative passerait.
 // ═══════════════════════════════════════════════════════════
 
-import { apiGet, apiPost, apiUpload, apiRequest } from './http';
+import { apiGet, apiPost, apiUpload, apiUploadWithProgress, apiRequest } from './http';
 import { ajouterFichier } from './upload';
 import { absMedia } from '../data/menuData';
 import type {
@@ -81,14 +81,20 @@ export const MAX_MEDIAS = 10;
  */
 export async function contribuer(
   restaurantId: number, texte: string, uris: string[], platId?: number,
+  /** Progression d'envoi (0 → 1) — les médias partent en une seule requête,
+   *  donc c'est une progression globale, pas un pourcentage par fichier
+   *  indépendant ; l'appelant peut néanmoins l'utiliser pour estimer quels
+   *  fichiers sont probablement déjà envoyés. */
+  onProgress?: (fraction: number) => void,
 ): Promise<PublicationDTO> {
   const form = new FormData();
   if (texte) form.append('texte', texte);
   if (platId) form.append('plat_id', String(platId));
   uris.slice(0, MAX_MEDIAS).forEach(uri => ajouterFichier(form, 'medias', uri));
-  const data = await apiUpload<PublicationDTO>(
-    `/client/restaurants/${restaurantId}/publications`, form,
-  );
+  const path = `/client/restaurants/${restaurantId}/publications`;
+  const data = onProgress
+    ? await apiUploadWithProgress<PublicationDTO>(path, form, onProgress)
+    : await apiUpload<PublicationDTO>(path, form);
   return normaliser(data);
 }
 

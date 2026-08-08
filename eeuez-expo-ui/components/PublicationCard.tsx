@@ -21,6 +21,7 @@ import { Brand, Radius } from '../constants/theme';
 import { WEB_BASE_URL } from '../constants/api';
 import { useApp } from '../context/AppContext';
 import { basculerSon, useSonCoupe } from '../lib/videoFeed';
+import { animateListChange } from '../lib/layoutAnimation';
 import { formatPrice } from '../data/menuData';
 import { PressableScale, displayFont, bodyFont } from './ui';
 import { AuthorChip } from './AuthorChip';
@@ -171,6 +172,10 @@ export function PublicationCard({ publication: pub, onOpenComments, actif = true
   }, [coeurEclat]);
 
   const aimer = useCallback(() => {
+    // Sans effet la plupart du temps (un like n'ajoute/retire rien à CETTE
+    // liste) — mais sur l'écran Favoris, un dé-like retire la carte : ce
+    // layout change mérite l'animation, moins cher que de le conditionner.
+    animateListChange();
     togglePubLike(pub.id);
     animerBouton();
   }, [togglePubLike, pub.id, animerBouton]);

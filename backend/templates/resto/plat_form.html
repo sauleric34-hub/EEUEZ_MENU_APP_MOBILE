@@ -146,10 +146,10 @@ function ajouterGroupe(nom, obligatoire, options) {
   const liste = bloc.querySelector('.options');
   const ajouter = (o) => {
     const ligne = document.createElement('div');
-    ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;align-items:center;';
+    ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;align-items:center;flex-wrap:wrap;';
     ligne.innerHTML = `
       <input type="text" name="option_nom[${i}][]" value="${echapper(o && o.nom)}"
-             placeholder="Nom de l'option" class="input-field" style="flex:1;">
+             placeholder="Nom de l'option" class="input-field" style="flex:1;min-width:140px;">
       <input type="number" name="option_prix[${i}][]" value="${o && o.supplement ? o.supplement : ''}"
              placeholder="Supplément (F)" min="0" class="input-field" style="width:150px;">
       <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">×</button>`;
@@ -163,10 +163,10 @@ function ajouterGroupe(nom, obligatoire, options) {
 
 function ajouterInclus(nom) {
   const ligne = document.createElement('div');
-  ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;';
+  ligne.style.cssText = 'display:flex;gap:8px;margin-bottom:7px;flex-wrap:wrap;';
   ligne.innerHTML = `
     <input type="text" name="inclus_nom[]" value="${echapper(nom)}"
-           placeholder="Ex. Servi avec du pain" class="input-field" style="flex:1;">
+           placeholder="Ex. Servi avec du pain" class="input-field" style="flex:1;min-width:140px;">
     <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">×</button>`;
   document.getElementById('inclus').appendChild(ligne);
 }

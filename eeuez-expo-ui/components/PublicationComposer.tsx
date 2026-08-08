@@ -20,6 +20,7 @@ import { useApp } from '../context/AppContext';
 import { useGardeDemo } from '../hooks/useGardeDemo';
 import { contribuer, MAX_MEDIAS } from '../services/publications';
 import { estVideo } from '../services/upload';
+import { animateListChange } from '../lib/layoutAnimation';
 import { PressableScale, displayFont, bodyFont } from './ui';
 
 interface Props {
@@ -41,6 +42,9 @@ export function PublicationComposer({
   const [platId, setPlatId] = useState<number | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Progression d'envoi (0 → 1) — une seule requête pour tous les médias,
+  // donc globale ; distribuée par fichier ci-dessous pour l'affichage.
+  const [progress, setProgress] = useState(0);
 
   const plats = dishesOfResto(restaurantId);
 
@@ -62,10 +66,13 @@ export function PublicationComposer({
     setError(null);
   };
 
-  const retirer = (uri: string) => setUris(prev => prev.filter(u => u !== uri));
+  const retirer = (uri: string) => {
+    animateListChange();
+    setUris(prev => prev.filter(u => u !== uri));
+  };
 
   const reset = () => {
-    setTexte(''); setUris([]); setPlatId(undefined); setError(null);
+    setTexte(''); setUris([]); setPlatId(undefined); setError(null); setProgress(0);
   };
 
   const envoyer = async () => {
@@ -74,13 +81,17 @@ export function PublicationComposer({
       setError('Ajoutez un texte ou au moins une photo.');
       return;
     }
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setProgress(0);
     try {
-      await contribuer(restaurantId, texte.trim(), uris, platId);
+      await contribuer(
+        restaurantId, texte.trim(), uris, platId,
+        uris.length > 0 ? setProgress : undefined,
+      );
       reset();
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "L'envoi a échoué. Réessayez.");
+      setProgress(0);
     } finally {
       setBusy(false);
     }
@@ -161,21 +172,41 @@ export function PublicationComposer({
                     </View>
                   </PressableScale>
                 )}
-                {uris.map(uri => (
-                  <View key={uri} style={styles.vignette}>
-                    <Image source={{ uri }} style={styles.vignetteImg} />
-                    {estVideo(uri) && (
-                      <View style={styles.videoBadge}>
-                        <Play size={11} color="#fff" fill="#fff" strokeWidth={0} />
-                      </View>
-                    )}
-                    <PressableScale onPress={() => retirer(uri)} style={styles.retirer}>
-                      <View style={styles.retirerBtn}>
-                        <X size={13} color="#fff" strokeWidth={2.8} />
-                      </View>
-                    </PressableScale>
-                  </View>
-                ))}
+                {uris.map((uri, i) => {
+                  // Une seule requête pour tous les médias : pas de % isolé par
+                  // fichier, mais on peut estimer lesquels sont déjà « passés »
+                  // à partir de la progression globale — plus parlant qu'un
+                  // spinner unique sans aucun détail.
+                  const enEnvoi = busy && uris.length > 0;
+                  const fichiersEnvoyes = Math.floor(progress * uris.length);
+                  const envoye = enEnvoi && i < fichiersEnvoyes;
+                  const enCours = enEnvoi && i === fichiersEnvoyes;
+                  return (
+                    <View key={uri} style={styles.vignette}>
+                      <Image source={{ uri }} style={styles.vignetteImg} />
+                      {estVideo(uri) && (
+                        <View style={styles.videoBadge}>
+                          <Play size={11} color="#fff" fill="#fff" strokeWidth={0} />
+                        </View>
+                      )}
+                      {enEnvoi ? (
+                        <View style={[styles.uploadOverlay, (envoye || enCours) && styles.uploadOverlayActif]}>
+                          {envoye ? (
+                            <Check size={20} color="#fff" strokeWidth={3} />
+                          ) : enCours ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : null}
+                        </View>
+                      ) : (
+                        <PressableScale onPress={() => retirer(uri)} style={styles.retirer}>
+                          <View style={styles.retirerBtn}>
+                            <X size={13} color="#fff" strokeWidth={2.8} />
+                          </View>
+                        </PressableScale>
+                      )}
+                    </View>
+                  );
+                })}
               </ScrollView>
 
               {/* ─── Plat associé (facultatif) ─── */}
@@ -232,7 +263,14 @@ export function PublicationComposer({
                     colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={[styles.envoyer, glow(Brand.accent, 20)]}
                   >
-                    {busy ? <ActivityIndicator color="#fff" /> : (
+                    {busy ? (
+                      <>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={[bodyFont(15, '800'), { color: '#fff' }]}>
+                          {uris.length > 0 ? `Envoi… ${Math.round(progress * 100)}%` : 'Envoi…'}
+                        </Text>
+                      </>
+                    ) : (
                       <>
                         <Send size={18} color="#fff" strokeWidth={2.5} />
                         <Text style={[bodyFont(15, '800'), { color: '#fff' }]}>Envoyer au restaurant</Text>
@@ -292,6 +330,11 @@ const styles = StyleSheet.create({
     width: 24, height: 24, borderRadius: 12, backgroundColor: '#000000aa',
     alignItems: 'center', justifyContent: 'center',
   },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center',
+  },
+  uploadOverlayActif: { backgroundColor: 'rgba(0,0,0,0.55)' },
   platChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 13, paddingVertical: 10, borderRadius: Radius.pill, borderWidth: 1,

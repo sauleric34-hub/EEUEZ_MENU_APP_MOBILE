@@ -2,8 +2,8 @@
 //  Recherche — plats & restaurants (grille + filtres)
 // ═══════════════════════════════════════════════════════════
 
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Image } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, View, Text, StyleSheet, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -12,34 +12,83 @@ import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatKm, formatPrice, distanceKm } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
-import { PressableScale, DishTile, Loader, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { PressableScale, DishTile, CascadeReveal, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { SkeletonDishGrid, SkeletonList } from '../../components/Skeleton';
 import { DishCardGrid } from '../../components/cards';
+import { animateListChange } from '../../lib/layoutAnimation';
 import {
   DishFilterModal, DEFAULT_FILTERS, countActiveFilters, type DishFilters,
 } from '../../components/DishFilterModal';
 
 type Mode = 'plats' | 'restos';
 
+const SEARCH_DEBOUNCE_MS = 350;
+
+/** Badge de filtres actifs : « pop » (scale bref) à chaque incrément, pas
+ *  sur une simple mise à jour ou une baisse du compteur. */
+function FilterBadge({ count, borderColor }: { count: number; borderColor: string }) {
+  const pop = useRef(new Animated.Value(1)).current;
+  const precedent = useRef(count);
+  useEffect(() => {
+    if (count > precedent.current) {
+      Animated.sequence([
+        Animated.spring(pop, { toValue: 1.35, useNativeDriver: true, speed: 50, bounciness: 16 }),
+        Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+      ]).start();
+    }
+    precedent.current = count;
+  }, [count, pop]);
+  return (
+    <Animated.View style={[styles.badge, { borderColor, transform: [{ scale: pop }] }]}>
+      <Text style={[bodyFont(10, '900'), { color: '#fff' }]}>{count}</Text>
+    </Animated.View>
+  );
+}
+
 export default function PlatsScreen() {
   const { colors, plats, restaurants, categories, dataLoading, restoById, userLoc } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('plats');
+  // Saisie immédiate (champ) vs valeur débouncée (utilisée pour filtrer) :
+  // évite de recalculer la grille à chaque frappe.
+  const [rawQuery, setRawQuery] = useState('');
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [dishFilters, setDishFilters] = useState<DishFilters>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    if (rawQuery === query) return;
+    setSearching(true);
+    const t = setTimeout(() => {
+      animateListChange();
+      setQuery(rawQuery);
+      setSearching(false);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [rawQuery, query]);
 
   const activeFilterCount = countActiveFilters(dishFilters);
   const categoryNames = useMemo(() => categories.map(c => c.name), [categories]);
   const selectedCats = dishFilters.categories;
 
+  const changeMode = (next: Mode) => { animateListChange(); setMode(next); };
+
   /** Barre de catégories : multi-sélection, partagée avec la modal de filtres. */
-  const toggleCategory = (name: string) =>
+  const toggleCategory = (name: string) => {
+    animateListChange();
     setDishFilters(f => ({
       ...f,
       categories: f.categories.includes(name)
         ? f.categories.filter(c => c !== name)
         : [...f.categories, name],
     }));
+  };
+
+  const applyFilters = (next: DishFilters) => {
+    animateListChange();
+    setDishFilters(next);
+  };
 
   /** Distance du plat = distance de son restaurant (position GPS connue). */
   const distFor = React.useCallback((restoId: number): number | null => {
@@ -106,7 +155,7 @@ export default function PlatsScreen() {
             {([['plats', 'Plats', UtensilsCrossed], ['restos', 'Restaurants', Store]] as const).map(([key, label, Icon]) => {
               const on = mode === key;
               return (
-                <PressableScale key={key} onPress={() => setMode(key)} style={{ flex: 1 }} scaleTo={0.97}>
+                <PressableScale key={key} onPress={() => changeMode(key)} style={{ flex: 1 }} scaleTo={0.97}>
                   {on ? (
                     <LinearGradient
                       colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -131,11 +180,12 @@ export default function PlatsScreen() {
             <View style={[styles.searchPill, { flex: 1, backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Search size={16} color={Brand.accentLight} strokeWidth={2.4} />
               <TextInput
-                value={query} onChangeText={setQuery}
+                value={rawQuery} onChangeText={setRawQuery}
                 placeholder={mode === 'plats' ? 'Rechercher un plat…' : 'Rechercher un restaurant…'}
                 placeholderTextColor={colors.faint}
                 style={[styles.input, { color: colors.text }]}
               />
+              {searching && <ActivityIndicator size="small" color={Brand.accent} />}
             </View>
 
             {mode === 'plats' && (
@@ -146,9 +196,7 @@ export default function PlatsScreen() {
                     style={[styles.filterBtn, glow(Brand.accent, 14)]}
                   >
                     <SlidersHorizontal size={19} color="#fff" strokeWidth={2.5} />
-                    <View style={[styles.badge, { borderColor: colors.page }]}>
-                      <Text style={[bodyFont(10, '900'), { color: '#fff' }]}>{activeFilterCount}</Text>
-                    </View>
+                    <FilterBadge count={activeFilterCount} borderColor={colors.page} />
                   </LinearGradient>
                 ) : (
                   <View style={[styles.filterBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
@@ -162,7 +210,7 @@ export default function PlatsScreen() {
           {/* Catégories — multi-sélection (partagée avec la modal de filtres) */}
           {mode === 'plats' && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }} contentContainerStyle={{ gap: 9 }}>
-              <PressableScale onPress={() => setDishFilters(f => ({ ...f, categories: [] }))}>
+              <PressableScale onPress={() => { animateListChange(); setDishFilters(f => ({ ...f, categories: [] })); }}>
                 <View style={[
                   styles.chip,
                   selectedCats.length === 0
@@ -194,15 +242,15 @@ export default function PlatsScreen() {
           )}
 
           {/* Résultats */}
-          {dataLoading && !plats.length ? (
-            <Loader colors={colors} />
+          {(dataLoading && !plats.length) || searching ? (
+            mode === 'plats' ? <SkeletonDishGrid colors={colors} /> : <SkeletonList colors={colors} />
           ) : mode === 'plats' ? (
             platList.length === 0 ? (
               <CenterMessage Icon={UtensilsCrossed} colors={colors} title="Aucun plat" subtitle="Essayez une autre catégorie ou recherche." />
             ) : (
               <View style={styles.grid}>
-                {platList.map(d => (
-                  <View key={d.id} style={styles.cell}><DishCardGrid dish={d} /></View>
+                {platList.map((d, i) => (
+                  <CascadeReveal key={d.id} index={i} style={styles.cell}><DishCardGrid dish={d} /></CascadeReveal>
                 ))}
               </View>
             )
@@ -252,7 +300,7 @@ export default function PlatsScreen() {
         resultCount={platList.length}
         categories={categoryNames}
         onClose={() => setShowFilters(false)}
-        onChange={setDishFilters}
+        onChange={applyFilters}
       />
     </ScreenBg>
   );

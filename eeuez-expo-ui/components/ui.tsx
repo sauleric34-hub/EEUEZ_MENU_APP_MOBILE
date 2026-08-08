@@ -3,9 +3,9 @@
 //  Gradients via expo-linear-gradient, icônes via lucide.
 // ═══════════════════════════════════════════════════════════
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  Animated, Pressable, View, Text, StyleSheet, ViewStyle, TextStyle,
+  Animated, Easing, Pressable, View, Text, StyleSheet, ViewStyle, TextStyle,
   StyleProp, ActivityIndicator, Image,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -50,6 +50,74 @@ export function PressableScale({ onPress, children, style, disabled, scaleTo = 0
     >
       <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>
     </Pressable>
+  );
+}
+
+// ─── FadeSlideIn : fondu + léger décalage vers le haut, en cascade ───
+// Anime une seule fois au montage : si l'élément reste monté (même clé
+// React) d'un rafraîchissement à l'autre, il ne rejoue pas — exactement
+// le comportement voulu pour une entrée « au premier chargement ».
+interface FadeSlideInProps {
+  index?: number;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+export function FadeSlideIn({ index = 0, children, style }: FadeSlideInProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1, duration: 380, delay: index * 55,
+      easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity: anim,
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+// ─── CascadeReveal : fondu + léger zoom + montée, en cascade ─────
+// Même recette que la grille de la galerie restaurant (gallery/[id].tsx),
+// généralisée ici pour être réutilisée par d'autres listes (ex. cartes de
+// réservation). Anime une seule fois au montage, comme FadeSlideIn.
+interface CascadeRevealProps {
+  index?: number;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+export function CascadeReveal({ index = 0, children, style }: CascadeRevealProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1, duration: 380, delay: Math.min(index, 12) * 45, useNativeDriver: true,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity: anim,
+          transform: [
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
+          ],
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
   );
 }
 

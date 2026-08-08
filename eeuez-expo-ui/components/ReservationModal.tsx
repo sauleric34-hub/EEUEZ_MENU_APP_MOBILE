@@ -4,10 +4,10 @@
 //  → crée une réservation en attente (payable une fois acceptée).
 // ═══════════════════════════════════════════════════════════
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Animated, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,6 +39,23 @@ function defaultWhen(): Date {
 
 export function ReservationModal({ visible, restaurantId, restaurantNom, prix, onClose, onDone }: Props) {
   const { colors, user } = useApp();
+  const { height: winHeight } = useWindowDimensions();
+  // Modal plein écran pilotée à la main (au lieu du `animationType="slide"`
+  // natif) pour que le fond sombre derrière la feuille se fonde aussi à
+  // l'ouverture ET à la fermeture, pas seulement la feuille.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      progress.setValue(0);
+      Animated.timing(progress, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else if (mounted) {
+      Animated.timing(progress, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setMounted(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const defaultName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || '';
   const [nom, setNom] = useState(defaultName);
   const [when, setWhen] = useState<Date>(defaultWhen);
@@ -76,8 +93,13 @@ export function ReservationModal({ visible, restaurantId, restaurantNom, prix, o
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={{ flex: 1, backgroundColor: colors.page }}>
+    <Modal visible={mounted} animationType="none" onRequestClose={onClose} transparent>
+      <View style={{ flex: 1 }}>
+        <Animated.View pointerEvents="none" style={[styles.scrim, { opacity: progress }]} />
+        <Animated.View style={[
+          { flex: 1, backgroundColor: colors.page },
+          { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [winHeight, 0] }) }] },
+        ]}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -154,6 +176,7 @@ export function ReservationModal({ visible, restaurantId, restaurantNom, prix, o
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
+        </Animated.View>
       </View>
 
       {pickerMode && (
@@ -180,6 +203,7 @@ function Field({ Icon, colors, ...inputProps }: { Icon: typeof UserIcon; colors:
 }
 
 const styles = StyleSheet.create({
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 30 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   iconBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

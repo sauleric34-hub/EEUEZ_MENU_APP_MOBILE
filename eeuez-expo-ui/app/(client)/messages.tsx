@@ -2,8 +2,8 @@
 //  Messages — conversations client ↔ restaurant (par plat)
 // ═══════════════════════════════════════════════════════════
 
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MessagesSquare } from 'lucide-react-native';
@@ -13,7 +13,38 @@ import { fetchConversations } from '../../services/menu';
 import type { ConversationDTO } from '../../services/dto';
 import { iconForPlat, gradForId, absMedia } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
-import { PressableScale, DishTile, Loader, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { PressableScale, DishTile, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { SkeletonList } from '../../components/Skeleton';
+
+/** Badge « non lus » : se rétracte (scale → 0) à la lecture au lieu de
+ *  disparaître d'un coup ; réapparaît avec un léger pop sur un nouveau message. */
+function UnreadBadge({ count }: { count: number }) {
+  const scale = useRef(new Animated.Value(count > 0 ? 1 : 0)).current;
+  const [visible, setVisible] = useState(count > 0);
+  const [displayCount, setDisplayCount] = useState(count);
+  const prevCount = useRef(count);
+
+  useEffect(() => {
+    if (count > 0) setDisplayCount(count);
+    if (count > 0 && prevCount.current === 0) {
+      setVisible(true);
+      scale.setValue(0);
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 10 }).start();
+    } else if (count === 0 && prevCount.current > 0) {
+      Animated.timing(scale, {
+        toValue: 0, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+      }).start(() => setVisible(false));
+    }
+    prevCount.current = count;
+  }, [count, scale]);
+
+  if (!visible) return null;
+  return (
+    <Animated.View style={[styles.unread, { transform: [{ scale }] }]}>
+      <Text style={styles.unreadTxt}>{displayCount}</Text>
+    </Animated.View>
+  );
+}
 
 function timeAgo(iso: string): string {
   const diffMin = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
@@ -28,14 +59,27 @@ export default function MessagesScreen() {
   const { colors, user } = useApp();
   const router = useRouter();
   const [convs, setConvs] = useState<ConversationDTO[] | null>(null);
+  // Distinct du chargement initial (convs === null) : reflète le
+  // pull-to-refresh manuel, pour que l'indicateur natif s'affiche vraiment.
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!user) { setConvs([]); return; }
-    fetchConversations().then(setConvs).catch(() => setConvs([]));
+    try {
+      setConvs(await fetchConversations());
+    } catch {
+      setConvs([]);
+    }
   }, [user]);
 
   // Recharge à chaque retour sur l'onglet (nouveaux messages)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   return (
     <ScreenBg>
@@ -43,7 +87,7 @@ export default function MessagesScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={convs === null} onRefresh={load} tintColor={Brand.accent} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.accent} />}
         >
           <Text style={[displayFont(26, '800'), { color: colors.text }]}>Messages</Text>
           <Text style={[bodyFont(13, '500'), { color: colors.muted, marginTop: 4 }]}>
@@ -51,7 +95,7 @@ export default function MessagesScreen() {
           </Text>
 
           {convs === null ? (
-            <Loader colors={colors} />
+            <SkeletonList colors={colors} />
           ) : convs.length === 0 ? (
             <CenterMessage
               Icon={MessagesSquare} colors={colors}
@@ -81,9 +125,7 @@ export default function MessagesScreen() {
                           </Text>
                         )}
                       </View>
-                      {c.non_lus > 0 && (
-                        <View style={styles.unread}><Text style={styles.unreadTxt}>{c.non_lus}</Text></View>
-                      )}
+                      <UnreadBadge count={c.non_lus} />
                     </View>
                   </PressableScale>
                 );

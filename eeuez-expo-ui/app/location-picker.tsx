@@ -7,7 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView, ActivityIndicator,
-  Keyboard,
+  Keyboard, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,12 +20,14 @@ import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { searchPlaces, reverseGeocode, type PlaceResult } from '../services/addresses';
 import { PressableScale, bodyFont } from '../components/ui';
+import { useToast } from '../context/ToastContext';
 import { LeafletPickerMap, type LeafletPickerHandle } from '../components/LeafletPickerMap';
 
 const DEFAULT = { latitude: 4.0611, longitude: 9.7089 }; // Douala
 
 export default function LocationPicker() {
   const { colors, mode, userLoc, addresses, addAddress, setDeliveryAddress, makeDefaultAddress, removeAddress } = useApp();
+  const toast = useToast();
   const router = useRouter();
   const mapRef = useRef<LeafletPickerHandle>(null);
 
@@ -40,15 +42,38 @@ export default function LocationPicker() {
   const [saveIt, setSaveIt] = useState(true);
   const [busy, setBusy] = useState(false);
   const revTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Évite un toast à chaque tick de debounce quand le géocodage est en
+  // panne (ex : hors-ligne pendant qu'on glisse la carte) — un seul
+  // avertissement tant que l'échec persiste.
+  const geocodeFailNotified = useRef(false);
+  const searchFailNotified = useRef(false);
+  // Petit rebond du pin (pattern « drop pin ») à chaque fois que la carte
+  // s'arrête de bouger : il repart d'une position légèrement soulevée et
+  // retombe avec un léger dépassement avant de se stabiliser.
+  const pinDrop = useRef(new Animated.Value(0)).current;
+  const bouncePin = () => {
+    pinDrop.setValue(-10);
+    Animated.spring(pinDrop, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 12 }).start();
+  };
 
   // Reverse-geocode le centre de la carte (debounce)
   const resolveCenter = (lat: number, lon: number) => {
     setResolving(true);
     if (revTimer.current) clearTimeout(revTimer.current);
     revTimer.current = setTimeout(async () => {
-      const txt = await reverseGeocode(lat, lon);
-      setAddress(txt || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-      setResolving(false);
+      try {
+        const txt = await reverseGeocode(lat, lon);
+        geocodeFailNotified.current = false;
+        setAddress(txt || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      } catch {
+        setAddress(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+        if (!geocodeFailNotified.current) {
+          geocodeFailNotified.current = true;
+          toast.error("Adresse introuvable pour ce point (connexion instable ?).");
+        }
+      } finally {
+        setResolving(false);
+      }
     }, 500);
   };
 
@@ -57,18 +82,28 @@ export default function LocationPicker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // La carte Leaflet remonte son centre après chaque déplacement.
+  // La carte Leaflet remonte son centre uniquement une fois le geste terminé
+  // (événement Leaflet `moveend`) : c'est donc le point exact où faire
+  // rebondir le pin.
   const onCenterChange = (lat: number, lng: number) => {
     setCenter({ latitude: lat, longitude: lng });
     resolveCenter(lat, lng);
+    bouncePin();
   };
 
   const useMyLocation = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return;
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    // moveTo → la carte émettra onCenterChange (met à jour le centre + l'adresse).
-    mapRef.current?.moveTo(pos.coords.latitude, pos.coords.longitude);
+    if (status !== 'granted') {
+      toast.error('Autorisez la localisation pour utiliser votre position actuelle.');
+      return;
+    }
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      // moveTo → la carte émettra onCenterChange (met à jour le centre + l'adresse).
+      mapRef.current?.moveTo(pos.coords.latitude, pos.coords.longitude);
+    } catch {
+      toast.error("Impossible d'obtenir votre position actuelle. Vérifiez que le GPS est activé.");
+    }
   };
 
   // Recherche de lieu (Nominatim), debounce
@@ -79,8 +114,19 @@ export default function LocationPicker() {
     if (text.trim().length < 3) { setResults([]); return; }
     setSearching(true);
     searchTimer.current = setTimeout(async () => {
-      setResults(await searchPlaces(text));
-      setSearching(false);
+      try {
+        const found = await searchPlaces(text);
+        searchFailNotified.current = false;
+        setResults(found);
+      } catch {
+        setResults([]);
+        if (!searchFailNotified.current) {
+          searchFailNotified.current = true;
+          toast.error('La recherche de lieu a échoué. Vérifiez votre connexion.');
+        }
+      } finally {
+        setSearching(false);
+      }
     }, 450);
   };
 
@@ -130,6 +176,7 @@ export default function LocationPicker() {
         } catch {
           // Enregistrement pour plus tard échoué → on livre quand même à ce lieu cette fois-ci
           setDeliveryAddress(target);
+          toast.error("Le lieu n'a pas pu être enregistré, mais la livraison est bien prise en compte.");
         }
       } else {
         setDeliveryAddress(target);
@@ -155,10 +202,10 @@ export default function LocationPicker() {
         {/* Pin fixe, centré sur la carte. La pointe indique le point exact
             de livraison ; le petit disque au sol marque ce point au sol. */}
         <View pointerEvents="none" style={styles.pinLayer}>
-          <View style={styles.marker}>
+          <Animated.View style={[styles.marker, { transform: [{ translateY: pinDrop }] }]}>
             <MapPin size={46} color={Brand.accent} fill={Brand.accent} strokeWidth={0} />
             <View style={styles.markerDot} />
-          </View>
+          </Animated.View>
         </View>
         <View pointerEvents="none" style={styles.pinLayer}>
           <View style={styles.markerBase} />

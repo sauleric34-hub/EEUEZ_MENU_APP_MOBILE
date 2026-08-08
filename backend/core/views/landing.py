@@ -84,9 +84,13 @@ def landing_view(request):
     # On ne trie plus par '-restaurant__commandes' : cette jointure sur une
     # relation inverse dupliquait chaque plat autant de fois qu'il y avait de
     # commandes au restaurant, et la grille affichait des doublons.
+    #
+    # exclude(image='') : la vitrine n'affiche que des plats illustrés — un
+    # plat sans photo tomberait sur l'icône de repli générique, ce qui casse
+    # la mise en avant « meilleurs plats » de la page d'accueil.
     plats_vedette = Plat.objects.filter(
         is_available=True, is_visible=True,
-    ).select_related('restaurant').annotate(
+    ).exclude(image='').select_related('restaurant').annotate(
         note_avg=Avg('notes__note'),
         nb_notes=Count('notes', distinct=True),
     ).annotate(

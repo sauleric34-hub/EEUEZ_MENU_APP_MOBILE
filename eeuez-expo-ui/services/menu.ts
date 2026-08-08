@@ -128,6 +128,10 @@ export const createOrder = (params: CreateOrderParams) =>
 
 export const fetchOrders = () => apiGet<CommandeDTO[]>('/client/commandes/', { auth: true });
 
+/** Une commande précise — sert à vérifier `paiement_confirme` après un
+ *  retour de paiement CamerPay, plutôt que d'attendre un délai fixe. */
+export const fetchOrder = (id: number) => apiGet<CommandeDTO>(`/client/commandes/${id}/`, { auth: true });
+
 // Confirmation de réception par le client (scan QR ou saisie du code).
 // Termine la livraison et débloque le paiement du restaurant.
 export const confirmReception = (commandeId: number, code: string) =>

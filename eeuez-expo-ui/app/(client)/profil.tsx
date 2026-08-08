@@ -21,6 +21,7 @@ import { ScreenBg } from '../../components/ScreenBg';
 import {
   IconButton, DishTile, PressableScale, StatusPill, SectionTitle, displayFont, bodyFont,
 } from '../../components/ui';
+import { animateListChange } from '../../lib/layoutAnimation';
 
 const STATUT: Record<string, { label: string; color: string; bg: string; Icon: LucideIcon }> = {
   en_attente:     { label: 'En attente',     color: Brand.yellow,      bg: Brand.yellow + '18', Icon: Clock },
@@ -95,6 +96,25 @@ function PointsAnimes({ valeur, couleur }: { valeur: number; couleur: string }) 
   return <Text style={[displayFont(20, '800'), { color: couleur }]}>{affiche}</Text>;
 }
 
+/** Barre fine et discrète : signale un rafraîchissement silencieux en cours
+ *  (retour sur l'onglet) sans le bruit d'un spinner ou d'un skeleton. */
+function BarreRafraichissement({ actif }: { actif: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!actif) { opacity.stopAnimation(); opacity.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.35, duration: 500, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [actif, opacity]);
+  if (!actif) return null;
+  return <Animated.View style={[styles.barreRafraichissement, { opacity }]} />;
+}
+
 /** Habillage du badge de fidélité (les seuils, eux, sont côté serveur). */
 const NIVEAUX: Record<NiveauFidelite, { libelle: string; fond: string; bord: string; texte: string }> = {
   bronze: { libelle: 'Bronze', fond: '#8a5a2b22', bord: '#8a5a2b66', texte: '#c98b46' },
@@ -110,13 +130,16 @@ export default function ProfilScreen() {
   // Mes contributions + solde de points, rechargés à chaque affichage :
   // les points évoluent côté serveur (likes et commentaires reçus).
   const [mesPubs, setMesPubs] = useState<PublicationDTO[]>([]);
+  const [rafraichitPubs, setRafraichitPubs] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let vivant = true;
       refreshUser();
+      setRafraichitPubs(true);
       fetchMesPublications()
         .then(res => { if (vivant) setMesPubs(res); })
-        .catch(() => { if (vivant) setMesPubs([]); });
+        .catch(() => { if (vivant) setMesPubs([]); })
+        .finally(() => { if (vivant) setRafraichitPubs(false); });
       return () => { vivant = false; };
     }, [refreshUser]),
   );
@@ -133,6 +156,7 @@ export default function ProfilScreen() {
           onPress: async () => {
             try {
               await supprimerPublication(pub.id);
+              animateListChange();
               setMesPubs(prev => prev.filter(p => p.id !== pub.id));
             } catch {
               Alert.alert('Erreur', 'Suppression impossible.');
@@ -227,6 +251,7 @@ export default function ProfilScreen() {
           {/* Mes publications */}
           {mesPubs.length > 0 && (
             <>
+              <BarreRafraichissement actif={rafraichitPubs} />
               <SectionTitle title="Mes publications" colors={colors} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
                 {mesPubs.map(p => {
@@ -336,6 +361,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10,
     paddingHorizontal: 11, paddingVertical: 5, borderRadius: Radius.pill, borderWidth: 1,
   },
+  barreRafraichissement: { height: 2, borderRadius: 1, backgroundColor: Brand.accent, marginTop: 10 },
   note: { padding: 18, borderRadius: 18, borderWidth: 1, marginTop: 12 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, borderWidth: 1 },
   linkIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

@@ -16,21 +16,12 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Radius, Screen } from '../constants/theme';
+import { Radius, Screen, hexToRgba } from '../constants/theme';
 import { PressableScale, displayFont, bodyFont } from './ui';
 import type { BanniereDTO } from '../services/dto';
 
 const SIDE_PADDING = 20;
 const CARD_W = Screen.W - SIDE_PADDING * 2;
-
-function hexToRgba(hex: string, alpha: number): string {
-  const clean = hex.replace('#', '');
-  const value = parseInt(clean, 16);
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 /** Une carte : fond statique, image de droite + texte + bouton animés à l'entrée. */
 function BannerCard({ banniere, active }: { banniere: BanniereDTO; active: boolean }) {
