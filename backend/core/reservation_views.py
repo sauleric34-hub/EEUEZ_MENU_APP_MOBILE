@@ -5,11 +5,12 @@
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from django.conf import settings
 from django.http import HttpResponse
 
 from .models import RestaurantProfile, RestaurantMedia, Reservation, Plat, Livraison
 from .serializers import RestaurantMediaSerializer, ReservationSerializer
-from .monetbil import initier_widget
+from .camerpay import initier_paiement
 from .reservation_pdf import generer_ticket_pdf
 
 
@@ -74,7 +75,7 @@ def reservations(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def reservation_payer(request, id):
-    """Initie le paiement Monetbil d'une réservation ACCEPTÉE."""
+    """Initie le paiement CamerPay d'une réservation ACCEPTÉE."""
     try:
         resa = Reservation.objects.get(id=id, client=request.user)
     except Reservation.DoesNotExist:
@@ -95,15 +96,21 @@ def reservation_payer(request, id):
         return Response({'free': True})
 
     phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
-    payment_url, error = initier_widget(
-        amount=int(resa.prix), payment_ref=f'RESA-{resa.id}', item_ref=resa.id,
-        email=request.user.email, first_name=request.user.first_name,
-        last_name=request.user.last_name, phone=phone,
+    payment_ref = f'RESA-{resa.id}'
+    transaction_uuid, pay_url, error = initier_paiement(
+        amount=int(resa.prix), merchant_invoice_id=payment_ref,
+        customer_phone=phone, customer_email=request.user.email,
+        customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
+        callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
+        return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
     )
     if error:
         code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
         return Response({'error': error}, status=code)
-    return Response({'payment_url': payment_url, 'payment_ref': f'RESA-{resa.id}'})
+
+    resa.provider_reference = transaction_uuid
+    resa.save(update_fields=['provider_reference'])
+    return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
 
 
 @api_view(['GET'])

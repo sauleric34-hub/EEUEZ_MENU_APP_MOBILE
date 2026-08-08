@@ -4,7 +4,7 @@ from django.conf import settings
 from django.views.static import serve as media_serve
 from django.views.decorators.cache import cache_page
 from core.views.landing import landing_view
-from core.api_views import monetbil_return, monetbil_failed
+from core.api_views import camerpay_return, camerpay_failed
 from core.views.publication_views import publication_rebond
 
 urlpatterns = [
@@ -16,9 +16,9 @@ urlpatterns = [
     path('django-admin/', admin.site.urls),
     path('admin-panel/', include('core.urls')),
     path('api/', include('core.api_urls')),
-    # Pages de retour Monetbil après paiement mobile money
-    path('payment/success/', monetbil_return, name='monetbil-return'),
-    path('payment/failed/', monetbil_failed, name='monetbil-failed'),
+    # Pages de retour CamerPay après paiement mobile money
+    path('payment/success/', camerpay_return, name='camerpay-return'),
+    path('payment/failed/', camerpay_failed, name='camerpay-failed'),
     # Lien partagé d'une publication → rebond vers l'application
     path('publication/<int:id>/', publication_rebond, name='publication-rebond'),
     # Sert les fichiers média (logos, plats, avatars…) même en production (DEBUG=False),

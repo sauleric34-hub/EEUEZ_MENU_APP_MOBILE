@@ -10,8 +10,6 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-import hashlib
-import hmac
 import json
 import uuid
 import requests as http_requests
@@ -27,7 +25,7 @@ from .delivery import (
     est_livreur_independant,
 )
 from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
-from .monetbil import initier_widget
+from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
 from . import fidelite
 
 def get_tokens_for_user(user):
@@ -279,7 +277,7 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         commande.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    # ── Initiation du paiement mobile money via Monetbil ─────────────────────
+    # ── Initiation du paiement mobile money via CamerPay ─────────────────────
     @action(detail=True, methods=['post'], url_path='initier_paiement')
     def initier_paiement(self, request, pk=None):
         """
@@ -287,9 +285,9 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         Body (optionnel) : { "phone": "6XXXXXXXX" }
         Retourne : { "payment_url": "https://..." }
 
-        Appelle l'API Monetbil Widget v2.1 côté serveur et retourne
+        Appelle l'API CamerPay (/payment/initiate) côté serveur et retourne
         l'URL de paiement à afficher dans le WebView de l'app mobile.
-        Le service_secret ne quitte jamais le backend.
+        Le token API ne quitte jamais le backend.
         """
         commande = self.get_object()  # vérifie que la commande appartient au client
         transaction = Transaction.objects.filter(
@@ -311,15 +309,21 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
         phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
 
-        payment_url, error = initier_widget(
-            amount=int(commande.montant_total), payment_ref=payment_ref, item_ref=commande.id,
-            email=request.user.email, first_name=request.user.first_name,
-            last_name=request.user.last_name, phone=phone,
+        transaction_uuid, pay_url, error = camerpay_initier_paiement(
+            amount=int(commande.montant_total), merchant_invoice_id=payment_ref,
+            payment_method=PAYMENT_METHOD_PAR_MODE.get(transaction.mode_paiement, ''),
+            customer_phone=phone, customer_email=request.user.email,
+            customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
+            callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
+            return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
         )
         if error:
             code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
             return Response({'error': error}, status=code)
-        return Response({'payment_url': payment_url, 'payment_ref': payment_ref})
+
+        transaction.provider_reference = transaction_uuid
+        transaction.save(update_fields=['provider_reference'])
+        return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
 
     @action(detail=True, methods=['post'])
     def confirmer_reception(self, request, pk=None):
@@ -514,22 +518,11 @@ def map_restaurants_search(request):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  MONETBIL — Webhook & page de retour
+#  CAMERPAY — Webhook & page de retour
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _monetbil_sign_valid(params, secret):
-    """Vérifie la signature Monetbil : md5(secret + concaténation des valeurs
-    reçues, hors 'sign'). Retourne None si aucune signature n'est fournie."""
-    sign = params.get('sign', '')
-    if not sign:
-        return None
-    concat = ''.join(str(v) for k, v in params.items() if k != 'sign')
-    computed = hashlib.md5((secret + concat).encode('utf-8')).hexdigest()
-    return hmac.compare_digest(computed, sign)
-
-
-def _monetbil_notify_reservation(payment_ref, payment_status, amount_recu):
-    """Traite la notification Monetbil d'une réservation (ref « RESA-<id> »)."""
+def _camerpay_notify_reservation(payment_ref, statut_interne):
+    """Traite la notification CamerPay d'une réservation (ref « RESA-<id> »)."""
     try:
         resa_id = int(payment_ref.split('-')[1])
         resa = Reservation.objects.get(pk=resa_id)
@@ -539,14 +532,7 @@ def _monetbil_notify_reservation(payment_ref, payment_status, amount_recu):
     if resa.statut == 'payee':
         return HttpResponse('OK')  # idempotence
 
-    # Vérifie le montant
-    try:
-        if amount_recu and int(float(amount_recu)) != int(resa.prix):
-            return HttpResponse('Montant incohérent', status=400)
-    except (TypeError, ValueError):
-        pass
-
-    if payment_status == 'success':
+    if statut_interne == 'complete':
         if not resa.code:
             resa.code = Livraison.generer_code()
         resa.statut = 'payee'
@@ -555,40 +541,66 @@ def _monetbil_notify_reservation(payment_ref, payment_status, amount_recu):
 
 
 @csrf_exempt
-def monetbil_notify(request):
+@require_POST
+def camerpay_notify(request):
     """
-    GET/POST /api/monetbil/notify/
-    Callback serveur-à-serveur envoyé par Monetbil après chaque tentative de paiement.
-    Met à jour le statut de la Transaction et de la Commande en base.
-    Sécurité : vérifie le montant reçu (et la signature si activée).
+    POST /api/camerpay/notify/
+    Webhook serveur-à-serveur envoyé par CamerPay à chaque changement d'état
+    d'une transaction. Met à jour le statut de la Transaction et de la Commande
+    (ou de la Réservation) en base.
+
+    ⚠️ La doc CamerPay est incohérente selon les pages entre un body
+    form-urlencoded (champ `uuid`) et un body JSON (champ `transaction_uuid`) —
+    on accepte donc DÉLIBÉRÉMENT les deux formes plutôt que de parier sur l'une
+    des deux (voir discussion en session : aucune ne peut être écartée avec
+    certitude sans un paiement réel de confirmation).
+
+    Sécurité : la signature HMAC-SHA256 est TOUJOURS vérifiée (pas de bascule
+    dev/prod) — sans elle, une référence devinable (ex. « RESA-<id> ») pourrait
+    être forgée pour marquer un paiement comme réussi sans payer. Le montant
+    reçu est également recontrôlé contre celui attendu en base.
     """
     try:
-        # Monetbil peut notifier via GET ou POST (form-urlencoded)
-        src = request.POST if request.method == 'POST' else request.GET
-        params = {k: src.get(k, '') for k in src.keys()}
-        payment_ref    = params.get('payment_ref', '')
-        payment_status = params.get('status', '')   # 'success' | 'failed' | 'cancelled'
-        amount_recu    = params.get('amount', '')
+        if 'application/json' in (request.content_type or ''):
+            try:
+                params = json.loads(request.body.decode('utf-8') or '{}')
+            except (ValueError, UnicodeDecodeError):
+                return HttpResponse('JSON invalide', status=400)
+        else:
+            params = request.POST
 
-        if not payment_ref:
-            return HttpResponse('payment_ref manquant', status=400)
+        def _champ(*noms):
+            for nom in noms:
+                valeur = params.get(nom)
+                if valeur not in (None, ''):
+                    return str(valeur)
+            return ''
 
-        # Vérification de signature (activable via settings). Quand elle est
-        # activée, une signature ABSENTE ou INVALIDE est rejetée : sans cela, les
-        # références devinables (ex. « RESA-<id> ») pourraient être forgées pour
-        # marquer un paiement comme réussi sans payer.
-        if getattr(settings, 'MONETBIL_VERIFY_SIGN', False):
-            if not _monetbil_sign_valid(params, settings.MONETBIL_SERVICE_SECRET):
-                return HttpResponse('Signature invalide ou absente', status=403)
+        txn_uuid        = _champ('uuid', 'transaction_uuid')
+        invoice_id      = _champ('invoice_id')
+        camerpay_statut = _champ('status')  # pending/processing/completed/failed/cancelled/refunded
+        amount_recu     = _champ('amount')
+        signature       = _champ('signature') or request.headers.get('X-CamerPay-Signature', '')
+
+        if not invoice_id:
+            return HttpResponse('invoice_id manquant', status=400)
+
+        if not verifier_signature_webhook(
+            uuid=txn_uuid, invoice_id=invoice_id, status=camerpay_statut,
+            amount=amount_recu, signature=signature,
+        ):
+            return HttpResponse('Signature invalide ou absente', status=403)
+
+        statut_interne = STATUT_PAR_CAMERPAY.get(camerpay_statut)  # None si pending/processing
 
         # ── Paiement d'une RÉSERVATION (ref « RESA-<id> ») ──────────────────
-        if payment_ref.startswith('RESA-'):
-            return _monetbil_notify_reservation(payment_ref, payment_status, amount_recu)
+        if invoice_id.startswith('RESA-'):
+            return _camerpay_notify_reservation(invoice_id, statut_interne)
 
         try:
-            txn = Transaction.objects.get(reference=payment_ref)
+            txn = Transaction.objects.get(reference=invoice_id)
         except Transaction.DoesNotExist:
-            # Référence inconnue — on répond 200 pour éviter les retentatives Monetbil
+            # Référence inconnue — on répond 200 pour éviter les retentatives CamerPay
             return HttpResponse('OK')
 
         # Idempotence : ne pas retraiter une transaction déjà finalisée
@@ -602,24 +614,29 @@ def monetbil_notify(request):
         except (TypeError, ValueError):
             pass
 
-        if payment_status == 'success':
+        if not txn.provider_reference and txn_uuid:
+            txn.provider_reference = txn_uuid
+
+        if statut_interne == 'complete':
             txn.statut = 'complete'
-            txn.save(update_fields=['statut'])
+            txn.save(update_fields=['statut', 'provider_reference'])
             # Paiement confirmé → la commande devient visible du restaurant.
             commande = txn.commande
             if commande and not commande.paiement_confirme:
                 commande.paiement_confirme = True
                 commande.save(update_fields=['paiement_confirme', 'updated_at'])
-        elif payment_status in ('failed', 'cancelled'):
-            txn.statut = 'echouee'
-            txn.save(update_fields=['statut'])
+        elif statut_interne in ('echouee', 'remboursee'):
+            txn.statut = statut_interne
+            txn.save(update_fields=['statut', 'provider_reference'])
+        else:
+            txn.save(update_fields=['provider_reference'])
 
         return HttpResponse('OK')
     except Exception:
         return HttpResponse('Erreur interne', status=500)
 
 
-def monetbil_return(request):
+def camerpay_return(request):
     """
     GET /payment/success/?ref=EEUEZ-xxx
     Page de retour après paiement. Le WebView de l'app mobile surveille cette URL.
@@ -686,7 +703,7 @@ def monetbil_return(request):
     return HttpResponse(html, content_type='text/html')
 
 
-def monetbil_failed(request):
+def camerpay_failed(request):
     """
     GET /payment/failed/
     Page de retour en cas d'échec / annulation. Le WebView de l'app la détecte

@@ -12,7 +12,7 @@ import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
-import { MonetbilWebView } from '../components/MonetbilWebView';
+import { CamerPayWebView } from '../components/CamerPayWebView';
 import { fetchReservations, payReservation, openTicket } from '../services/reservations';
 import { formatPrice } from '../data/menuData';
 import type { ReservationDTO } from '../services/dto';
@@ -45,7 +45,7 @@ export default function ReservationsScreen() {
     try {
       const data = await payReservation(r.id, user?.telephone || undefined);
       if (data.payment_url) {
-        setPaymentUrl(data.payment_url);   // paiement Monetbil
+        setPaymentUrl(data.payment_url);   // paiement CamerPay
       } else {
         await load();                       // réservation gratuite → confirmée directement
       }
@@ -138,7 +138,7 @@ export default function ReservationsScreen() {
     </ScreenBg>
 
     {paymentUrl && (
-      <MonetbilWebView
+      <CamerPayWebView
         paymentUrl={paymentUrl}
         onSuccess={() => { setPaymentUrl(null); load(); }}
         onCancel={() => { setPaymentUrl(null); setError('Paiement annulé. Vous pouvez réessayer.'); }}

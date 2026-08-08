@@ -1,6 +1,6 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
-from core.views import publications_admin
+from core.views import publications_admin, bannieres
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
 
@@ -33,6 +33,15 @@ urlpatterns = [
     path('dishes/', dishes.dish_list, name='dish_list'),
     path('dishes/<int:pk>/', dishes.dish_detail, name='dish_detail'),
     path('dishes/<int:pk>/toggle/', dishes.dish_toggle, name='dish_toggle'),
+
+    # Bannières (accueil client)
+    path('bannieres/', bannieres.banniere_list, name='banniere_list'),
+    path('bannieres/nouvelle/', bannieres.banniere_form, name='banniere_create'),
+    path('bannieres/<int:pk>/', bannieres.banniere_form, name='banniere_edit'),
+    path('bannieres/<int:pk>/supprimer/', bannieres.banniere_delete, name='banniere_delete'),
+    path('bannieres/<int:pk>/toggle/', bannieres.banniere_toggle, name='banniere_toggle'),
+    path('bannieres/<int:pk>/monter/', bannieres.banniere_move, {'direction': 'up'}, name='banniere_up'),
+    path('bannieres/<int:pk>/descendre/', bannieres.banniere_move, {'direction': 'down'}, name='banniere_down'),
 
     # Finances
     path('finances/', finances.finances_view, name='finances'),

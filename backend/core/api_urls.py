@@ -30,6 +30,8 @@ urlpatterns = [
     path('client/plats', client_views.plats_list, name='api-client-plats'),
     path('client/plats/<int:id>', client_views.plat_detail, name='api-client-plat-detail'),
     path('client/categories', client_views.categories_list, name='api-client-categories'),
+    path('client/bannieres', client_views.bannieres_list, name='api-client-bannieres'),
+    path('client/bannieres/version', client_views.bannieres_version, name='api-client-bannieres-version'),
     path('client/recommandations', client_views.recommandations, name='api-client-recommandations'),
     path('client/tendances', client_views.tendances, name='api-client-tendances'),
     path('client/plats/<int:id>/noter', client_views.noter_plat, name='api-client-noter-plat'),
@@ -67,10 +69,10 @@ urlpatterns = [
     path('client/publications/<int:id>/commentaires', publication_views.commentaires, name='api-client-pub-commentaires'),
     path('client/commentaires/<int:id>', publication_views.commentaire_delete, name='api-client-pub-commentaire-delete'),
 
-    # ─── Monetbil — webhook serveur-à-serveur ──────────────────────────────────
+    # ─── CamerPay — webhook serveur-à-serveur ──────────────────────────────────
     # Note : le routeur DRF enregistre automatiquement l'action initier_paiement
     # sous POST /api/client/commandes/{id}/initier_paiement/
-    path('monetbil/notify/', api_views.monetbil_notify, name='api-monetbil-notify'),
+    path('camerpay/notify/', api_views.camerpay_notify, name='api-camerpay-notify'),
 
     # Restaurant
     path('restaurant/workspace', api_views.RestaurantWorkspaceView.as_view(), name='api-restaurant-workspace'),

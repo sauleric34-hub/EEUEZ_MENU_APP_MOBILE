@@ -102,7 +102,7 @@ class ConversionPaiementTests(TestCase):
         self.assertEqual(int(commande.montant_total), 8500)
 
     def test_le_montant_paye_correspond_a_la_transaction(self):
-        """Monetbil doit encaisser exactement le montant réduit."""
+        """CamerPay doit encaisser exactement le montant réduit."""
         self._crediter(200)
         self._auth()
         commande = Commande.objects.get(pk=self._commander(utiliser_points=True).json()['id'])

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Bannières — Menu Admin{% endblock %}
+{% block topbar_title %}Bannières{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Bannières</h1>
+    <p class="page-subtitle">Carrousel promo affiché en haut de l'accueil client — {{ bannieres.count }} bannière{{ bannieres.count|pluralize }}</p>
+  </div>
+  <a href="{% url 'core:banniere_create' %}" class="btn btn-primary" style="margin-left:auto;">+ Nouvelle bannière</a>
+</div>
+
+<div class="table-wrapper">
+  {% if bannieres %}
+  <table>
+    <thead><tr><th>Aperçu</th><th>Nom interne</th><th>Fond</th><th>Bouton « Commander »</th><th>Ordre</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+      {% for b in bannieres %}
+      <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            {% if b.fond_type == 'image' and b.fond_image %}
+              <img src="{{ b.fond_image.url }}" style="width:52px;height:36px;border-radius:8px;object-fit:cover;">
+            {% elif b.fond_type == 'couleur' %}
+              <div style="width:52px;height:36px;border-radius:8px;background:{{ b.fond_couleur }};"></div>
+            {% else %}
+              <div style="width:52px;height:36px;border-radius:8px;background:linear-gradient(135deg,{{ b.fond_degrade_debut }},{{ b.fond_degrade_fin }});"></div>
+            {% endif %}
+            {% if b.image_droite %}<img src="{{ b.image_droite.url }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;">{% endif %}
+          </div>
+        </td>
+        <td>
+          <div style="color:var(--text-primary);font-weight:500;">{{ b.nom_interne }}</div>
+          <div style="color:var(--text-muted);font-size:0.75rem;max-width:220px;white-space:pre-line;">{{ b.titre|truncatechars:50 }}</div>
+        </td>
+        <td>{{ b.get_fond_type_display }}</td>
+        <td>{% if b.plat %}<span class="badge badge-blue">→ {{ b.plat.nom }}</span>{% else %}<span class="badge badge-gray">Masqué (aucun plat)</span>{% endif %}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            <form method="post" action="{% url 'core:banniere_up' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Monter">↑</button></form>
+            <form method="post" action="{% url 'core:banniere_down' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Descendre">↓</button></form>
+          </div>
+        </td>
+        <td>{% if b.is_active %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-gray">Inactive</span>{% endif %}</td>
+        <td style="display:flex;gap:6px;">
+          <a href="{% url 'core:banniere_edit' b.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
+          <form method="post" action="{% url 'core:banniere_toggle' b.pk %}">{% csrf_token %}
+            <button class="btn {% if b.is_active %}btn-amber{% else %}btn-secondary{% endif %} btn-sm">{% if b.is_active %}Désactiver{% else %}Activer{% endif %}</button>
+          </form>
+          <form method="post" action="{% url 'core:banniere_delete' b.pk %}" onsubmit="return confirm('Supprimer cette bannière ?');">{% csrf_token %}
+            <button class="btn btn-danger btn-sm">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="12" rx="2"/></svg><p>Aucune bannière — créez-en une pour l'accueil client</p></div>
+  {% endif %}
+</div>
+{% endblock %}

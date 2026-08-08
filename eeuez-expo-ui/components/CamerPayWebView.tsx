@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-//  MonetbilWebView — Modal plein écran de paiement Mobile Money
-//  Affiche le widget Monetbil dans un WebView.
-//  Surveille la navigation vers MONETBIL_SUCCESS_URL pour
+//  CamerPayWebView — Modal plein écran de paiement Mobile Money
+//  Affiche la pay_url CamerPay dans un WebView.
+//  Surveille la navigation vers CAMERPAY_SUCCESS_URL pour
 //  détecter la fin du paiement et appeler onSuccess / onCancel.
 // ═══════════════════════════════════════════════════════════
 
@@ -19,11 +19,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, ShieldCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Brand, Radius } from '../constants/theme';
-import { MONETBIL_SUCCESS_URL } from '../constants/api';
+import { CAMERPAY_SUCCESS_URL } from '../constants/api';
 import { bodyFont, displayFont } from './ui';
 
 interface Props {
-  /** URL du widget Monetbil reçue du backend. */
+  /** pay_url CamerPay reçue du backend. */
   paymentUrl: string;
   /** Appelé quand la page de succès est détectée. */
   onSuccess: () => void;
@@ -33,7 +33,7 @@ interface Props {
   amount?: number;
 }
 
-export function MonetbilWebView({ paymentUrl, onSuccess, onCancel, amount }: Props) {
+export function CamerPayWebView({ paymentUrl, onSuccess, onCancel, amount }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const handledRef = useRef(false);
@@ -47,7 +47,7 @@ export function MonetbilWebView({ paymentUrl, onSuccess, onCancel, amount }: Pro
       return;
     }
     // Succès → redirection vers /payment/success/
-    if (nav.url.startsWith(MONETBIL_SUCCESS_URL) || nav.url.includes('/payment/success')) {
+    if (nav.url.startsWith(CAMERPAY_SUCCESS_URL) || nav.url.includes('/payment/success')) {
       handledRef.current = true;
       // Petit délai pour que la page de succès s'affiche une fraction de seconde
       setTimeout(onSuccess, 800);

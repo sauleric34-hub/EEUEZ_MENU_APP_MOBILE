@@ -84,14 +84,14 @@ clique **Restart** (sinon les nouvelles valeurs ne sont pas prises en compte).
 | `CSRF_TRUSTED_ORIGINS` | Selon besoin | `https://menu.cambus.cm` | Origines de confiance pour les formulaires |
 | `APP_BASE_URL` | Non | `https://menu.cambus.cm` | URL publique (liens de retour) |
 | `SECURE_SSL_REDIRECT` | Non | `True` | Force HTTPS (défaut `True` en prod) |
-| `MONETBIL_SERVICE_KEY` | Paiement | *(fournie par Monetbil)* | Clé du service de paiement |
-| `MONETBIL_SERVICE_SECRET` | Paiement | *(fournie par Monetbil)* | Secret du service |
-| `MONETBIL_VERIFY_SIGN` | Paiement | `True` | Vérifie la signature des notifications de paiement |
-| `MONETBIL_PAYOUT_ENABLED` | Paiement | `True`/`False` | Active les décaissements automatiques |
-| `MONETBIL_PAYOUT_URL` | Paiement | *(URL Monetbil)* | Point de décaissement |
+| `CAMERPAY_TOKEN` | Paiement | *(token dashboard CamerPay)* | Authentifie les appels API |
+| `CAMERPAY_BASE_URL` | Paiement | `https://camerpay.biz/api` | Base URL de l'API CamerPay |
+| `CAMERPAY_CALLBACK_SECRET` | Paiement | *(secret webhook CamerPay)* | Vérifie la signature HMAC des notifications |
+| `CAMERPAY_PAYOUT_ENABLED` | Paiement | `True`/`False` | Active les décaissements automatiques |
 
-> **Astuce sécurité.** `MONETBIL_VERIFY_SIGN=True` en production : sinon une
-> fausse notification de paiement pourrait valider une commande non payée.
+> **Astuce sécurité.** La signature des webhooks CamerPay est TOUJOURS
+> vérifiée (pas de bascule dev/prod) : sans `CAMERPAY_CALLBACK_SECRET`, aucune
+> notification de paiement n'est acceptée — voir `core.api_views.camerpay_notify`.
 
 ### ✅ Point de contrôle Phase 1
 
@@ -390,4 +390,4 @@ Détails complets dans [`load_test/README.md`](../load_test/README.md).
 | Images en pleine résolution (lentes) | `generer_apercus` jamais lancé | Lancer `python manage.py generer_apercus` |
 | Bouton « Visiter en invité » échoue | Compte démo absent | Lancer `python manage.py creer_compte_demo` |
 | Notifications temps réel muettes | WebSockets non supportés (mutualisé) | Voir Phase 5 — nécessite un serveur ASGI |
-| Paiement validé sans encaissement | `MONETBIL_VERIFY_SIGN` désactivé | Poser `MONETBIL_VERIFY_SIGN=True` |
+| Webhook de paiement rejeté (403) | `CAMERPAY_CALLBACK_SECRET` absent ou différent du dashboard | Vérifier la valeur dans cPanel/`.env` contre Dashboard CamerPay > API & webhooks |

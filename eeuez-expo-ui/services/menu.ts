@@ -7,11 +7,17 @@ import { ajouterFichier } from './upload';
 import type {
   CategorieDTO, PlatDTO, RestoDTO, CommandeDTO,
   FavoriToggleDTO, AbonnementToggleDTO, RecommandationsDTO,
-  ConversationDTO, MessageDTO, NoteResultDTO, MonetbilPaymentDTO,
+  ConversationDTO, MessageDTO, NoteResultDTO, CamerPayPaymentDTO, BanniereDTO,
 } from './dto';
 
 // ─── Catalogue ───────────────────────────────────────────────
 export const fetchCategories = () => apiGet<CategorieDTO[]>('/client/categories');
+
+// ─── Bannières (carrousel promo accueil) ─────────────────────
+export const fetchBannieres = () => apiGet<BanniereDTO[]>('/client/bannieres');
+/** Requête légère : ne renvoie qu'un identifiant de version, pour éviter de
+ *  re-télécharger la liste complète (images) à chaque arrivée sur l'accueil. */
+export const fetchBannieresVersion = () => apiGet<{ version: string }>('/client/bannieres/version');
 
 export const fetchRestaurants = (q?: string) =>
   apiGet<RestoDTO[]>('/client/restaurants', { query: { q } });
@@ -130,14 +136,14 @@ export const confirmReception = (commandeId: number, code: string) =>
 export const createAvis = (commandeId: number, note: number, commentaire = '') =>
   apiPost('/client/commandes/' + commandeId + '/avis', { note, commentaire }, { auth: true });
 
-// ─── Paiement Monetbil (Mobile Money) ────────────────────────
+// ─── Paiement CamerPay (Mobile Money) ────────────────────────
 /**
- * Demande au backend Django d'initier un paiement Monetbil pour la commande donnée.
- * Le backend appelle Monetbil côté serveur et retourne l'URL de paiement à afficher
+ * Demande au backend Django d'initier un paiement CamerPay pour la commande donnée.
+ * Le backend appelle CamerPay côté serveur et retourne l'URL de paiement à afficher
  * dans le WebView. Le numéro de téléphone est optionnel (pré-rempli si fourni).
  */
-export const initiateMonetbilPayment = (commandeId: number, phone?: string) =>
-  apiPost<MonetbilPaymentDTO>(
+export const initiateCamerPayPayment = (commandeId: number, phone?: string) =>
+  apiPost<CamerPayPaymentDTO>(
     `/client/commandes/${commandeId}/initier_paiement/`,
     phone ? { phone } : {},
     { auth: true },

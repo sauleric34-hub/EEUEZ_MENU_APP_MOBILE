@@ -17,9 +17,9 @@
 
 <div class="glass-card anim-fade-up" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid {% if payout_auto %}var(--accent-green){% else %}var(--accent-amber){% endif %};">
   {% if payout_auto %}
-    <strong style="color:var(--accent-green);">Décaissement automatique activé</strong> — « Approuver » envoie l'argent via Monetbil.
+    <strong style="color:var(--accent-green);">Décaissement automatique activé</strong> — « Approuver » envoie l'argent via CamerPay.
   {% else %}
-    <strong style="color:var(--accent-amber);">Décaissement manuel</strong> — « Approuver » marque la demande comme validée&nbsp;; effectuez ensuite le virement mobile money à la main, puis marquez « Payé ». (Activez <code>MONETBIL_PAYOUT_ENABLED</code> pour l'automatiser.)
+    <strong style="color:var(--accent-amber);">Décaissement manuel</strong> — « Approuver » marque la demande comme validée&nbsp;; effectuez ensuite le virement mobile money à la main, puis marquez « Payé ». (Activez <code>CAMERPAY_PAYOUT_ENABLED</code> pour l'automatiser.)
   {% endif %}
 </div>
 

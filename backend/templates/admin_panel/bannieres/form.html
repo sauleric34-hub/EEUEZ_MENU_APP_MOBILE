@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}{% if banniere %}Modifier{% else %}Nouvelle{% endif %} bannière — Menu Admin{% endblock %}
+{% block topbar_title %}{% if banniere %}Modifier la bannière{% else %}Nouvelle bannière{% endif %}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:banniere_list' %}">Bannières</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">{% if banniere %}Modifier{% else %}Nouvelle{% endif %}</span>
+</div>
+<div class="page-header anim-fade-up">
+  <h1 class="page-title">{% if banniere %}Modifier « {{ banniere.nom_interne }} »{% else %}Nouvelle bannière{% endif %}</h1>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div class="charts-grid charts-grid-2">
+
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">1 · Texte</div>
+      <div class="form-group">
+        <label class="form-label">Nom interne (repère admin, non visible client) *</label>
+        <input type="text" name="nom_interne" class="input-field" value="{{ banniere.nom_interne|default:'' }}" required placeholder="Ex : Promo KFC juillet">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pastille (optionnel)</label>
+        <input type="text" name="badge" class="input-field" value="{{ banniere.badge|default:'' }}" placeholder="Ex : OFFRE DU MOMENT">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Texte de la bannière * (une ligne = un retour à la ligne à l'affichage)</label>
+        <textarea name="titre" class="input-field" rows="3" required placeholder="Croustillant.&#10;Juteux.&#10;Irrésistible.">{{ banniere.titre|default:'' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sous-texte (optionnel)</label>
+        <input type="text" name="sous_titre" class="input-field" value="{{ banniere.sous_titre|default:'' }}" placeholder="Ex : 100 % fait maison, toujours frais.">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Couleur du texte</label>
+        <input type="color" name="texte_couleur" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.texte_couleur|default:'#ffffff' }}">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px;">
+        <input type="checkbox" name="is_active" {% if not banniere or banniere.is_active %}checked{% endif %}>
+        <span>Bannière active (visible dans l'app)</span>
+      </label>
+    </div>
+
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">2 · Bouton « Commander »</div>
+      <p style="color:var(--text-muted);font-size:0.8rem;margin:-4px 0 14px;">
+        Le bouton n'apparaît que si un plat est relié ci-dessous. Un tap dessus ouvre la fiche de ce plat.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Plat lié</label>
+        <select name="plat" class="input-field">
+          <option value="">— Aucun (le bouton reste masqué) —</option>
+          {% for p in plats %}
+          <option value="{{ p.pk }}" {% if banniere.plat_id == p.pk %}selected{% endif %}>{{ p.nom }} — {{ p.restaurant.nom }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="coords-grid">
+        <div class="form-group">
+          <label class="form-label">Couleur du texte du bouton</label>
+          <input type="color" name="bouton_texte_couleur" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.bouton_texte_couleur|default:'#f26a1b' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Couleur de fond du bouton</label>
+          <input type="color" name="bouton_fond_couleur" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.bouton_fond_couleur|default:'#ffffff' }}">
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">3 · Fond de la bannière</div>
+      <div class="form-group">
+        <label class="form-label">Type de fond</label>
+        <select name="fond_type" id="fond_type" class="input-field" onchange="toggleFond()">
+          <option value="image" {% if not banniere or banniere.fond_type == 'image' %}selected{% endif %}>Image</option>
+          <option value="couleur" {% if banniere.fond_type == 'couleur' %}selected{% endif %}>Couleur unie</option>
+          <option value="degrade" {% if banniere.fond_type == 'degrade' %}selected{% endif %}>Dégradé</option>
+        </select>
+      </div>
+
+      <div id="fond-image-group">
+        {% if banniere.fond_image %}
+        <div style="margin-bottom:12px;">
+          <img src="{{ banniere.fond_image.url }}" style="width:140px;height:70px;border-radius:12px;object-fit:cover;border:1px solid var(--border);display:block;">
+        </div>
+        {% endif %}
+        <div class="form-group">
+          <label class="form-label">{% if banniere.fond_image %}Remplacer l'image de fond{% else %}Image de fond{% endif %}</label>
+          <input type="file" name="fond_image" accept="image/*" class="input-field" style="padding:8px;">
+        </div>
+      </div>
+
+      <div id="fond-couleur-group" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Couleur de fond</label>
+          <input type="color" name="fond_couleur" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.fond_couleur|default:'#1f8a4c' }}">
+        </div>
+      </div>
+
+      <div id="fond-degrade-group" style="display:none;">
+        <div class="coords-grid">
+          <div class="form-group">
+            <label class="form-label">Dégradé — début</label>
+            <input type="color" name="fond_degrade_debut" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.fond_degrade_debut|default:'#f7891b' }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dégradé — fin</label>
+            <input type="color" name="fond_degrade_fin" class="input-field" style="padding:4px;height:42px;" value="{{ banniere.fond_degrade_fin|default:'#f2611b' }}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card" style="padding:28px;">
+      <div class="section-title">4 · Image de droite</div>
+      {% if banniere.image_droite %}
+      <div style="margin-bottom:12px;">
+        <img src="{{ banniere.image_droite.url }}" style="width:140px;height:100px;border-radius:12px;object-fit:cover;border:1px solid var(--border);display:block;">
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label class="form-label">{% if banniere.image_droite %}Remplacer l'image de droite{% else %}Image de droite *{% endif %}</label>
+        <input type="file" name="image_droite" accept="image/*" class="input-field" style="padding:8px;">
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;">
+    <a href="{% url 'core:banniere_list' %}" class="btn btn-secondary">Annuler</a>
+    <button type="submit" class="btn btn-primary">Enregistrer la bannière</button>
+  </div>
+</form>
+
+<script>
+function toggleFond() {
+  var type = document.getElementById('fond_type').value;
+  document.getElementById('fond-image-group').style.display = type === 'image' ? '' : 'none';
+  document.getElementById('fond-couleur-group').style.display = type === 'couleur' ? '' : 'none';
+  document.getElementById('fond-degrade-group').style.display = type === 'degrade' ? '' : 'none';
+}
+toggleFond();
+</script>
+{% endblock %}

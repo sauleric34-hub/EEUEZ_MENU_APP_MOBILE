@@ -8,17 +8,18 @@ from rest_framework.response import Response
 
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Max, Sum
 from django.utils import timezone
 
 from .models import (
     RestaurantProfile, Plat, Categorie, Commande, Favori, Abonnement, Avis,
-    PlatNote, Conversation, Message, AdresseLivraison,
+    PlatNote, Conversation, Message, AdresseLivraison, Banniere,
 )
 from .serializers import (
     RestaurantProfileSerializer, PlatSerializer, CategorieSerializer,
     FavoriSerializer, AbonnementSerializer, AvisSerializer,
     ConversationSerializer, MessageSerializer, AdresseLivraisonSerializer,
+    BanniereSerializer,
 )
 from . import recommendation
 from .utils import geo
@@ -90,6 +91,25 @@ def plat_detail(request, id):
 @permission_classes([permissions.AllowAny])
 def categories_list(request):
     return Response(CategorieSerializer(Categorie.objects.all().order_by('id'), many=True).data)
+
+
+# ─── BANNIÈRES (carrousel promo accueil) ────────────────────
+# La liste complète est coûteuse à télécharger (images) : l'app ne la
+# recharge que si /bannieres/version indique un changement (cf.
+# AppContext.checkBannieres côté client, requête légère à chaque accueil).
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def bannieres_list(request):
+    qs = Banniere.objects.filter(is_active=True).select_related('plat').order_by('ordre', 'id')
+    return Response(BanniereSerializer(qs, many=True, context={'request': request}).data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def bannieres_version(request):
+    agg = Banniere.objects.filter(is_active=True).aggregate(dernier=Max('updated_at'), total=Count('id'))
+    dernier = agg['dernier'].isoformat() if agg['dernier'] else '0'
+    return Response({'version': f"{agg['total']}:{dernier}"})
 
 
 # ─── FAVORIS ─────────────────────────────────────────────────

@@ -25,10 +25,10 @@ export const AUTH_TOKEN_KEY = '@menu_auth_token';
 export const REFRESH_TOKEN_KEY = '@menu_refresh_token';
 export const USER_KEY = '@menu_user';
 
-// ─── Monetbil ────────────────────────────────────────────
+// ─── CamerPay ────────────────────────────────────────────
 // URL de retour surveillée par le WebView pour détecter la fin du paiement.
 // En prod : 'https://menu.cambus.cm/payment/success/'
-export const MONETBIL_SUCCESS_URL = `${MEDIA_BASE_URL}/payment/success/`;
+export const CAMERPAY_SUCCESS_URL = `${MEDIA_BASE_URL}/payment/success/`;
 
 /** Base publique du site — sert à fabriquer les liens de partage.
  *  Un lien https est cliquable partout (WhatsApp, SMS…), contrairement à

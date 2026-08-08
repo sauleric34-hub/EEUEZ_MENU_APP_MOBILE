@@ -184,24 +184,25 @@ if not DEBUG:
         o.strip() for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
     ]
 
-# ─── Monetbil ─────────────────────────────────────────────────────────────────
-# Les clés viennent UNIQUEMENT des variables d'environnement (jamais en dur dans
-# le code : le SECRET ne doit pas se retrouver dans Git). Définissez-les en cPanel
-# (prod) ou dans un fichier .env non versionné (dev).
-MONETBIL_SERVICE_KEY    = os.environ.get('MONETBIL_SERVICE_KEY',    '')
-MONETBIL_SERVICE_SECRET = os.environ.get('MONETBIL_SERVICE_SECRET', '')
-# URL de base publique de l'application (utilisée pour notify_url)
+# ─── CamerPay ─────────────────────────────────────────────────────────────────
+# Passerelle de paiement camerounaise (camerpay.biz) : Orange Money, MTN MoMo,
+# cartes, PayPal. Les clés viennent UNIQUEMENT des variables d'environnement
+# (jamais en dur dans le code : un secret ne doit pas se retrouver dans Git).
+# Définissez-les en cPanel (prod) ou dans un fichier .env non versionné (dev).
+CAMERPAY_TOKEN = os.environ.get('CAMERPAY_TOKEN', '')
+CAMERPAY_BASE_URL = os.environ.get('CAMERPAY_BASE_URL', 'https://camerpay.biz/api')
+# Secret webhook (dashboard CamerPay > API & webhooks) : sert à vérifier la
+# signature HMAC-SHA256 de chaque notification de paiement. La vérification
+# est TOUJOURS appliquée (pas de bascule dev/prod) : sans secret configuré,
+# aucun webhook n'est accepté — voir core.api_views.camerpay_notify.
+CAMERPAY_CALLBACK_SECRET = os.environ.get('CAMERPAY_CALLBACK_SECRET', '')
+# URL de base publique de l'application (callback_url / return_url CamerPay)
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
-# Vérifier la signature des notifications Monetbil (activer une fois validé en prod).
-MONETBIL_VERIFY_SIGN = _env_bool('MONETBIL_VERIFY_SIGN', False)
 
-# ─── Monetbil Décaissement (payout / cashout) ───────────────────────────────────
-# Produit DISTINCT du widget d'encaissement : envoie de l'argent vers un bénéficiaire
-# (retrait restaurant). Nécessite l'activation du décaissement côté Monetbil + sa doc.
+# ─── CamerPay Décaissement (payout / cashout) ───────────────────────────────────
+# Versement vers un bénéficiaire (retrait restaurant), via POST /payouts/batch.
 # Tant que désactivé, les retraits sont traités manuellement (aucun versement auto).
-MONETBIL_PAYOUT_ENABLED = os.environ.get('MONETBIL_PAYOUT_ENABLED', 'false').lower() in ('1', 'true', 'yes')
-# URL de base de l'API de décaissement (à renseigner d'après la doc payout Monetbil).
-MONETBIL_PAYOUT_URL = os.environ.get('MONETBIL_PAYOUT_URL', 'https://api.monetbil.com/payout/v1')
+CAMERPAY_PAYOUT_ENABLED = _env_bool('CAMERPAY_PAYOUT_ENABLED', False)
 
 from datetime import timedelta
 SIMPLE_JWT = {

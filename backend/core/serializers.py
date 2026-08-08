@@ -4,7 +4,7 @@ from django.db.models import Sum, Avg
 from .models import (
     RestaurantProfile, Categorie, Plat, Commande, LigneCommande,
     Livraison, Avis, Favori, Abonnement, Conversation, Message, AdresseLivraison,
-    RestaurantMedia, Reservation,
+    RestaurantMedia, Reservation, Banniere,
 )
 
 User = get_user_model()
@@ -36,6 +36,17 @@ class AdresseLivraisonSerializer(serializers.ModelSerializer):
         model = AdresseLivraison
         fields = ['id', 'label', 'adresse', 'details', 'latitude', 'longitude', 'is_default', 'created_at']
         read_only_fields = ['created_at']
+
+
+class BanniereSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Banniere
+        fields = [
+            'id', 'badge', 'titre', 'sous_titre', 'texte_couleur',
+            'plat', 'bouton_texte_couleur', 'bouton_fond_couleur',
+            'fond_type', 'fond_image', 'fond_couleur', 'fond_degrade_debut', 'fond_degrade_fin',
+            'image_droite',
+        ]
 
 
 class CategorieSerializer(serializers.ModelSerializer):

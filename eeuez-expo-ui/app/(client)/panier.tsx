@@ -12,10 +12,10 @@ import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
 import type { PaymentMode, FideliteApercuDTO } from '../../services/menu';
-import { initiateMonetbilPayment, cancelOrder, fetchFideliteApercu } from '../../services/menu';
+import { initiateCamerPayPayment, cancelOrder, fetchFideliteApercu } from '../../services/menu';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
-import { MonetbilWebView } from '../../components/MonetbilWebView';
+import { CamerPayWebView } from '../../components/CamerPayWebView';
 import { useGardeDemo } from '../../hooks/useGardeDemo';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
@@ -23,8 +23,8 @@ const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = 
   { mode: 'orange_money', label: 'Orange Money', Icon: Smartphone },
 ];
 
-/** Modes qui nécessitent le widget Monetbil (tous les modes actuels) */
-const MONETBIL_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
+/** Modes qui nécessitent le widget CamerPay (tous les modes actuels) */
+const CAMERPAY_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
 
 export default function PanierScreen() {
   const { colors, cartLines, cartInc, cartDec, cartRemove, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
@@ -70,17 +70,17 @@ export default function PanierScreen() {
     }).start();
   }, [usePoints, rebondTotal, fidelite]);
 
-  // ─── État WebView Monetbil ────────────────────────────
+  // ─── État WebView CamerPay ────────────────────────────
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   // Commande créée mais non encore payée (mobile money). Tant qu'elle n'est pas
   // confirmée, elle est invisible du restaurant et peut être relancée ou annulée.
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
-  /** Lance (ou relance) le widget Monetbil pour une commande déjà créée. */
+  /** Lance (ou relance) le widget CamerPay pour une commande déjà créée. */
   const launchPayment = async (orderId: number) => {
     setBusy(true); setError(null);
     try {
-      const data = await initiateMonetbilPayment(orderId, phone || undefined);
+      const data = await initiateCamerPayPayment(orderId, phone || undefined);
       if (data.payment_url) setPaymentUrl(data.payment_url);
       else setError('Paiement indisponible pour le moment. Réessayez.');
     } catch (e) {
@@ -112,8 +112,8 @@ export default function PanierScreen() {
       // 1. Créer la commande (toujours)
       const order = await checkout(mode, usePoints);
 
-      if (MONETBIL_MODES.includes(mode)) {
-        // 2. Pour MTN/Orange Money → initier le paiement Monetbil.
+      if (CAMERPAY_MODES.includes(mode)) {
+        // 2. Pour MTN/Orange Money → initier le paiement CamerPay.
         //    On NE vide PAS le panier : la commande n'existe vraiment qu'une fois
         //    payée. Si le paiement est abandonné, les plats restent au panier.
         setPendingOrderId(order.id);
@@ -251,7 +251,7 @@ export default function PanierScreen() {
               </View>
 
               {/* Numéro de téléphone (Mobile Money uniquement) */}
-              {MONETBIL_MODES.includes(mode) && (
+              {CAMERPAY_MODES.includes(mode) && (
                 <View style={[styles.phoneRow, { backgroundColor: colors.surface, borderColor: Brand.accent + '55' }]}>
                   <View style={[styles.phoneIcon, { backgroundColor: Brand.accent + '1f' }]}>
                     <Phone size={16} color={Brand.accentLight} strokeWidth={2.3} />
@@ -365,9 +365,9 @@ export default function PanierScreen() {
       </SafeAreaView>
     </ScreenBg>
 
-    {/* ─── Modal WebView Monetbil ─────────────────── */}
+    {/* ─── Modal WebView CamerPay ─────────────────── */}
     {paymentUrl && (
-      <MonetbilWebView
+      <CamerPayWebView
         paymentUrl={paymentUrl}
         amount={totalAPayer}
         onSuccess={() => {

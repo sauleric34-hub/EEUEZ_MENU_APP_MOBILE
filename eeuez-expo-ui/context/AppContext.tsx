@@ -4,7 +4,7 @@
 //  abonnements, panier, commandes, suivi.
 // ═══════════════════════════════════════════════════════════
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getPalette, type Palette, type ThemeMode } from '../constants/theme';
@@ -18,7 +18,7 @@ import { setAuthExpiredHandler } from '../services/http';
 import * as addr from '../services/addresses';
 import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
-import type { UserDTO, CommandeDTO, AdresseDTO } from '../services/dto';
+import type { UserDTO, CommandeDTO, AdresseDTO, BanniereDTO } from '../services/dto';
 import { estCompteDemo } from '../constants/demo';
 
 /** Complément retenu sur une ligne de panier (libellé figé pour l'affichage). */
@@ -106,6 +106,12 @@ interface AppContextValue {
   dataLoading: boolean;
   dataError: string | null;
   reloadCatalogue: () => Promise<void>;
+
+  // bannières promo (accueil) — mises en cache en mémoire, revérifiées
+  // (requête légère) à chaque arrivée sur l'accueil ; ne se re-téléchargent
+  // en entier que si la version a changé côté serveur.
+  bannieres: BanniereDTO[];
+  checkBannieres: () => Promise<void>;
 
   // géolocalisation & recommandations personnalisées
   userLoc: { lat: number; lon: number } | null;
@@ -195,6 +201,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
 
+  // bannières promo (accueil)
+  const [bannieres, setBannieres] = useState<BanniereDTO[]>([]);
+  // Dernière version connue : en mémoire seulement (pas de persistance disque),
+  // donc redemandée au serveur au redémarrage de l'app — c'est voulu.
+  const bannieresVersionRef = useRef<string | null>(null);
+
   // état utilisateur
   const [likes, setLikes] = useState<Record<number, boolean>>({});
   const [follows, setFollows] = useState<Record<number, boolean>>({});
@@ -260,6 +272,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDataError(e instanceof Error ? e.message : 'Erreur de chargement');
     } finally {
       setDataLoading(false);
+    }
+  }, []);
+
+  /** Vérifie une version légère avant de retélécharger la liste complète
+   *  (images incluses) — appelée à chaque arrivée sur l'accueil. */
+  const checkBannieres = useCallback(async () => {
+    try {
+      const { version } = await menu.fetchBannieresVersion();
+      if (version === bannieresVersionRef.current) return;
+      const list = await menu.fetchBannieres();
+      bannieresVersionRef.current = version;
+      setBannieres(list);
+    } catch {
+      // hors ligne ou erreur réseau : on garde la liste déjà en mémoire
     }
   }, []);
 
@@ -334,6 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setAuthReady(true);
       await reloadCatalogue();
       await reloadRecommendations();
+      await checkBannieres();
       if (stored) {
         await loadUserState();
         await reloadOrders();
@@ -577,6 +604,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     user, authReady, estDemo, signIn, register, signOut, updateUser, refreshUser,
     addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
     categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
+    bannieres, checkBannieres,
     userLoc, recommended, recoRestos, positionUsed, reloadRecommendations,
     restoById, dishById, dishesOfResto,
     likes, toggleLike, favList,

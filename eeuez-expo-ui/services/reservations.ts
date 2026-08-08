@@ -7,7 +7,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { apiGet, apiPost, ApiError } from './http';
 import { API_BASE_URL, AUTH_TOKEN_KEY } from '../constants/api';
-import type { ReservationDTO, MonetbilPaymentDTO } from './dto';
+import type { ReservationDTO, CamerPayPaymentDTO } from './dto';
 
 export interface NewReservation {
   restaurant: number;
@@ -24,7 +24,7 @@ export const fetchReservations = () =>
   apiGet<ReservationDTO[]>('/client/reservations', { auth: true });
 
 export const payReservation = (id: number, phone?: string) =>
-  apiPost<MonetbilPaymentDTO>(`/client/reservations/${id}/payer`, { phone }, { auth: true });
+  apiPost<CamerPayPaymentDTO>(`/client/reservations/${id}/payer`, { phone }, { auth: true });
 
 /** Télécharge le ticket PDF (avec le jeton) puis ouvre le partage système. */
 export async function openTicket(id: number): Promise<void> {

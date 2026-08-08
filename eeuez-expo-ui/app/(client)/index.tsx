@@ -20,6 +20,7 @@ import {
   AccentButton, displayFont, bodyFont,
 } from '../../components/ui';
 import { DishCardWide } from '../../components/cards';
+import { PromoBanner } from '../../components/PromoBanner';
 import { PublicationCard } from '../../components/PublicationCard';
 import { fetchFeed } from '../../services/publications';
 import type { PublicationDTO } from '../../services/dto';
@@ -37,6 +38,7 @@ export default function HomeScreen() {
     colors, mode, toggleTheme, user,
     categories, restaurants, popular, dataLoading, dataError, reloadCatalogue,
     recommended, recoRestos, positionUsed, reloadRecommendations,
+    bannieres, checkBannieres,
   } = useApp();
   const router = useRouter();
   const goPlats = () => router.push('/(client)/plats');
@@ -112,8 +114,9 @@ export default function HomeScreen() {
   const [ecranActif, setEcranActif] = useState(true);
   useFocusEffect(useCallback(() => {
     setEcranActif(true);
+    checkBannieres();
     return () => setEcranActif(false);
-  }, []));
+  }, [checkBannieres]));
 
   // En-tête de la liste : tout le contenu au-dessus du fil.
   // Référence stable indispensable — sinon l'en-tête se remonte à chaque
@@ -145,9 +148,12 @@ export default function HomeScreen() {
               </View>
             </PressableScale>
             <PressableScale onPress={goPlats}>
-              <DishTile Icon={SlidersHorizontal} grad={[Brand.accentTop, Brand.accentBot]} size={52} iconSize={20} radius={Radius.pill} />
+              <DishTile Icon={SlidersHorizontal} grad={[Brand.accentTop, Brand.accentBot]} size={44} iconSize={18} radius={Radius.pill} />
             </PressableScale>
           </View>
+
+          {/* Bannière promo */}
+          <PromoBanner banners={bannieres} />
 
           {/* Catégories */}
           {categories.length > 0 && (
@@ -185,7 +191,7 @@ export default function HomeScreen() {
               pour que la détection de visibilité (lecture vidéo) les couvre. */}
           {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
         </>
-  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length]);
+  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres]);
 
   /** Bloc « Restaurants » : intercalé dans le fil, après les 5 premières. */
   const SectionRestaurants = useCallback(() => (
@@ -266,7 +272,7 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 22 },
   searchPill: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 15, borderRadius: Radius.pill, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 11, borderRadius: Radius.pill, borderWidth: 1,
   },
   cat: { width: 78, alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1 },
   restoMini: { width: 150, padding: 14, borderRadius: 22, borderWidth: 1 },

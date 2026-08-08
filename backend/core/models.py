@@ -209,7 +209,7 @@ class Commande(models.Model):
     client = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='commandes_client')
     restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.SET_NULL, null=True, related_name='commandes')
     statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default='en_attente')
-    # Paiement confirmé : False pour une commande mobile money tant que Monetbil
+    # Paiement confirmé : False pour une commande mobile money tant que CamerPay
     # n'a pas notifié le succès. Une commande non confirmée n'est PAS visible du
     # restaurant (elle n'existe réellement qu'une fois payée).
     paiement_confirme = models.BooleanField(default=True)
@@ -467,6 +467,9 @@ class Transaction(models.Model):
     mode_paiement = models.CharField(max_length=20, choices=MODE_PAIEMENT_CHOICES, default='especes')
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     reference = models.CharField(max_length=100, blank=True)
+    # transaction_uuid CamerPay (renvoyé par /api/payment/initiate), utile pour
+    # une vérification de statut complémentaire au webhook (GET /payment/{uuid}/status).
+    provider_reference = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -491,7 +494,7 @@ class RetraitFonds(models.Model):
     mode_paiement = models.CharField(max_length=20, choices=MODE_PAIEMENT_CHOICES, default='mtn_money')
     numero_compte = models.CharField(max_length=50, blank=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
-    # Suivi du décaissement (payout Monetbil ou traitement manuel)
+    # Suivi du décaissement (payout CamerPay ou traitement manuel)
     payout_reference = models.CharField(max_length=100, blank=True)
     payout_message = models.CharField(max_length=250, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -563,6 +566,9 @@ class Reservation(models.Model):
     notes = models.TextField(blank=True)
     # Code du ticket (QR / PDF), généré au paiement — cf. Livraison.generer_code
     code = models.CharField(max_length=8, blank=True)
+    # transaction_uuid CamerPay (renvoyé par /api/payment/initiate), utile pour
+    # une vérification de statut complémentaire au webhook (GET /payment/{uuid}/status).
+    provider_reference = models.CharField(max_length=100, blank=True)
     transaction = models.ForeignKey(
         'Transaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='reservations',
     )
@@ -591,3 +597,6 @@ from .models_fidelite import MouvementPoints, ParametrageFidelite  # noqa: E402,
 from .models_complements import (  # noqa: E402,F401
     GroupeComplement, OptionComplement, ChoixLigneCommande, ElementInclus,
 )
+
+# ─── Bannières promo (accueil client) ────────────────────────
+from .models_bannieres import Banniere  # noqa: E402,F401

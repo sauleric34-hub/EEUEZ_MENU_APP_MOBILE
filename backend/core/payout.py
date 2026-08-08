@@ -2,16 +2,14 @@
 #  Décaissement (payout / cashout) — versement vers un bénéficiaire
 #  Utilisé pour les RETRAITS de fonds des restaurants.
 #
-#  ⚠️ IMPORTANT : le décaissement Monetbil (ENVOYER de l'argent) est un
-#  produit DISTINCT du widget d'encaissement (le client qui paie). Il doit
-#  être activé côté Monetbil et sa doc obtenue.
+#  Via CamerPay POST /payouts/batch (un seul bénéficiaire par appel ici).
+#  ⚠️ La doc CamerPay mentionne un « workflow d'approbation admin » côté
+#  plateforme pour les batches de versement : un HTTP 2xx signifie que la
+#  demande a été ACCEPTÉE, pas que l'argent est déjà versé. On ne marque donc
+#  jamais un retrait « payé » sur cette seule base — voir _map_response.
 #
-#  Cette couche est PRÊTE À BRANCHER :
-#   • Tant que settings.MONETBIL_PAYOUT_ENABLED est False → ManualPayoutProvider
-#     (la demande est approuvée mais le versement se fait à la main, rien n'est envoyé).
-#   • Dès que vous avez la doc payout Monetbil → implémentez l'appel HTTP réel
-#     dans MonetbilPayoutProvider._call_api (un seul endroit marqué « TODO »),
-#     puis mettez MONETBIL_PAYOUT_ENABLED=true. Rien d'autre à changer.
+#  Tant que settings.CAMERPAY_PAYOUT_ENABLED est False → ManualPayoutProvider
+#  (la demande est approuvée mais le versement se fait à la main).
 # ═══════════════════════════════════════════════════════════
 
 from dataclasses import dataclass, field
@@ -19,13 +17,13 @@ from dataclasses import dataclass, field
 from django.conf import settings
 from django.utils import timezone
 
-import requests as http_requests
+from .camerpay import initier_payout_batch
 
-
-# Correspondance mode de paiement interne → code opérateur Monetbil
-OPERATEUR_MONETBIL = {
-    'mtn_money':    'CM_MTNMOBILEMONEY',
-    'orange_money': 'CM_ORANGEMONEY',
+# Correspondance mode de paiement interne → opérateur attendu par CamerPay
+# (mêmes valeurs que payment_method sur /payment/initiate).
+OPERATEUR_CAMERPAY = {
+    'mtn_money':    'mtn_momo',
+    'orange_money': 'orange_money',
 }
 
 
@@ -56,83 +54,45 @@ class ManualPayoutProvider(PayoutProvider):
         )
 
 
-class MonetbilPayoutProvider(PayoutProvider):
-    """Décaissement via l'API Monetbil (à câbler dès réception de la doc payout)."""
-
-    def __init__(self, service_key, service_secret, base_url):
-        self.service_key = service_key
-        self.service_secret = service_secret
-        self.base_url = base_url.rstrip('/')
+class CamerPayPayoutProvider(PayoutProvider):
+    """Décaissement via l'API CamerPay (POST /payouts/batch, 1 bénéficiaire)."""
 
     def send(self, *, phone, amount, operator='', reference='', reason=''):
-        try:
-            data = self._call_api(phone=phone, amount=amount, operator=operator,
-                                   reference=reference, reason=reason)
-        except NotImplementedError as exc:
-            return PayoutResult(success=False, status='echec', reference=reference, message=str(exc))
-        except Exception as exc:
-            return PayoutResult(success=False, status='echec', reference=reference,
-                                message=f'Erreur décaissement Monetbil : {exc}')
-        return self._map_response(data, reference)
-
-    def _call_api(self, *, phone, amount, operator, reference, reason):
-        # ───────────────────────────────────────────────────────────────
-        # TODO(Monetbil Payout) : implémenter l'appel réel avec la doc payout.
-        # Forme ATTENDUE (à CONFIRMER avec la doc officielle) :
-        #
-        #   payload = {
-        #       'service':     self.service_key,
-        #       'phonenumber': phone,          # format 2376XXXXXXXX
-        #       'amount':      int(amount),
-        #       'operator':    operator,       # ex. CM_MTNMOBILEMONEY
-        #       'currency':    'XAF',
-        #       'country':     'CM',
-        #       'payout_ref':  reference,
-        #       # + éventuelle signature/authentification propre au payout
-        #   }
-        #   resp = http_requests.post(f'{self.base_url}/placePayout', data=payload, timeout=20)
-        #   resp.raise_for_status()
-        #   return resp.json()
-        #
-        # Puis adapter _map_response() aux champs réels renvoyés.
-        # ───────────────────────────────────────────────────────────────
-        raise NotImplementedError(
-            "API de décaissement Monetbil non câblée : renseignez _call_api "
-            "d'après la doc payout, puis activez MONETBIL_PAYOUT_ENABLED."
+        data, error = initier_payout_batch(
+            reference=reference,
+            beneficiaries=[{'phone': phone, 'amount': amount, 'name': reason, 'operator': operator}],
         )
+        if error:
+            return PayoutResult(success=False, status='echec', reference=reference, message=error)
+        return self._map_response(data, reference)
 
     @staticmethod
     def _map_response(data, reference):
-        # À ADAPTER selon la réponse réelle de l'API payout.
-        status_raw = str(data.get('status', '')).upper()
-        ref = data.get('payoutId') or data.get('transaction_id') or reference
-        if status_raw in ('SUCCESS', 'PAID', 'COMPLETED'):
-            return PayoutResult(True, 'paye', str(ref), data.get('message', 'Versé.'), data)
-        if status_raw in ('REQUEST_ACCEPTED', 'PENDING', 'PROCESSING'):
-            return PayoutResult(True, 'en_attente', str(ref), data.get('message', 'En cours.'), data)
-        return PayoutResult(False, 'echec', str(ref), data.get('message', 'Échec du décaissement.'), data)
+        # Le batch a été accepté par l'API : il attend l'approbation admin côté
+        # CamerPay avant versement effectif (workflow non documenté publiquement
+        # au-delà de cette mention). On reste donc prudent : 'en_attente' plutôt
+        # que 'paye', même en cas de succès HTTP. À affiner dès confirmation du
+        # format exact des statuts de batch (dashboard CamerPay / webhook payout).
+        ref = data.get('batch_id') or data.get('reference') or reference
+        return PayoutResult(True, 'en_attente', str(ref), 'Versement soumis à CamerPay — en attente de traitement.', data)
 
 
 def get_payout_provider():
     """Retourne le provider actif selon la configuration."""
-    if getattr(settings, 'MONETBIL_PAYOUT_ENABLED', False):
-        return MonetbilPayoutProvider(
-            settings.MONETBIL_SERVICE_KEY,
-            settings.MONETBIL_SERVICE_SECRET,
-            settings.MONETBIL_PAYOUT_URL,
-        )
+    if getattr(settings, 'CAMERPAY_PAYOUT_ENABLED', False):
+        return CamerPayPayoutProvider()
     return ManualPayoutProvider()
 
 
 def executer_retrait(retrait):
     """Déclenche le versement d'une demande de retrait et met à jour son statut.
 
-    - Décaissement activé  → tente l'envoi via Monetbil (payé / en attente / échec).
+    - Décaissement activé  → tente l'envoi via CamerPay (soumis / échec).
     - Décaissement désactivé → marque « approuvé » (à verser manuellement).
     Retourne le PayoutResult.
     """
     provider = get_payout_provider()
-    operator = OPERATEUR_MONETBIL.get(retrait.mode_paiement, '')
+    operator = OPERATEUR_CAMERPAY.get(retrait.mode_paiement, '')
     reference = retrait.payout_reference or f'PAYOUT-{retrait.pk}'
 
     result = provider.send(

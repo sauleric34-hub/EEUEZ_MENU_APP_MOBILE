@@ -63,6 +63,26 @@ export interface PlatDTO {
   created_at?: string;
 }
 
+export type FondBanniereType = 'image' | 'couleur' | 'degrade';
+
+export interface BanniereDTO {
+  id: number;
+  badge: string;
+  titre: string;
+  sous_titre: string;
+  texte_couleur: string;
+  /** Repas relié — le bouton « Commander » n'existe que si non-null. */
+  plat: number | null;
+  bouton_texte_couleur: string;
+  bouton_fond_couleur: string;
+  fond_type: FondBanniereType;
+  fond_image: string | null;
+  fond_couleur: string;
+  fond_degrade_debut: string;
+  fond_degrade_fin: string;
+  image_droite: string | null;
+}
+
 export interface MessageDTO {
   id: number;
   sender: 'client' | 'restaurant';
@@ -263,9 +283,9 @@ export interface AbonnementToggleDTO {
   abonnements: number[];
 }
 
-/** Réponse d'initiation de paiement (commande ou réservation).
+/** Réponse d'initiation de paiement CamerPay (commande ou réservation).
  *  `free` = réservation gratuite déjà confirmée (pas de paiement). */
-export interface MonetbilPaymentDTO {
+export interface CamerPayPaymentDTO {
   payment_url?: string;
   payment_ref?: string;
   free?: boolean;

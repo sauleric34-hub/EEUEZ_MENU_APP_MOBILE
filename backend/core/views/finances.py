@@ -72,7 +72,7 @@ def retraits_view(request):
             retrait.save(update_fields=['statut', 'processed_at'])
             messages.success(request, f'Retrait #{retrait.pk} marqué comme payé ({retrait.montant} F).')
         elif action == 'approuver':
-            # Décaissement auto (Monetbil) si activé, sinon simple approbation manuelle
+            # Décaissement auto (CamerPay) si activé, sinon simple approbation manuelle
             result = executer_retrait(retrait)
             if result.status == 'paye':
                 messages.success(request, f'Retrait #{retrait.pk} versé ({retrait.montant} F).')
@@ -86,7 +86,7 @@ def retraits_view(request):
     return render(request, 'admin_panel/finances/retraits.html', {
         'retraits': retraits,
         'en_attente': retraits.filter(statut='en_attente'),
-        'payout_auto': getattr(settings, 'MONETBIL_PAYOUT_ENABLED', False),
+        'payout_auto': getattr(settings, 'CAMERPAY_PAYOUT_ENABLED', False),
         'active_page': 'finances',
     })
 

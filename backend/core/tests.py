@@ -1,8 +1,11 @@
+import hashlib
+import hmac
 from unittest.mock import patch
 from django.test import TestCase, override_settings, Client
 from rest_framework.test import APIClient
 
 from .models import User, RestaurantProfile, Plat, Categorie, Commande, Transaction, Favori, Livraison
+from .camerpay import verifier_signature_webhook
 
 # Désactive le throttling pendant les tests (sinon 429 après quelques appels auth).
 NO_THROTTLE = {
@@ -13,8 +16,47 @@ NO_THROTTLE = {
     'DEFAULT_THROTTLE_RATES': {},
 }
 
+CAMERPAY_TEST_SECRET = 'test_secret_key_123'
 
-@override_settings(REST_FRAMEWORK=NO_THROTTLE)
+
+def _camerpay_signature(secret, uuid, invoice_id, status, amount):
+    """Reproduit la signature HMAC-SHA256 CamerPay pour simuler un webhook dans les tests."""
+    data = f'{uuid}|{invoice_id}|{status}|{amount}'
+    return hmac.new(secret.encode('utf-8'), data.encode('utf-8'), hashlib.sha256).hexdigest()
+
+
+class CamerPayWebhookSignatureTests(TestCase):
+    """Vérifie l'implémentation HMAC contre le vecteur de test officiel CamerPay
+    (https://camerpay.biz/docs/webhooks)."""
+
+    @override_settings(CAMERPAY_CALLBACK_SECRET='test_secret_key_123')
+    def test_signature_matches_official_test_vector(self):
+        valide = verifier_signature_webhook(
+            uuid='5add2319-f71b-4f2d-a4f4-97fe0d11c1d4', invoice_id='FACT-001',
+            status='completed', amount='10000.00',
+            signature='feab3068de64a00e07ecddc6990570a621eb3d725f9efb728b6a9ca2e455bc37',
+        )
+        self.assertTrue(valide)
+
+    @override_settings(CAMERPAY_CALLBACK_SECRET='test_secret_key_123')
+    def test_signature_rejects_tampered_amount(self):
+        valide = verifier_signature_webhook(
+            uuid='5add2319-f71b-4f2d-a4f4-97fe0d11c1d4', invoice_id='FACT-001',
+            status='completed', amount='99999.00',
+            signature='feab3068de64a00e07ecddc6990570a621eb3d725f9efb728b6a9ca2e455bc37',
+        )
+        self.assertFalse(valide)
+
+    def test_signature_rejected_when_secret_missing(self):
+        valide = verifier_signature_webhook(
+            uuid='x', invoice_id='y', status='completed', amount='1.00', signature='whatever',
+        )
+        self.assertFalse(valide)
+
+
+@override_settings(
+    REST_FRAMEWORK=NO_THROTTLE, CAMERPAY_CALLBACK_SECRET=CAMERPAY_TEST_SECRET, CAMERPAY_TOKEN='test-token-123',
+)
 class ClientApiTests(TestCase):
     def setUp(self):
         self.client_user = User.objects.create_user(
@@ -124,10 +166,12 @@ class ClientApiTests(TestCase):
         # Paiement confirmé via le webhook → la commande devient confirmée.
         tx = Transaction.objects.get(commande=order)
         tx.reference = 'EEUEZ-CONFIRM-1'; tx.save(update_fields=['reference'])
+        amount = f'{int(order.montant_total)}.00'
         web = Client()
-        ok = web.post('/api/monetbil/notify/', {
-            'payment_ref': 'EEUEZ-CONFIRM-1', 'status': 'success',
-            'amount': str(int(order.montant_total)),
+        ok = web.post('/api/camerpay/notify/', {
+            'uuid': 'txn-confirm-1', 'invoice_id': 'EEUEZ-CONFIRM-1', 'status': 'completed',
+            'amount': amount,
+            'signature': _camerpay_signature(CAMERPAY_TEST_SECRET, 'txn-confirm-1', 'EEUEZ-CONFIRM-1', 'completed', amount),
         })
         self.assertEqual(ok.status_code, 200)
         order.refresh_from_db()
@@ -172,7 +216,7 @@ class ClientApiTests(TestCase):
         # prix_client 2000 + 10% = 2200 ; + frais du plat 1000 = 3200
         self.assertEqual(int(float(res.json()['montant_total'])), 3200)
 
-    def test_monetbil_notify_marks_transaction_paid(self):
+    def test_camerpay_notify_marks_transaction_paid(self):
         commande = Commande.objects.create(
             client=self.client_user, restaurant=self.resto, statut='en_attente', montant_total=7100,
         )
@@ -181,20 +225,57 @@ class ClientApiTests(TestCase):
             mode_paiement='mtn_money', statut='en_attente', reference='EEUEZ-TEST-1',
         )
         web = Client()
-        url = '/api/monetbil/notify/'
-        # Montant incohérent → rejet, transaction inchangée
-        bad = web.post(url, {'payment_ref': 'EEUEZ-TEST-1', 'status': 'success', 'amount': '5000'})
+        url = '/api/camerpay/notify/'
+
+        def notify(amount, status='completed'):
+            return web.post(url, {
+                'uuid': 'txn-test-1', 'invoice_id': 'EEUEZ-TEST-1', 'status': status, 'amount': amount,
+                'signature': _camerpay_signature(CAMERPAY_TEST_SECRET, 'txn-test-1', 'EEUEZ-TEST-1', status, amount),
+            })
+
+        # Signature absente → rejet
+        rejected = web.post(url, {'uuid': 'txn-test-1', 'invoice_id': 'EEUEZ-TEST-1', 'status': 'completed', 'amount': '7100.00'})
+        self.assertEqual(rejected.status_code, 403)
+        # Montant incohérent (mais signature valide POUR ce montant) → rejet, transaction inchangée
+        bad = notify('5000.00')
         self.assertEqual(bad.status_code, 400)
         txn.refresh_from_db(); self.assertEqual(txn.statut, 'en_attente')
         # Bon montant + succès → transaction complète
-        ok = web.post(url, {'payment_ref': 'EEUEZ-TEST-1', 'status': 'success', 'amount': '7100'})
+        ok = notify('7100.00')
         self.assertEqual(ok.status_code, 200)
         txn.refresh_from_db(); self.assertEqual(txn.statut, 'complete')
         # Idempotence : une seconde notification ne casse rien
-        again = web.post(url, {'payment_ref': 'EEUEZ-TEST-1', 'status': 'success', 'amount': '7100'})
+        again = notify('7100.00')
         self.assertEqual(again.status_code, 200)
 
-    def test_monetbil_initiation_returns_payment_url(self):
+    def test_camerpay_notify_accepts_json_body_with_transaction_uuid(self):
+        """La doc CamerPay est incohérente entre un webhook form-urlencoded
+        (champ `uuid`) et JSON (champ `transaction_uuid`) selon les pages —
+        les deux formes doivent donc être acceptées sans favoriser l'une."""
+        import json as json_module
+        commande = Commande.objects.create(
+            client=self.client_user, restaurant=self.resto, statut='en_attente', montant_total=7100,
+        )
+        txn = Transaction.objects.create(
+            commande=commande, type='paiement_client', montant=7100,
+            mode_paiement='mtn_money', statut='en_attente', reference='EEUEZ-TEST-JSON-1',
+        )
+        signature = _camerpay_signature(CAMERPAY_TEST_SECRET, 'txn-json-1', 'EEUEZ-TEST-JSON-1', 'completed', '7100')
+        web = Client()
+        res = web.post(
+            '/api/camerpay/notify/',
+            data=json_module.dumps({
+                'transaction_uuid': 'txn-json-1', 'invoice_id': 'EEUEZ-TEST-JSON-1',
+                'status': 'completed', 'amount': 7100, 'signature': signature,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        txn.refresh_from_db()
+        self.assertEqual(txn.statut, 'complete')
+        self.assertEqual(txn.provider_reference, 'txn-json-1')
+
+    def test_camerpay_initiation_returns_payment_url(self):
         self._auth()
         commande = Commande.objects.create(
             client=self.client_user, restaurant=self.resto, statut='en_attente', montant_total=7100,
@@ -203,17 +284,20 @@ class ClientApiTests(TestCase):
             commande=commande, type='paiement_client', montant=7100,
             mode_paiement='mtn_money', statut='en_attente',
         )
-        fake = {'success': True, 'payment_url': 'https://api.monetbil.com/pay/v2.1/ABC123'}
+        fake = {
+            'success': True, 'transaction_uuid': 'txn-abc123', 'status': 'pending',
+            'pay_url': 'https://camerpay.biz/pay/txn-abc123', 'redirect_url': 'https://camerpay.biz/pay/txn-abc123',
+        }
 
         class FakeResp:
-            def raise_for_status(self): pass
+            ok = True
             def json(self): return fake
 
-        with patch('core.api_views.http_requests.post', return_value=FakeResp()):
+        with patch('core.camerpay.http_requests.post', return_value=FakeResp()):
             res = self.api.post(f'/api/client/commandes/{commande.id}/initier_paiement/',
                                 {'phone': '699000000'}, format='json')
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()['payment_url'], fake['payment_url'])
+        self.assertEqual(res.json()['payment_url'], fake['pay_url'])
 
     def test_retrait_decaissement_mode_manuel(self):
         from core.models import RetraitFonds
@@ -221,31 +305,32 @@ class ClientApiTests(TestCase):
         r = RetraitFonds.objects.create(
             restaurant=self.resto, montant=5000, mode_paiement='mtn_money', numero_compte='699000000',
         )
-        res = executer_retrait(r)  # MONETBIL_PAYOUT_ENABLED = False par défaut
+        res = executer_retrait(r)  # CAMERPAY_PAYOUT_ENABLED = False par défaut
         self.assertEqual(res.status, 'en_attente')
         r.refresh_from_db()
         self.assertEqual(r.statut, 'approuve')  # approuvé, à verser manuellement
         self.assertTrue(r.payout_reference)
 
-    def test_retrait_decaissement_monetbil_mocke(self):
+    def test_retrait_decaissement_camerpay_mocke(self):
         from core.models import RetraitFonds
-        from core.payout import executer_retrait, MonetbilPayoutProvider
+        from core.payout import executer_retrait
         r = RetraitFonds.objects.create(
             restaurant=self.resto, montant=5000, mode_paiement='orange_money', numero_compte='699111111',
         )
-        with override_settings(MONETBIL_PAYOUT_ENABLED=True):
-            with patch.object(MonetbilPayoutProvider, '_call_api',
-                              return_value={'status': 'SUCCESS', 'payoutId': 'PX-1'}):
+        with override_settings(CAMERPAY_PAYOUT_ENABLED=True):
+            with patch('core.payout.initier_payout_batch',
+                       return_value=({'batch_id': 'PX-1'}, None)):
                 res = executer_retrait(r)
-        self.assertEqual(res.status, 'paye')
+        # Un batch accepté est mis « en attente » (workflow d'approbation admin
+        # CamerPay), jamais marqué payé sur la seule base d'un succès HTTP.
+        self.assertEqual(res.status, 'en_attente')
         r.refresh_from_db()
-        self.assertEqual(r.statut, 'paye')
+        self.assertEqual(r.statut, 'approuve')
         self.assertEqual(r.payout_reference, 'PX-1')
-        self.assertIsNotNone(r.processed_at)
 
     def test_reservation_flow_complet(self):
         from core.models import Reservation
-        from core.api_views import _monetbil_notify_reservation
+        from core.api_views import _camerpay_notify_reservation
         self._auth()
         # 1. Création → en_attente, nom par défaut, prix du resto
         res = self.api.post('/api/client/reservations', {
@@ -258,8 +343,8 @@ class ClientApiTests(TestCase):
         self.assertEqual(self.api.post(f'/api/client/reservations/{rid}/payer', {}, format='json').status_code, 400)
         # 3. Restaurant accepte (avec prix)
         resa = Reservation.objects.get(pk=rid); resa.statut = 'acceptee'; resa.prix = 7000; resa.save()
-        # 4. Notification Monetbil succès → payee + code
-        _monetbil_notify_reservation(f'RESA-{rid}', 'success', '7000')
+        # 4. Notification CamerPay succès → payee + code
+        _camerpay_notify_reservation(f'RESA-{rid}', 'complete')
         resa.refresh_from_db()
         self.assertEqual(resa.statut, 'payee')
         self.assertTrue(resa.code)
