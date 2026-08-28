@@ -18,17 +18,21 @@ function NotificationRouter() {
   const router = useRouter();
   const { user } = useApp();
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener(resp => {
-      const data = resp.notification.request.content.data as Record<string, unknown>;
-      const type = data?.type;
-      if (user?.role === 'livreur') {
-        if (type === 'mission') router.push('/(livreur)');
-        else if (type === 'course' || type === 'paiement') router.push('/(livreur)/gains');
-      } else if (type === 'commande') {
-        router.push('/tracking');
-      }
-    });
-    return () => sub.remove();
+    if (Platform.OS === 'web') return;
+    let sub: { remove: () => void } | undefined;
+    try {
+      sub = Notifications.addNotificationResponseReceivedListener(resp => {
+        const data = resp.notification.request.content.data as Record<string, unknown>;
+        const type = data?.type;
+        if (user?.role === 'livreur') {
+          if (type === 'mission') router.push('/(livreur)');
+          else if (type === 'course' || type === 'paiement') router.push('/(livreur)/gains');
+        } else if (type === 'commande') {
+          router.push('/tracking');
+        }
+      });
+    } catch { /* push indisponible sur cet environnement */ }
+    return () => sub?.remove();
   }, [router, user?.role]);
   return null;
 }

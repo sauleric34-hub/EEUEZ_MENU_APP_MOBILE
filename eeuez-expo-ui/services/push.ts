@@ -13,14 +13,16 @@ import { apiPost } from './http';
 
 let dejaTente = false;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+} catch { /* push indisponible (web / environnement restreint) */ }
 
 export async function registerForPush(): Promise<void> {
   if (dejaTente) return;
