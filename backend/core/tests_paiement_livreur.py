@@ -1,12 +1,12 @@
 """Paiement des livreurs indépendants : part figée, grand livre, versement auto."""
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, Client
 from rest_framework.test import APIClient
 
 from core.models import RestaurantProfile, Commande, Livraison, Transaction
 from core.models_livraison import ParametrageLivraison, PaiementLivreur
-from core.delivery import finaliser_livraison, recuperer_commande, prendre_commande_libre
+from core.delivery import finaliser_livraison, marquer_livree_sans_code
 
 User = get_user_model()
 
@@ -89,6 +89,25 @@ class VersementAutoTest(BaseLivraison):
         # Le solde disponible retombe à 0 (gain 1050 − paiement 1050).
         self.livreur.refresh_from_db()
         self.assertEqual(int(self.livreur.solde_livreur), 0)
+
+    def test_validation_admin_d_une_course_sans_code_credite(self):
+        liv = self._commande_livrable(frais=1500)
+        marquer_livree_sans_code(liv, 'Client absent')
+        liv.refresh_from_db()
+        self.assertEqual(liv.statut, 'livree_sans_code')
+        self.livreur.refresh_from_db()
+        self.assertEqual(float(self.livreur.gain_total), 0.0)
+
+        admin = User.objects.create_user(username='adm', password='x', role='admin')
+        nav = Client(); nav.force_login(admin)
+        rep = nav.post(f'/admin-panel/deliveries/{liv.pk}/action/', {'action': 'valider_sans_code'})
+        self.assertEqual(rep.status_code, 302)
+
+        liv.refresh_from_db(); self.livreur.refresh_from_db()
+        self.assertEqual(liv.statut, 'livree')
+        self.assertEqual(liv.confirmee_par, 'admin')
+        self.assertEqual(liv.commande.statut, 'livree')
+        self.assertEqual(float(self.livreur.gain_total), 1050.0)
 
     def test_refus_de_paiement_reconstitue_le_solde(self):
         self.livreur.paiement_numero = '650000000'
