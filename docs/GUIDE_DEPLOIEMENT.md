@@ -378,6 +378,13 @@ Détails complets dans [`load_test/README.md`](../load_test/README.md).
 - [ ] `creer_compte_demo`
 - [ ] `generer_apercus`
 - [ ] `recalculer_notes` (+ cron quotidien)
+- [ ] `relancer_livraisons` en cron (toutes les 5 min) — remet au pool les
+      missions de livraison libre prises mais jamais démarrées
+- [ ] App mobile : `npx expo install` (nouvelles dépendances : `expo-notifications`,
+      `expo-keep-awake`, `react-native-qrcode-svg`) puis build EAS avec les
+      identifiants push (clé FCM Android + clé APNs iOS) pour les notifications
+- [ ] Régler la part livreur / le seuil de versement dans
+      `/admin-panel/livreurs/parametrage/` (défauts : 70 %, 5 000 F)
 
 **Montée en charge, par ordre de rentabilité :**
 - [ ] Phase 3 — poser `REDIS_URL`
