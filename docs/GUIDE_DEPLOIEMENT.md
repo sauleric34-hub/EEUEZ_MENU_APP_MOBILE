@@ -148,6 +148,13 @@ cPanel → **Cron Jobs** → ajouter, une fois par jour (ex. 04h00) :
 cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py recalculer_notes
 ```
 
+Et, toutes les 5 minutes, la relance des missions de livraison libre prises
+mais jamais démarrées (sinon la commande reste bloquée) :
+
+```
+*/5 * * * * cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py relancer_livraisons
+```
+
 *(adapte les chemins à ton hébergement — le chemin du `python` de l'app est
 visible dans « Setup Python App ».)*
 

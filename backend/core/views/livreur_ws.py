@@ -18,10 +18,9 @@ from django.views.decorators.http import require_POST
 from core.models import Livraison, AuditLog, Commande
 from core.delivery import (
     est_livreur_independant, prendre_commande_libre, PriseImpossible,
+    TransitionInvalide, demarrer_course, recuperer_commande,
+    marquer_livree_sans_code, abandonner_livraison, STATUTS_LIBERABLES,
 )
-
-# Statuts d'une commande prête à être livrée (offerte au pool libre).
-STATUTS_LIBERABLES = ['acceptee', 'en_preparation', 'prete']
 
 
 def livreur_required(view):
@@ -52,9 +51,9 @@ def dashboard(request):
     today = timezone.now().date()
     livrees_jour = qs.filter(statut='livree', delivered_at__date=today).count()
     gains_jour = 0
-    for liv in qs.filter(statut='livree', delivered_at__date=today).select_related('commande__restaurant'):
-        if liv.commande and liv.commande.restaurant:
-            gains_jour += float(liv.commande.restaurant.frais_livraison) * 0.7
+    for liv in qs.filter(statut='livree', delivered_at__date=today).select_related('commande'):
+        if liv.commande:
+            gains_jour += float(liv.commande.part_livreur or 0)
 
     # Missions libres : réservées aux livreurs INDÉPENDANTS. Ce sont les
     # commandes qu'un restaurant a confiées au pool et que personne n'a encore
@@ -81,6 +80,8 @@ def dashboard(request):
         'livrees_jour': livrees_jour,
         'gains_jour': int(gains_jour),
         'gain_total': int(livreur.gain_total),
+        'solde_livreur': int(livreur.solde_livreur),
+        'paiement_manquant': independant and not livreur.paiement_numero,
         'nb_total': livreur.nombre_livraisons,
         'resto_attache': livreur.restaurant_attache,
         'est_independant': independant,
@@ -190,25 +191,34 @@ def livraison_action(request, pk):
     commande = livraison.commande
     action = request.POST.get('action')
 
-    if action == 'demarrer' and livraison.statut == 'assignee':
-        # Départ vers le restaurant pour récupérer la commande
-        livraison.statut = 'en_collecte'
-        messages.success(request, f'Mission #{commande.pk} démarrée — direction le restaurant.')
-    elif action == 'collecte' and livraison.statut == 'en_collecte':
-        # Commande récupérée → en route vers le client (suivi visible dans l'app).
-        # On génère le code de confirmation que le client scannera/saisira à la réception.
-        livraison.statut = 'en_livraison'
-        if not livraison.code_confirmation:
-            livraison.code_confirmation = Livraison.generer_code()
-        commande.statut = 'en_livraison'
-        commande.save(update_fields=['statut', 'updated_at'])
-        messages.success(request, f'Commande #{commande.pk} récupérée — le client suit votre trajet. '
-                                  f'Faites-lui scanner votre QR ou saisir le code à l\'arrivée.')
-    else:
-        messages.error(request, 'Action impossible pour ce statut.')
+    try:
+        if action == 'demarrer':
+            demarrer_course(livraison)
+            messages.success(request, f'Mission #{commande.pk} démarrée — direction le restaurant.')
+        elif action == 'collecte':
+            recuperer_commande(livraison)
+            messages.success(request, f'Commande #{commande.pk} récupérée — le client suit votre trajet. '
+                                      f'Faites-lui scanner votre QR ou saisir le code à l\'arrivée.')
+        elif action == 'livrer_sans_code':
+            motif = (request.POST.get('motif') or '').strip()
+            if not motif:
+                messages.error(request, 'Indiquez un motif (client injoignable, refus de scanner…).')
+                return redirect('core:livreur_dashboard')
+            marquer_livree_sans_code(livraison, motif)
+            messages.warning(request, f'Course #{commande.pk} clôturée sans confirmation — '
+                                      f'paiement en attente de validation par l\'équipe.')
+        elif action == 'abandonner':
+            # abandonner_livraison supprime la Livraison et écrit son propre AuditLog.
+            abandonner_livraison(livraison, (request.POST.get('motif') or '').strip(), auto=False)
+            messages.info(request, f'Mission #{commande.pk} abandonnée et remise au pool.')
+            return redirect('core:livreur_dashboard')
+        else:
+            messages.error(request, 'Action inconnue.')
+            return redirect('core:livreur_dashboard')
+    except TransitionInvalide as e:
+        messages.error(request, str(e))
         return redirect('core:livreur_dashboard')
 
-    livraison.save()
     AuditLog.objects.create(
         user=request.user, action=f'LIVRAISON_{(action or "?").upper()}',
         model_name='Livraison', object_id=str(livraison.pk),

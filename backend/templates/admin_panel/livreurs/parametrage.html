@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Paramétrage livraison — Administration{% endblock %}
+{% block topbar_title %}Paramétrage de la livraison{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{% url 'core:admin_livreurs' %}">Livreurs indépendants</a>
+  <span class="breadcrumb-sep">/</span>
+  <span class="breadcrumb-current">Paramétrage</span>
+</div>
+
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title gradient-text">Paramétrage de la livraison libre</h1>
+    <p class="page-subtitle">Part du livreur, seuil de versement automatique et gestion des abandons. Aucune valeur n'est figée dans le code.</p>
+  </div>
+</div>
+
+<form method="post" class="glass-card anim-fade-up" style="padding:28px;max-width:820px;">
+  {% csrf_token %}
+
+  <h2 class="section-title">Rémunération</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Part du livreur (% des frais de livraison)</label>
+      <input type="number" name="pourcentage_livreur" min="0" max="100" value="{{ config.pourcentage_livreur }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Appliquée aux frais réellement payés par le client, figés sur la commande.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Seuil de versement automatique (FCFA)</label>
+      <input type="number" name="seuil_paiement_auto" min="0" value="{{ config.seuil_paiement_auto }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Dès que le solde d'un livreur l'atteint, un décaissement est initié vers son compte mobile money.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title" style="margin-top:28px;">Fiabilité</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Délai de relance (minutes)</label>
+      <input type="number" name="delai_relance_minutes" min="1" value="{{ config.delai_relance_minutes }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Une mission prise mais pas démarrée est remise au pool après ce délai (commande <code>relancer_livraisons</code> en cron).</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Abandons tolérés</label>
+      <input type="number" name="max_abandons" min="1" value="{{ config.max_abandons }}" class="input-field" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fenêtre des abandons (jours)</label>
+      <input type="number" name="fenetre_abandons_jours" min="1" value="{{ config.fenetre_abandons_jours }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Au-delà de « abandons tolérés » sur cette fenêtre, le livreur est désactivé automatiquement (réactivation manuelle par un admin).</p>
+    </div>
+  </div>
+
+  <div class="form-group" style="margin-top:24px;">
+    <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+      <input type="checkbox" name="actif" {% if config.actif %}checked{% endif %} style="width:18px;height:18px;">
+      Livraison libre active
+    </label>
+  </div>
+
+  <div class="btn-group" style="margin-top:26px;">
+    <button type="submit" class="btn btn-primary">Enregistrer</button>
+    <a href="{% url 'core:admin_livreurs' %}" class="btn btn-secondary">Retour</a>
+  </div>
+</form>
+{% endblock %}

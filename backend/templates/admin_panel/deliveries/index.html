@@ -6,7 +6,7 @@
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title">Livraisons</h1>
-    <p class="page-subtitle">Suivi en temps réel des commandes en cours de livraison</p>
+    <p class="page-subtitle">Suivi en temps réel et interventions sur les livraisons libres</p>
   </div>
 </div>
 
@@ -24,13 +24,51 @@
   <div class="kpi-card" style="--kpi-color:var(--accent-amber);">
     <div class="kpi-value status-live-amber" data-count="{{ stats.en_cours }}">0</div>
     <div class="kpi-label">En Cours</div>
-    <div class="kpi-sub">Temps réel</div>
   </div>
   <div class="kpi-card" style="--kpi-color:var(--accent-red);">
-    <div class="kpi-value" data-count="{{ stats.echecs }}">0</div>
-    <div class="kpi-label">Échecs</div>
+    <div class="kpi-value" data-count="{{ stats.a_valider }}">0</div>
+    <div class="kpi-label">À valider</div>
+    <div class="kpi-sub">Livrées sans code</div>
   </div>
 </div>
+
+<!-- À valider : courses livrées sans confirmation client -->
+{% if a_valider %}
+<div class="table-wrapper" style="margin-bottom:24px;border:1px solid var(--accent-amber);">
+  <div class="table-header">
+    <div>
+      <div class="chart-title">Courses à valider</div>
+      <div class="chart-subtitle">Le livreur a clôturé sans code client. Valider = créditer le livreur ET débloquer l'argent du restaurant.</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Commande</th><th>Restaurant</th><th>Livreur</th><th>Motif</th><th>Clôturée</th><th style="min-width:220px;">Actions</th></tr></thead>
+    <tbody>
+      {% for liv in a_valider %}
+      <tr>
+        <td class="td-primary">#{{ liv.commande.pk }}</td>
+        <td>{{ liv.commande.restaurant.nom|default:"—" }}</td>
+        <td>{{ liv.livreur.get_full_name|default:liv.livreur.username }}</td>
+        <td style="font-size:0.8rem;">{{ liv.motif_sans_code|default:"—" }}</td>
+        <td style="font-size:0.75rem;">{{ liv.delivered_at|date:"d/m H:i" }}</td>
+        <td>
+          <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+            <form method="post" action="{% url 'core:delivery_action' liv.pk %}" style="display:inline;">{% csrf_token %}
+              <input type="hidden" name="action" value="valider_sans_code">
+              <button class="btn btn-primary btn-sm">Valider</button>
+            </form>
+            <form method="post" action="{% url 'core:delivery_action' liv.pk %}" style="display:inline;" onsubmit="return confirm('Rejeter et remettre la commande au pool ?');">{% csrf_token %}
+              <input type="hidden" name="action" value="rejeter_sans_code">
+              <button class="btn btn-danger btn-sm">Rejeter</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <!-- Livraisons actives -->
 <div class="table-wrapper" style="margin-bottom:24px;">
@@ -43,7 +81,7 @@
   </div>
   {% if livraisons_actives %}
   <table>
-    <thead><tr><th>Commande</th><th>Restaurant</th><th>Client</th><th>Livreur</th><th>Statut</th><th>Heure</th><th>Position</th></tr></thead>
+    <thead><tr><th>Commande</th><th>Restaurant</th><th>Client</th><th>Livreur</th><th>Statut</th><th>Heure</th><th style="min-width:240px;">Intervention</th></tr></thead>
     <tbody>
       {% for liv in livraisons_actives %}
       <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
@@ -63,10 +101,24 @@
           {% else %}<span class="badge badge-gray">{{ liv.get_statut_display }}</span>{% endif %}
         </td>
         <td style="font-size:0.75rem;">{{ liv.created_at|date:"H:i" }}</td>
-        <td style="font-size:0.75rem;">
-          {% if liv.latitude_actuelle and liv.longitude_actuelle %}
-          <span style="color:var(--accent-green);">{{ liv.latitude_actuelle }}, {{ liv.longitude_actuelle }}</span>
-          {% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
+        <td>
+          <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+            <form method="post" action="{% url 'core:delivery_action' liv.pk %}" style="display:flex;gap:4px;">{% csrf_token %}
+              <input type="hidden" name="action" value="reassigner">
+              <select name="livreur" class="input-field" style="max-width:150px;padding:6px 8px;font-size:0.8rem;">
+                {% for l in livreurs_dispo %}<option value="{{ l.pk }}">{{ l.get_full_name|default:l.username }}</option>{% endfor %}
+              </select>
+              <button class="btn btn-secondary btn-sm">Réassigner</button>
+            </form>
+            <form method="post" action="{% url 'core:delivery_action' liv.pk %}" style="display:inline;" onsubmit="return confirm('Remettre au pool ?');">{% csrf_token %}
+              <input type="hidden" name="action" value="remettre_pool">
+              <button class="btn btn-secondary btn-sm">Pool</button>
+            </form>
+            <form method="post" action="{% url 'core:delivery_action' liv.pk %}" style="display:inline;" onsubmit="return confirm('Marquer en échec (commande annulée) ?');">{% csrf_token %}
+              <input type="hidden" name="action" value="marquer_echec">
+              <button class="btn btn-danger btn-sm">Échec</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -85,13 +137,14 @@
   <div class="table-header"><div class="chart-title">Livraisons Récentes</div></div>
   {% if livraisons_recentes %}
   <table>
-    <thead><tr><th>Commande</th><th>Restaurant</th><th>Livreur</th><th>Livré à</th></tr></thead>
+    <thead><tr><th>Commande</th><th>Restaurant</th><th>Livreur</th><th>Confirmée par</th><th>Livré à</th></tr></thead>
     <tbody>
       {% for liv in livraisons_recentes %}
       <tr>
         <td class="td-primary">#{{ liv.commande.pk }}</td>
         <td>{{ liv.commande.restaurant.nom|default:"—" }}</td>
         <td>{{ liv.livreur.get_full_name|default:"—" }}</td>
+        <td style="font-size:0.8rem;">{{ liv.confirmee_par|default:"—" }}</td>
         <td style="font-size:0.8rem;color:var(--accent-green);">{{ liv.delivered_at|date:"d/m/Y H:i"|default:"—" }}</td>
       </tr>
       {% endfor %}

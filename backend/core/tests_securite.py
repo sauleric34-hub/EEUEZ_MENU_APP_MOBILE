@@ -30,7 +30,8 @@ class MissionsLivreurTests(TestCase):
         )
         self.commande = Commande.objects.create(
             client=self.client_final, restaurant=self.restaurant,
-            montant_total=5000, statut='en_livraison',
+            montant_total=5000, frais_livraison=1000, part_livreur=700,
+            statut='en_livraison',
         )
         self.livraison = Livraison.objects.create(
             commande=self.commande, livreur=self.livreur, statut='en_collecte',
@@ -44,63 +45,87 @@ class MissionsLivreurTests(TestCase):
     def _url(self, action):
         return f'/api/livreur/missions/{self.commande.pk}/{action}/'
 
-    # ── Le cœur du problème ─────────────────────────────────
-    def test_un_client_ne_peut_pas_marquer_une_livraison_comme_livree(self):
-        """Sans ce contrôle, n'importe quel compte pouvait déclencher le
-        versement des gains — donc se payer sur des commandes d'autrui."""
-        reponse = self._api(self.client_final).put(self._url('delivered'))
-        self.assertIn(reponse.status_code, (403, 404))
-
-        self.livraison.refresh_from_db()
+    # ── Le cœur du problème : le livreur ne finalise jamais seul ──
+    def test_le_livreur_ne_peut_pas_finaliser_sans_le_client(self):
+        """La finalisation (crédit + déblocage argent resto) passe uniquement
+        par le client (code/QR) ou un admin. Aucune route livreur ne crédite."""
+        self.livraison.statut = 'en_livraison'
+        self.livraison.save(update_fields=['statut'])
+        # Il n'existe plus aucune action livreur « delivered ».
+        rep = self._api(self.livreur).post(self._url('delivered'))
+        self.assertIn(rep.status_code, (404, 405))
         self.livreur.refresh_from_db()
-        self.assertNotEqual(self.livraison.statut, 'livree')
         self.assertEqual(float(self.livreur.gain_total), 0.0)
 
-    def test_un_livreur_ne_peut_pas_encaisser_la_mission_d_un_autre(self):
-        reponse = self._api(self.autre_livreur).put(self._url('delivered'))
-        self.assertEqual(reponse.status_code, 404)
-
+    def test_un_livreur_ne_peut_pas_piloter_la_mission_d_un_autre(self):
+        rep = self._api(self.autre_livreur).post(self._url('recuperer'))
+        self.assertEqual(rep.status_code, 404)
         self.autre_livreur.refresh_from_db()
-        self.livraison.refresh_from_db()
         self.assertEqual(float(self.autre_livreur.gain_total), 0.0)
-        self.assertNotEqual(self.livraison.statut, 'livree')
 
     def test_un_client_ne_peut_pas_collecter(self):
-        reponse = self._api(self.client_final).put(self._url('collected'))
-        self.assertIn(reponse.status_code, (403, 404))
-        self.livraison.refresh_from_db()
-        self.assertNotEqual(self.livraison.statut, 'en_livraison')
+        rep = self._api(self.client_final).post(self._url('depart'))
+        self.assertIn(rep.status_code, (403, 404))
 
     def test_un_client_ne_peut_pas_s_attribuer_une_mission(self):
         libre = Commande.objects.create(
             client=self.client_final, restaurant=self.restaurant,
             montant_total=3000, statut='prete',
         )
-        reponse = self._api(self.client_final).post(
+        rep = self._api(self.client_final).post(
             f'/api/livreur/missions/{libre.pk}/accept/'
         )
-        self.assertEqual(reponse.status_code, 403)
+        self.assertEqual(rep.status_code, 403)
         self.assertFalse(Livraison.objects.filter(commande=libre).exists())
 
     def test_un_anonyme_est_refuse(self):
-        self.assertIn(APIClient().put(self._url('delivered')).status_code, (401, 403))
+        self.assertIn(APIClient().post(self._url('recuperer')).status_code, (401, 403))
 
-    # ── Le cas légitime doit continuer de marcher ───────────
-    def test_le_livreur_assigne_peut_livrer_et_est_credite(self):
-        reponse = self._api(self.livreur).put(self._url('delivered'))
-        self.assertEqual(reponse.status_code, 200)
+    def test_un_livreur_desactive_est_refuse(self):
+        self.livreur.is_active = False
+        self.livreur.save(update_fields=['is_active'])
+        rep = self._api(self.livreur).post(self._url('depart'))
+        self.assertIn(rep.status_code, (401, 403))
 
+    # ── Le parcours légitime ────────────────────────────────
+    def test_parcours_complet_avec_confirmation_client(self):
+        api = self._api(self.livreur)
+        self.livraison.statut = 'assignee'
+        self.livraison.save(update_fields=['statut'])
+
+        self.assertEqual(api.post(self._url('depart')).status_code, 200)
+        rep = api.post(self._url('recuperer'))
+        self.assertEqual(rep.status_code, 200)
+        code = rep.json()['code_confirmation']
+        self.assertTrue(code)
+
+        # Toujours rien crédité tant que le client n'a pas confirmé.
+        self.livreur.refresh_from_db()
+        self.assertEqual(float(self.livreur.gain_total), 0.0)
+
+        rep = self._api(self.client_final).post(
+            f'/api/client/commandes/{self.commande.pk}/confirmer_reception/', {'code': code},
+        )
+        self.assertEqual(rep.status_code, 200)
         self.livraison.refresh_from_db()
         self.livreur.refresh_from_db()
         self.assertEqual(self.livraison.statut, 'livree')
-        # 70 % des frais de livraison, cf. core/delivery.py
         self.assertAlmostEqual(float(self.livreur.gain_total), 700.0, places=2)
 
-    def test_le_livreur_assigne_peut_collecter(self):
-        reponse = self._api(self.livreur).put(self._url('collected'))
-        self.assertEqual(reponse.status_code, 200)
+    def test_livree_sans_code_ne_credite_pas(self):
+        self.livraison.statut = 'en_livraison'
+        self.livraison.save(update_fields=['statut'])
+        rep = self._api(self.livreur).post(
+            self._url('livrer_sans_code'), {'motif': 'Client injoignable'},
+        )
+        self.assertEqual(rep.status_code, 200)
         self.livraison.refresh_from_db()
-        self.assertEqual(self.livraison.statut, 'en_collecte')
+        self.livreur.refresh_from_db()
+        self.assertEqual(self.livraison.statut, 'livree_sans_code')
+        self.assertEqual(float(self.livreur.gain_total), 0.0)
+        # L'argent du restaurant reste gelé : la commande n'est pas « livree ».
+        self.commande.refresh_from_db()
+        self.assertNotEqual(self.commande.statut, 'livree')
 
 
 class UploadMediasTests(TestCase):

@@ -23,6 +23,7 @@ class EstLivreur(permissions.BasePermission):
         return bool(
             utilisateur
             and utilisateur.is_authenticated
+            and utilisateur.is_active
             and getattr(utilisateur, 'role', None) == 'livreur'
         )
 
@@ -37,5 +38,6 @@ class EstRestaurant(permissions.BasePermission):
         return bool(
             utilisateur
             and utilisateur.is_authenticated
+            and utilisateur.is_active
             and getattr(utilisateur, 'role', None) == 'restaurant'
         )

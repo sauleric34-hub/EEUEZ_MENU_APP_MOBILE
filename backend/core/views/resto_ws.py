@@ -27,6 +27,19 @@ from core.publications_utils import (
 )
 
 
+def _notifier_pool_nouvelle_mission(commande):
+    """Push aux livreurs indépendants actifs quand une commande entre au pool."""
+    try:
+        from core.push import envoyer_push, livreurs_independants_actifs
+        envoyer_push(
+            livreurs_independants_actifs(), 'Nouvelle mission disponible',
+            f'Une course à {int(commande.frais_livraison or 0)} F de frais vient de se libérer.',
+            data={'type': 'mission', 'commande_id': commande.pk},
+        )
+    except Exception:
+        pass
+
+
 def resto_required(view):
     """Réservé aux comptes restaurant possédant un profil."""
     @wraps(view)
@@ -175,6 +188,7 @@ def commande_action(request, pk):
             messages.error(request, 'Cette commande a déjà un livreur assigné.')
             return redirect('core:resto_commandes')
         commande.livraison_libre = True
+        _notifier_pool_nouvelle_mission(commande)
         messages.success(
             request,
             f'Commande #{commande.pk} confiée aux livreurs indépendants. '

@@ -19,6 +19,10 @@ class User(AbstractUser):
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     gain_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     nombre_livraisons = models.PositiveIntegerField(default=0)
+    # Compte mobile money du livreur — cible des décaissements automatiques.
+    # Tant qu'il est vide, aucun paiement n'est déclenché (les gains s'accumulent).
+    paiement_numero = models.CharField(max_length=50, blank=True)
+    paiement_operateur = models.CharField(max_length=20, blank=True)
     # Livreur rattaché à un restaurant (compte créé par ce restaurant)
     restaurant_attache = models.ForeignKey(
         'RestaurantProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='livreurs',
@@ -40,6 +44,23 @@ class User(AbstractUser):
     def niveau_fidelite(self):
         from .models_fidelite import ParametrageFidelite
         return ParametrageFidelite.get_solo().niveau(self.points_solde)
+
+    @property
+    def note_moyenne(self):
+        """Note moyenne du livreur. Réservé pour une future notation client —
+        renvoie 0.0 tant que le système de notation des livreurs n'existe pas.
+        Placeholder consommé par CommandeSerializer.get_suivi."""
+        return 0.0
+
+    @property
+    def solde_livreur(self):
+        """Gains cumulés du livreur − paiements déjà émis (non refusés)."""
+        from django.db.models import Sum
+        verses = (
+            self.paiements_livreur.exclude(statut='refuse')
+            .aggregate(t=Sum('montant'))['t'] or 0
+        )
+        return float(self.gain_total or 0) - float(verses)
 
 
 class RestaurantProfile(models.Model):
@@ -221,6 +242,12 @@ class Commande(models.Model):
     # Fidélité : points dépensés et réduction correspondante (en FCFA).
     points_utilises = models.PositiveIntegerField(default=0)
     reduction_points = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    # Frais de livraison payés par le client, FIGÉS à la création (le plus élevé
+    # parmi les plats commandés). On ne les recalcule jamais après coup.
+    frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=0)
+    # Part revenant au livreur sur ces frais, figée à la création selon
+    # ParametrageLivraison.pourcentage_livreur.
+    part_livreur = models.DecimalField(max_digits=10, decimal_places=0, default=0)
     adresse_livraison = models.CharField(max_length=300, blank=True)
     latitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -275,6 +302,7 @@ class Livraison(models.Model):
         ('en_collecte', 'En collecte'),
         ('en_livraison', 'En livraison'),
         ('livree', 'Livrée'),
+        ('livree_sans_code', 'Livrée — à valider'),
         ('echec', 'Échec'),
     ]
     commande = models.OneToOneField(Commande, on_delete=models.CASCADE, related_name='livraison')
@@ -287,6 +315,12 @@ class Livraison(models.Model):
     # Code que le client scanne (QR) ou saisit pour confirmer la réception.
     # Généré au départ vers le client ; sa validation termine la livraison.
     code_confirmation = models.CharField(max_length=8, blank=True)
+    # Qui a confirmé la réception : 'client' (code/QR), 'admin' (validation d'une
+    # livraison « sans code »), ou '' tant que non confirmée.
+    confirmee_par = models.CharField(max_length=10, blank=True)
+    # Motif saisi par le livreur quand il clôt une course « sans confirmation »
+    # (client injoignable / refuse de scanner). La course reste à valider.
+    motif_sans_code = models.CharField(max_length=250, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -454,6 +488,7 @@ class Transaction(models.Model):
         ('paiement_client', 'Paiement Client'),
         ('commission_eeuez', 'Commission plateforme'),
         ('reversement_restaurant', 'Reversement Restaurant'),
+        ('gain_livreur', 'Gain livreur'),
     ]
     STATUT_CHOICES = [
         ('en_attente', 'En attente'),
@@ -600,3 +635,8 @@ from .models_complements import (  # noqa: E402,F401
 
 # ─── Bannières promo (accueil client) ────────────────────────
 from .models_bannieres import Banniere  # noqa: E402,F401
+
+# ─── Livraison libre (paramétrage, paiements livreurs, push) ──
+from .models_livraison import (  # noqa: E402,F401
+    ParametrageLivraison, PaiementLivreur, AbandonLivraison, AppareilPush,
+)

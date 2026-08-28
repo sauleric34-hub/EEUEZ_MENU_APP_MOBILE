@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Paiements livreurs — Menu Admin{% endblock %}
+{% block topbar_title %}Paiements livreurs{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:admin_livreurs' %}">Livreurs indépendants</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Paiements</span>
+</div>
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Paiements livreurs</h1>
+    <p class="page-subtitle">Versements automatiques au seuil + relances manuelles</p>
+  </div>
+</div>
+
+<!-- Livreurs avec un solde à verser -->
+<div class="table-wrapper" style="margin-bottom:24px;">
+  <div class="table-header"><div class="chart-title">Soldes en attente de versement</div></div>
+  {% if a_verser %}
+  <table>
+    <thead><tr><th>Livreur</th><th>Compte</th><th>Solde</th><th style="min-width:160px;">Action</th></tr></thead>
+    <tbody>
+      {% for l in a_verser %}
+      <tr>
+        <td class="td-primary">{{ l.get_full_name|default:l.username }}</td>
+        <td style="font-size:0.82rem;">{{ l.paiement_numero }} · {{ l.paiement_operateur|default:"—" }}</td>
+        <td style="font-weight:700;color:var(--accent-green);">{{ l.solde }} F</td>
+        <td>
+          <form method="post" action="{% url 'core:admin_livreur_paiement_action' 0 %}" style="display:inline;">{% csrf_token %}
+            <input type="hidden" name="action" value="declencher">
+            <input type="hidden" name="livreur" value="{{ l.pk }}">
+            <button class="btn btn-primary btn-sm">Verser maintenant</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state"><p>Aucun solde en attente.</p></div>
+  {% endif %}
+</div>
+
+<!-- Historique des paiements -->
+<div class="table-wrapper">
+  <div class="table-header"><div class="chart-title">Historique</div></div>
+  <table>
+    <thead><tr><th>#</th><th>Livreur</th><th>Montant</th><th>Compte</th><th>Statut</th><th>Créé</th><th style="min-width:200px;">Actions</th></tr></thead>
+    <tbody>
+      {% for p in paiements %}
+      <tr>
+        <td>#{{ p.pk }}</td>
+        <td class="td-primary">{{ p.livreur.get_full_name|default:p.livreur.username }}</td>
+        <td style="font-weight:700;color:var(--accent-green);">{{ p.montant }} F</td>
+        <td style="font-size:0.8rem;">{{ p.numero }} · {{ p.get_operateur_display }}</td>
+        <td>
+          <span class="badge badge-{{ p.statut }}">{{ p.get_statut_display }}</span>
+          {% if p.payout_message %}<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">{{ p.payout_message }}</div>{% endif %}
+        </td>
+        <td style="font-size:0.8rem;">{{ p.created_at|date:'d M · H:i' }}</td>
+        <td>
+          {% if p.statut == 'approuve' or p.statut == 'en_attente' %}
+          <div class="btn-group" style="gap:6px;">
+            <form method="post" action="{% url 'core:admin_livreur_paiement_action' p.pk %}" style="display:inline;">{% csrf_token %}
+              <input type="hidden" name="action" value="marquer_paye">
+              <button class="btn btn-primary btn-sm">Marquer payé</button>
+            </form>
+            <form method="post" action="{% url 'core:admin_livreur_paiement_action' p.pk %}" style="display:inline;" onsubmit="return confirm('Refuser ce paiement ? Le solde du livreur est reconstitué.');">{% csrf_token %}
+              <input type="hidden" name="action" value="refuser">
+              <button class="btn btn-danger btn-sm">Refuser</button>
+            </form>
+          </div>
+          {% else %}
+          <span style="color:var(--text-muted);font-size:0.82rem;">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;">Aucun paiement pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

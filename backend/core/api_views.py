@@ -15,14 +15,17 @@ import uuid
 import requests as http_requests
 
 from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis, Transaction, Reservation
+from .models_livraison import ParametrageLivraison
 from .serializers import (
-    UserSerializer, RestaurantProfileSerializer, PlatSerializer, 
-    CommandeSerializer, LivraisonSerializer
+    UserSerializer, RestaurantProfileSerializer, PlatSerializer,
+    CommandeSerializer, LivraisonSerializer, LivraisonCourseSerializer,
+    MissionPoolSerializer,
 )
 from .utils import geo
 from .delivery import (
-    finaliser_livraison, prendre_commande_libre, PriseImpossible,
-    est_livreur_independant,
+    finaliser_livraison, prendre_commande_libre, PriseImpossible, TransitionInvalide,
+    est_livreur_independant, demarrer_course, recuperer_commande,
+    marquer_livree_sans_code, abandonner_livraison, STATUTS_LIBERABLES, STATUTS_ACTIFS,
 )
 from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
 from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
@@ -111,6 +114,47 @@ class ClientProfileView(views.APIView):
             user.avatar = request.FILES['avatar']
         user.save()
         return Response(UserSerializer(user).data)
+
+
+class LivreurProfileView(views.APIView):
+    """Profil livreur : identité + compte mobile money cible des versements."""
+    permission_classes = [EstLivreur]
+
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        user = request.user
+        for field in ('first_name', 'last_name', 'telephone'):
+            if field in request.data:
+                setattr(user, field, request.data.get(field) or '')
+        if 'paiement_numero' in request.data:
+            user.paiement_numero = (request.data.get('paiement_numero') or '').strip()
+        if 'paiement_operateur' in request.data:
+            op = (request.data.get('paiement_operateur') or '').strip()
+            user.paiement_operateur = op if op in ('mtn_money', 'orange_money') else ''
+        user.save()
+        return Response(UserSerializer(user).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def push_register(request):
+    """Enregistre (ou rafraîchit) le jeton de notification push Expo d'un
+    appareil. Un même jeton n'appartient qu'à un utilisateur à la fois."""
+    from .models_livraison import AppareilPush
+
+    token = (request.data.get('token') or '').strip()
+    if not token:
+        return Response({'error': 'token manquant'}, status=400)
+    plateforme = (request.data.get('platform') or '').strip().lower()[:10]
+
+    AppareilPush.objects.filter(expo_token=token).exclude(user=request.user).delete()
+    AppareilPush.objects.update_or_create(
+        expo_token=token,
+        defaults={'user': request.user, 'plateforme': plateforme},
+    )
+    return Response({'ok': True})
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
@@ -227,6 +271,10 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         # Frais de livraison = le plus élevé parmi les plats commandés (une seule livraison).
         # Repli sur le frais du restaurant si aucun plat n'en définit.
         frais_liv = max(frais_plats) if frais_plats else float(restaurant.frais_livraison)
+        # On FIGE les frais et la part livreur sur la commande : ni le restaurant
+        # ni la plateforme ne peuvent les faire varier après coup.
+        commande.frais_livraison = int(round(frais_liv))
+        commande.part_livreur = ParametrageLivraison.get_solo().part_livreur(frais_liv)
         # Le client paie les plats majorés + la livraison
         commande.montant_total = sous_total_client + frais_liv
         # Le restaurant ne perçoit que ses prix de base ; la majoration revient à la plateforme
@@ -261,7 +309,10 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             statut='complete' if mode_paiement == 'especes' else 'en_attente',
         )
 
-        return Response(CommandeSerializer(commande).data, status=status.HTTP_201_CREATED)
+        return Response(
+            CommandeSerializer(commande, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=['post'])
     def annuler(self, request, pk=None):
@@ -347,8 +398,8 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        finaliser_livraison(livraison)
-        return Response(CommandeSerializer(commande).data)
+        finaliser_livraison(livraison, par='client')
+        return Response(CommandeSerializer(commande, context={'request': request}).data)
 
 # --- RESTAURANT ---
 class RestaurantWorkspaceView(views.APIView):
@@ -383,79 +434,171 @@ class RestaurantCommandeViewSet(viewsets.ModelViewSet):
             return Response({"error": "Commande ne peut pas être acceptée"}, status=400)
         commande.statut = 'acceptee'
         commande.save()
-        return Response(CommandeSerializer(commande).data)
-        
+        return Response(CommandeSerializer(commande, context={'request': request}).data)
+
     @action(detail=True, methods=['put'])
     def refuse(self, request, pk=None):
         commande = self.get_object()
         commande.statut = 'refusee'
         commande.notes = request.data.get('raison', commande.notes)
         commande.save()
-        return Response(CommandeSerializer(commande).data)
+        return Response(CommandeSerializer(commande, context={'request': request}).data)
 
 # --- LIVREUR ---
 class LivreurMissionViewSet(viewsets.ViewSet):
-    # EstLivreur et non IsAuthenticated : ces actions déplacent de l'argent
-    # (finaliser_livraison crédite le livreur et débloque la part du
-    # restaurant). Un simple compte client ne doit pas y accéder.
+    # EstLivreur (et non IsAuthenticated) : ces actions pilotent une livraison
+    # dont dépend le versement des gains. Un compte client ne doit pas y accéder.
+    # La finalisation (crédit livreur + déblocage argent resto) n'est JAMAIS
+    # déclenchée par le livreur seul : elle passe par le client (code/QR) ou par
+    # un admin (validation d'une course « sans code »).
     permission_classes = [EstLivreur]
 
-    @staticmethod
-    def _mission_du_livreur(pk, utilisateur):
+    def _mission_du_livreur(self, pk):
         """Récupère la livraison SI elle appartient bien à ce livreur.
 
         Le filtre sur le livreur est le cœur du contrôle : sans lui, un livreur
-        authentifié pourrait piloter — et encaisser — les missions des autres.
-        """
-        return Livraison.objects.filter(
-            commande_id=pk, livreur=utilisateur,
-        ).first()
+        authentifié pourrait piloter les missions des autres."""
+        return (
+            Livraison.objects
+            .select_related('commande', 'commande__restaurant', 'commande__client')
+            .filter(commande_id=pk, livreur=self.request.user)
+            .first()
+        )
+
+    def _audit(self, action, livraison, extra=None):
+        from .models import AuditLog
+        AuditLog.objects.create(
+            user=self.request.user, action=action,
+            model_name='Livraison', object_id=str(livraison.pk),
+            description={'commande': livraison.commande_id, **(extra or {})},
+            ip_address=self.request.META.get('REMOTE_ADDR'),
+        )
+
+    def _commande_data(self, commande):
+        return CommandeSerializer(commande, context={'request': self.request}).data
 
     def list(self, request):
-        # Missions LIBRES uniquement : commandes confiées par les restaurants au
-        # pool des livreurs indépendants, et pas encore prises. Un livreur
-        # attaché à un restaurant reçoit ses missions par son restaurant, pas ici.
+        """Pool des missions libres, AVANT acceptation — données client
+        anonymisées (cf. MissionPoolSerializer). Un livreur attaché à un
+        restaurant reçoit ses missions par son restaurant, pas ici."""
         if not est_livreur_independant(request.user):
             return Response([])
         commandes = Commande.objects.filter(
             livraison_libre=True,
             livraison__isnull=True,
             paiement_confirme=True,
-            statut__in=['acceptee', 'en_preparation', 'prete'],
-        ).order_by('created_at')
-        return Response(CommandeSerializer(commandes, many=True).data)
+            statut__in=STATUTS_LIBERABLES,
+        ).select_related('restaurant').prefetch_related('lignes').order_by('created_at')
+        return Response(MissionPoolSerializer(commandes, many=True).data)
+
+    @action(detail=False, methods=['get'], url_path='mes_courses')
+    def mes_courses(self, request):
+        """Missions en cours du livreur — contact client visible (mission
+        attribuée)."""
+        livraisons = (
+            Livraison.objects
+            .filter(livreur=request.user, statut__in=STATUTS_ACTIFS)
+            .select_related('commande', 'commande__restaurant', 'commande__client')
+            .order_by('created_at')
+        )
+        return Response([
+            {**self._commande_data(l.commande),
+             'livraison': LivraisonCourseSerializer(l).data}
+            for l in livraisons if l.commande
+        ])
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
-        # Prise sûre face à la concurrence (verrou + re-vérification) : deux
-        # livreurs ne peuvent pas obtenir la même mission.
+        # Prise sûre face à la concurrence (verrou + re-vérification).
         try:
             livraison = prendre_commande_libre(pk, request.user)
         except PriseImpossible as e:
             return Response({"error": str(e)}, status=400)
-        return Response(LivraisonSerializer(livraison).data)
-        
-    @action(detail=True, methods=['put'])
-    def collected(self, request, pk=None):
-        livraison = self._mission_du_livreur(pk, request.user)
+        self._audit('MISSION_LIBRE_PRISE', livraison)
+        return Response(self._commande_data(livraison.commande))
+
+    @action(detail=True, methods=['post'])
+    def depart(self, request, pk=None):
+        livraison = self._mission_du_livreur(pk)
         if not livraison:
             return Response({"error": "Livraison introuvable"}, status=404)
+        try:
+            demarrer_course(livraison)
+        except TransitionInvalide as e:
+            return Response({"error": str(e)}, status=400)
+        self._audit('LIVRAISON_DEPART', livraison)
+        return Response(self._commande_data(livraison.commande))
 
-        livraison.statut = 'en_collecte'
-        livraison.save(update_fields=['statut'])
-        livraison.commande.statut = 'en_livraison'
-        livraison.commande.save(update_fields=['statut', 'updated_at'])
-        return Response(LivraisonSerializer(livraison).data)
-
-    @action(detail=True, methods=['put'])
-    def delivered(self, request, pk=None):
-        livraison = self._mission_du_livreur(pk, request.user)
+    @action(detail=True, methods=['post'])
+    def recuperer(self, request, pk=None):
+        livraison = self._mission_du_livreur(pk)
         if not livraison:
             return Response({"error": "Livraison introuvable"}, status=404)
+        try:
+            recuperer_commande(livraison)
+        except TransitionInvalide as e:
+            return Response({"error": str(e)}, status=400)
+        self._audit('LIVRAISON_RECUPEREE', livraison)
+        _notifier_client_en_route(livraison)
+        data = self._commande_data(livraison.commande)
+        data['code_confirmation'] = livraison.code_confirmation
+        return Response(data)
 
-        # Finalise via le helper partagé (crédite le livreur, débloque l'argent resto)
-        finaliser_livraison(livraison)
-        return Response(LivraisonSerializer(livraison).data)
+    @action(detail=True, methods=['post'], url_path='livrer_sans_code')
+    def livrer_sans_code(self, request, pk=None):
+        """Filet de sécurité : client injoignable / refuse de scanner. La course
+        est close mais RIEN n'est crédité tant qu'un admin n'a pas validé."""
+        livraison = self._mission_du_livreur(pk)
+        if not livraison:
+            return Response({"error": "Livraison introuvable"}, status=404)
+        motif = (request.data.get('motif') or '').strip()
+        if not motif:
+            return Response({"error": "Un motif est obligatoire."}, status=400)
+        try:
+            marquer_livree_sans_code(livraison, motif)
+        except TransitionInvalide as e:
+            return Response({"error": str(e)}, status=400)
+        return Response(self._commande_data(livraison.commande))
+
+    @action(detail=True, methods=['post'])
+    def abandonner(self, request, pk=None):
+        livraison = self._mission_du_livreur(pk)
+        if not livraison:
+            return Response({"error": "Livraison introuvable"}, status=404)
+        motif = (request.data.get('motif') or '').strip()
+        abandonner_livraison(livraison, motif, auto=False)
+        return Response({"ok": True})
+
+    @action(detail=True, methods=['post'])
+    def position(self, request, pk=None):
+        livraison = self._mission_du_livreur(pk)
+        if not livraison:
+            return Response({"error": "Livraison introuvable"}, status=404)
+        try:
+            lat = float(request.data.get('lat'))
+            lon = float(request.data.get('lon'))
+        except (TypeError, ValueError):
+            return Response({"error": "Coordonnées invalides"}, status=400)
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return Response({"error": "Coordonnées hors limites"}, status=400)
+        livraison.latitude_actuelle = lat
+        livraison.longitude_actuelle = lon
+        livraison.save(update_fields=['latitude_actuelle', 'longitude_actuelle'])
+        return Response({"ok": True})
+
+
+def _notifier_client_en_route(livraison):
+    try:
+        from .push import envoyer_push
+    except Exception:
+        return
+    c = livraison.commande
+    if c and c.client_id:
+        envoyer_push(
+            [c.client], 'Votre livreur est en route',
+            'Suivez sa progression en direct dans l\'app.',
+            data={'type': 'commande', 'commande_id': c.pk},
+        )
 
 # --- MAP ---
 @api_view(['GET'])
@@ -625,6 +768,14 @@ def camerpay_notify(request):
             if commande and not commande.paiement_confirme:
                 commande.paiement_confirme = True
                 commande.save(update_fields=['paiement_confirme', 'updated_at'])
+                # Si le restaurant l'avait déjà confiée au pool, elle n'était
+                # pas notifiable tant qu'impayée : on prévient maintenant.
+                if commande.livraison_libre and not hasattr(commande, 'livraison'):
+                    try:
+                        from .views.resto_ws import _notifier_pool_nouvelle_mission
+                        _notifier_pool_nouvelle_mission(commande)
+                    except Exception:
+                        pass
         elif statut_interne in ('echouee', 'remboursee'):
             txn.statut = statut_interne
             txn.save(update_fields=['statut', 'provider_reference'])
