@@ -18,9 +18,11 @@ class LandingTests(TestCase):
             is_verified=verifie, is_open=ouvert,
         )
 
-    def _plat(self, resto, nom, prix=1000, visible=True, dispo=True):
+    def _plat(self, resto, nom, prix=1000, visible=True, dispo=True, image='plats/demo.jpg'):
+        # La vitrine d'accueil n'affiche que les plats illustrés
+        # (landing_view : .exclude(image='')) — on en pose une par défaut.
         return Plat.objects.create(
-            restaurant=resto, nom=nom, prix=prix,
+            restaurant=resto, nom=nom, prix=prix, image=image,
             is_visible=visible, is_available=dispo,
         )
 
