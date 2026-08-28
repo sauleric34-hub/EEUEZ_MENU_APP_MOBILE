@@ -24,9 +24,11 @@ export default function TrackingScreen() {
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const etaLabel = TRACK_ETA[trackStep] ?? TRACK_ETA[0];
   const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
   const suivi = activeOrder?.suivi ?? null;
+  const etaLabel = enLivraison && suivi?.eta_minutes
+    ? `Arrive dans ~${suivi.eta_minutes} min`
+    : (TRACK_ETA[trackStep] ?? TRACK_ETA[0]);
   // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
   const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
 

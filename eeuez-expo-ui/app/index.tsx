@@ -17,8 +17,15 @@ import { AccentButton, PressableScale, displayFont, bodyFont } from '../componen
 
 import { DEMO } from '../constants/demo';
 
+/** Écran d'accueil après connexion selon le rôle du compte. */
+function homeFor(role?: string): '/(client)' | '/(livreur)' | null {
+  if (role === 'livreur') return '/(livreur)';
+  if (role === 'client' || role === undefined) return '/(client)';
+  return null; // restaurant / admin : pas d'app mobile dédiée
+}
+
 export default function SplashScreen() {
-  const { colors, user, authReady, signIn } = useApp();
+  const { colors, user, authReady, signIn, signOut } = useApp();
   const router = useRouter();
 
   const [email, setEmail] = useState(DEMO.email);
@@ -64,10 +71,13 @@ export default function SplashScreen() {
     ).start();
   }, [float]);
 
-  // Session déjà active → on entre directement
+  // Session déjà active → on entre directement, selon le rôle
   useEffect(() => {
-    if (authReady && user) router.replace('/(client)');
-  }, [authReady, user, router]);
+    if (!authReady || !user) return;
+    const dest = homeFor(user.role);
+    if (dest) router.replace(dest);
+    else { setError('Ce compte n\'est pas pris en charge par l\'application mobile.'); signOut(); }
+  }, [authReady, user, router, signOut]);
 
   const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 
@@ -78,8 +88,10 @@ export default function SplashScreen() {
     setBusy(true);
     setError(null);
     try {
-      await signIn(email.trim(), password);
-      router.replace('/(client)');
+      const u = await signIn(email.trim(), password);
+      const dest = homeFor(u?.role);
+      if (dest) router.replace(dest);
+      else setError('Ce compte n\'est pas pris en charge par l\'application mobile.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec de la connexion');
       triggerShake();

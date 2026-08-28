@@ -15,6 +15,7 @@ import {
 import * as authService from '../services/auth';
 import * as menu from '../services/menu';
 import { setAuthExpiredHandler } from '../services/http';
+import { registerForPush, resetPushRegistration } from '../services/push';
 import { useToast } from './ToastContext';
 import * as addr from '../services/addresses';
 import * as publications from '../services/publications';
@@ -83,7 +84,7 @@ interface AppContextValue {
   authReady: boolean;
   /** Compte de démonstration : navigation libre, actions engageantes bloquées. */
   estDemo: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<UserDTO>;
   register: (p: authService.RegisterParams) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (p: authService.ProfileUpdate) => Promise<void>;
@@ -373,11 +374,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await reloadRecommendations();
       await checkBannieres();
       if (stored) {
-        await loadUserState();
-        await reloadOrders();
-        await reloadAddresses();
-        // Les points ont pu évoluer côté serveur depuis la dernière session.
-        await refreshUser();
+        registerForPush();
+        if (stored.role === 'client') {
+          await loadUserState();
+          await reloadOrders();
+          await reloadAddresses();
+          // Les points ont pu évoluer côté serveur depuis la dernière session.
+          await refreshUser();
+        }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,9 +391,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const u = await authService.login(email, password);
     setUser(u);
-    await loadUserState();
-    await reloadOrders();
-    await reloadAddresses();
+    registerForPush();
+    if (u.role === 'client') {
+      await loadUserState();
+      await reloadOrders();
+      await reloadAddresses();
+    }
+    return u;
   };
   const register = async (p: authService.RegisterParams) => {
     const u = await authService.registerClient(p);
@@ -416,6 +424,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const signOut = async () => {
     await authService.logout();
+    resetPushRegistration();
     setUser(null);
     setLikes({});
     setFollows({});

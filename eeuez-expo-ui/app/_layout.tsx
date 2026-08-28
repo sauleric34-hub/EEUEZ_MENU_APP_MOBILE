@@ -1,7 +1,9 @@
-import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { AppProvider, useApp } from '../context/AppContext';
 import { ToastProvider } from '../context/ToastContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -9,6 +11,26 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 function ThemedStatusBar() {
   const { mode } = useApp();
   return <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />;
+}
+
+/** Ouvre le bon écran quand l'utilisateur tape une notification push. */
+function NotificationRouter() {
+  const router = useRouter();
+  const { user } = useApp();
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(resp => {
+      const data = resp.notification.request.content.data as Record<string, unknown>;
+      const type = data?.type;
+      if (user?.role === 'livreur') {
+        if (type === 'mission') router.push('/(livreur)');
+        else if (type === 'course' || type === 'paiement') router.push('/(livreur)/gains');
+      } else if (type === 'commande') {
+        router.push('/tracking');
+      }
+    });
+    return () => sub.remove();
+  }, [router, user?.role]);
+  return null;
 }
 
 // Sur navigateur, l'app garde son design mobile mais dans une colonne
@@ -33,9 +55,12 @@ export default function RootLayout() {
       <ToastProvider>
       <AppProvider>
         <ThemedStatusBar />
+        <NotificationRouter />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" options={{ animation: 'fade' }} />
           <Stack.Screen name="(client)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(livreur)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="mission/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="dish/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="resto/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="chat/[id]" options={{ animation: 'slide_from_right' }} />
