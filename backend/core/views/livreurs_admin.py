@@ -31,8 +31,8 @@ def livreurs_view(request):
         User.objects.filter(role='livreur', restaurant_attache__isnull=True)
         .annotate(
             nb_en_cours=Count(
-                'livraison',
-                filter=Q(livraison__statut__in=['assignee', 'en_collecte', 'en_livraison']),
+                'livraisons',
+                filter=Q(livraisons__statut__in=['assignee', 'en_collecte', 'en_livraison']),
             ),
             nb_abandons=Count('abandons_livraison'),
         )
