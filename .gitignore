@@ -79,3 +79,5 @@ desktop.ini
 # .vscode/ laissé versionnable (config partagée) ;
 # décommenter la ligne suivante pour l'ignorer :
 # .vscode/
+node_modules
+node_modules
