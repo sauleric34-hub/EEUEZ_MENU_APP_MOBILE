@@ -385,6 +385,14 @@ Détails complets dans [`load_test/README.md`](../load_test/README.md).
       identifiants push (clé FCM Android + clé APNs iOS) pour les notifications
 - [ ] Régler la part livreur / le seuil de versement dans
       `/admin-panel/livreurs/parametrage/` (défauts : 70 %, 5 000 F)
+- [ ] Barème de livraison par distance : chaque restaurant doit enregistrer
+      sa **position GPS** puis ses tranches de prix dans `/admin-panel/resto/profil/`
+      (« Barème de livraison par distance »). Sans barème, le « frais de repli »
+      s'applique. Au-delà de la dernière tranche, le client est hors zone.
+      Côté admin : coefficient routier global (défaut 1,3) sur
+      `/admin-panel/livreurs/parametrage/` ; suivi des restos non configurés
+      dans la liste `/admin-panel/restaurants/` (badge) ; édition de dépannage
+      du barème d'un resto depuis sa fiche.
 
 **Montée en charge, par ordre de rentabilité :**
 - [ ] Phase 3 — poser `REDIS_URL`

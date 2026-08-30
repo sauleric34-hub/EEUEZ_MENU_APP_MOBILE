@@ -22,6 +22,7 @@ urlpatterns = [
     path('restaurants/<int:pk>/toggle/', restaurants.restaurant_toggle, name='restaurant_toggle'),
     path('restaurants/<int:pk>/verify/', restaurants.restaurant_verify, name='restaurant_verify'),
     path('restaurants/<int:pk>/commission/', restaurants.restaurant_commission, name='restaurant_commission'),
+    path('restaurants/<int:pk>/bareme-livraison/', restaurants.restaurant_bareme, name='restaurant_bareme'),
 
     # Users
     path('users/', users.user_list, name='user_list'),

@@ -117,6 +117,59 @@
   </div>
 </div>
 
+<!-- Zone de livraison -->
+<div class="glass-card" style="padding:24px;margin-top:20px;">
+  <div class="section-title">Zone de livraison</div>
+
+  <div class="kpi-grid" style="margin:12px 0 20px;">
+    <div class="kpi-card" style="--kpi-color:var(--accent-blue);">
+      <div class="kpi-value" style="font-size:1rem;">
+        {% if restaurant.latitude %}{{ restaurant.latitude }}, {{ restaurant.longitude }}{% else %}<span style="color:var(--accent-red);">Non renseignée</span>{% endif %}
+      </div>
+      <div class="kpi-label">Position GPS</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--accent-amber);">
+      <div class="kpi-value" data-count="{{ restaurant.frais_livraison|floatformat:0 }}" data-suffix=" F">0</div>
+      <div class="kpi-label">Frais de repli</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--accent-green);">
+      <div class="kpi-value" data-count="{{ paliers.count }}">0</div>
+      <div class="kpi-label">Tranches du barème</div>
+    </div>
+  </div>
+
+  {% if not restaurant.latitude %}
+  <p style="font-size:0.8rem;color:var(--accent-red);margin-bottom:14px;">
+    ⚠️ Sans position GPS, la distance ne peut pas être calculée : c'est le frais de repli qui s'applique, quel que soit le barème.
+  </p>
+  {% endif %}
+
+  <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+    « jusqu'à X km → Y F ». Au-delà de la dernière tranche, le client est <strong>hors zone</strong> et ne peut pas commander.
+    Laisser vide = seul le frais de repli s'applique. Édition normalement faite par le restaurant depuis son espace.
+  </p>
+
+  <form method="post" action="{% url 'core:restaurant_bareme' restaurant.pk %}" id="baremeForm">
+    {% csrf_token %}
+    <div id="baremeRows" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+      {% for p in paliers %}
+      <div class="bareme-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:0.85rem;color:var(--text-muted);">jusqu'à</span>
+        <input type="number" name="palier_km" class="input-field" value="{{ p.jusqu_a_km }}" min="0.1" step="0.1" style="width:110px;">
+        <span style="font-size:0.85rem;color:var(--text-muted);">km &nbsp;→&nbsp;</span>
+        <input type="number" name="palier_prix" class="input-field" value="{{ p.prix }}" min="0" step="50" style="width:130px;">
+        <span style="font-size:0.85rem;color:var(--text-muted);">F</span>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.bareme-row').remove()">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="btn-group">
+      <button type="button" class="btn btn-secondary btn-sm" id="baremeAddBtn">+ Ajouter une tranche</button>
+      <button type="submit" class="btn btn-primary btn-sm">Enregistrer le barème</button>
+    </div>
+  </form>
+</div>
+
 <!-- Derniers avis -->
 {% if avis %}
 <div class="glass-card" style="padding:24px;margin-top:20px;">
@@ -154,4 +207,23 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('baremeAddBtn')?.addEventListener('click', function () {
+  var rows = document.getElementById('baremeRows');
+  var row = document.createElement('div');
+  row.className = 'bareme-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  row.innerHTML =
+    '<span style="font-size:0.85rem;color:var(--text-muted);">jusqu\'à</span>' +
+    '<input type="number" name="palier_km" class="input-field" min="0.1" step="0.1" style="width:110px;">' +
+    '<span style="font-size:0.85rem;color:var(--text-muted);">km &nbsp;&rarr;&nbsp;</span>' +
+    '<input type="number" name="palier_prix" class="input-field" min="0" step="50" style="width:130px;">' +
+    '<span style="font-size:0.85rem;color:var(--text-muted);">F</span>' +
+    '<button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.bareme-row\').remove()">&#10005;</button>';
+  rows.appendChild(row);
+});
+</script>
 {% endblock %}

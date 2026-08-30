@@ -140,12 +140,26 @@ export interface RestoDTO {
   note_moyenne: number;
   temps_livraison_moyen: number;
   frais_livraison: string;
+  /** Barème de livraison par distance (trié par jusqu_a_km croissant). Vide = tarif unique. */
+  paliers_livraison?: PalierLivraisonDTO[];
   prix_reservation?: string;
   nombre_plats: number;
   nombre_abonnes: number;
   is_following?: boolean;
   plat_du_jour?: number | null;
   plats?: PlatDTO[];
+}
+
+export interface PalierLivraisonDTO {
+  jusqu_a_km: string;
+  prix: string;
+}
+
+/** Réponse de POST /client/livraison/estimer */
+export interface EstimationLivraisonDTO {
+  frais_livraison: number | null;
+  distance_km: number | null;
+  hors_zone: boolean;
 }
 
 export interface LigneCommandeDTO {

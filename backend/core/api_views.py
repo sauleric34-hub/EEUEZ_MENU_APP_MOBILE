@@ -25,7 +25,8 @@ from .utils import geo
 from .delivery import (
     finaliser_livraison, prendre_commande_libre, PriseImpossible, TransitionInvalide,
     est_livreur_independant, demarrer_course, recuperer_commande,
-    marquer_livree_sans_code, abandonner_livraison, STATUTS_LIBERABLES, STATUTS_ACTIFS,
+    marquer_livree_sans_code, abandonner_livraison, calculer_frais_livraison,
+    STATUTS_LIBERABLES, STATUTS_ACTIFS,
 )
 from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
 from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
@@ -175,6 +176,41 @@ def nearby_restaurants(request):
             
     return Response(results)
 
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def estimer_frais_livraison(request):
+    """Frais de livraison pour un restaurant et une adresse donnés.
+
+    POST { "restaurant": <id>, "latitude": <float>, "longitude": <float> }
+    →   { "frais_livraison": 1000, "distance_km": 8.4, "hors_zone": false }
+
+    Sert à l'app cliente pour afficher le vrai prix AVANT le paiement. Le
+    serveur reste la source de vérité : la commande recalcule et fige la même
+    valeur à sa création.
+    """
+    data = request.data
+    try:
+        restaurant = RestaurantProfile.objects.get(id=data.get('restaurant'))
+    except (RestaurantProfile.DoesNotExist, TypeError, ValueError):
+        return Response({'error': 'Restaurant introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    def _coord(v):
+        try:
+            return round(float(v), 6)
+        except (TypeError, ValueError):
+            return None
+
+    frais, hors_zone, distance_km = calculer_frais_livraison(
+        restaurant, _coord(data.get('latitude')), _coord(data.get('longitude')),
+    )
+    return Response({
+        'frais_livraison': frais,
+        'distance_km': distance_km,
+        'hors_zone': hors_zone,
+    })
+
+
 class ClientCommandeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CommandeSerializer
@@ -268,9 +304,21 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             commande.delete()
             return Response({"error": "Aucun plat valide dans la commande"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Frais de livraison = le plus élevé parmi les plats commandés (une seule livraison).
-        # Repli sur le frais du restaurant si aucun plat n'en définit.
-        frais_liv = max(frais_plats) if frais_plats else float(restaurant.frais_livraison)
+        # Frais de livraison : barème du restaurant selon la distance
+        # restaurant → adresse de livraison. Repli sur le frais le plus élevé
+        # parmi les plats commandés (sinon le frais fixe du restaurant) quand
+        # aucun barème n'est configuré ou que la distance n'est pas mesurable.
+        repli_frais = int(round(max(frais_plats))) if frais_plats else int(restaurant.frais_livraison or 0)
+        frais_liv, hors_zone, _distance_km = calculer_frais_livraison(
+            restaurant, commande.latitude_livraison, commande.longitude_livraison,
+            repli=repli_frais,
+        )
+        if hors_zone:
+            commande.delete()
+            return Response(
+                {"error": "Cette adresse est hors de la zone de livraison du restaurant."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # On FIGE les frais et la part livreur sur la commande : ni le restaurant
         # ni la plateforme ne peuvent les faire varier après coup.
         commande.frais_livraison = int(round(frais_liv))

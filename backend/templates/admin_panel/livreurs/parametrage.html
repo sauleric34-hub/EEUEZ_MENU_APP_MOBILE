@@ -12,7 +12,7 @@
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title gradient-text">Paramétrage de la livraison libre</h1>
-    <p class="page-subtitle">Part du livreur, seuil de versement automatique et gestion des abandons. Aucune valeur n'est figée dans le code.</p>
+    <p class="page-subtitle">Part du livreur, seuil de versement automatique, gestion des abandons et coefficient de distance. Aucune valeur n'est figée dans le code.</p>
   </div>
 </div>
 
@@ -48,6 +48,19 @@
       <label class="form-label">Fenêtre des abandons (jours)</label>
       <input type="number" name="fenetre_abandons_jours" min="1" value="{{ config.fenetre_abandons_jours }}" class="input-field" required>
       <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Au-delà de « abandons tolérés » sur cette fenêtre, le livreur est désactivé automatiquement (réactivation manuelle par un admin).</p>
+    </div>
+  </div>
+
+  <h2 class="section-title" style="margin-top:28px;">Distance &amp; barème</h2>
+  <div class="grid-2" style="gap:18px;">
+    <div class="form-group">
+      <label class="form-label">Coefficient de distance routière</label>
+      <input type="number" name="coefficient_distance_routiere" min="1" max="3" step="0.05" value="{{ config.coefficient_distance_routiere }}" class="input-field" required>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+        La distance restaurant → client est mesurée à vol d'oiseau, puis multipliée par ce coefficient
+        pour approcher le trajet réel avant de choisir la tranche du barème du restaurant.
+        <strong>1,3</strong> ≈ +30 %. Chaque restaurant définit ses tranches dans son propre espace.
+      </p>
     </div>
   </div>
 

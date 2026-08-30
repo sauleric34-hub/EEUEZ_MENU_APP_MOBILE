@@ -5,6 +5,8 @@ restaurant (restaurant_attache = NULL). Ce sont eux qui prennent les commandes
 mises en « livraison libre » par les restaurants.
 """
 
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q, Sum
@@ -183,12 +185,29 @@ def parametrage_view(request):
         if config.pourcentage_livreur > 100:
             messages.error(request, 'La part du livreur ne peut pas dépasser 100 %.')
             return redirect('core:admin_livreur_parametrage')
+        # Coefficient de distance routière : décimal, borné pour rester réaliste.
+        try:
+            coef = Decimal(
+                str(request.POST.get(
+                    'coefficient_distance_routiere', config.coefficient_distance_routiere,
+                )).replace(',', '.')
+            ).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
+            messages.error(request, 'Le coefficient de distance doit être un nombre.')
+            return redirect('core:admin_livreur_parametrage')
+        if not (Decimal('1') <= coef <= Decimal('3')):
+            messages.error(request, 'Le coefficient de distance doit être compris entre 1 et 3.')
+            return redirect('core:admin_livreur_parametrage')
+        config.coefficient_distance_routiere = coef
         config.actif = request.POST.get('actif') == 'on'
         config.save()
         AuditLog.objects.create(
             user=request.user, action='LIVRAISON_PARAMETRAGE',
             model_name='ParametrageLivraison', object_id='1',
-            description={c: getattr(config, c) for c in champs},
+            description={
+                **{c: getattr(config, c) for c in champs},
+                'coefficient_distance_routiere': str(config.coefficient_distance_routiere),
+            },
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         messages.success(request, 'Paramétrage de la livraison enregistré.')

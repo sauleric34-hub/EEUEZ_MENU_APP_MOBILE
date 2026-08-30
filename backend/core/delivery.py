@@ -32,6 +32,78 @@ class TransitionInvalide(Exception):
     """Action impossible pour le statut courant de la livraison."""
 
 
+def calculer_frais_livraison(restaurant, lat_livraison, lon_livraison, repli=None):
+    """Frais de livraison d'une commande selon la distance restaurant → client.
+
+    On mesure la distance à vol d'oiseau puis on la multiplie par le coefficient
+    routier (ParametrageLivraison) pour approcher le trajet réel, avant de
+    choisir la tranche du barème du restaurant.
+
+    Renvoie ``(frais, hors_zone, distance_km)`` :
+      · ``hors_zone`` vrai  → l'adresse dépasse le dernier palier, refuser la commande
+      · ``distance_km`` None → distance non mesurable (repli sur le frais fixe)
+    """
+    from .utils import geo
+    from .models_livraison import ParametrageLivraison
+
+    distance_km = None
+    if (
+        lat_livraison is not None and lon_livraison is not None
+        and restaurant.latitude is not None and restaurant.longitude is not None
+    ):
+        coef = float(ParametrageLivraison.get_solo().coefficient_distance_routiere or 1)
+        vol_oiseau = geo.calculer_distance(
+            restaurant.latitude, restaurant.longitude, lat_livraison, lon_livraison,
+        )
+        distance_km = round(vol_oiseau * coef, 2)
+
+    frais, hors_zone = restaurant.frais_livraison_pour_distance(distance_km, repli=repli)
+    return frais, hors_zone, distance_km
+
+
+def parser_bareme_livraison(kms, prix):
+    """Valide deux listes parallèles de tranches (distances / prix).
+
+    Renvoie ``(lignes_triees, erreur)`` : ``lignes_triees`` est une liste de
+    couples ``(jusqu_a_km, prix)`` triée par distance, ``erreur`` un message
+    prêt à afficher ou ``None``. Les lignes entièrement vides sont ignorées.
+    """
+    lignes = []
+    for i, km_brut in enumerate(kms):
+        km_brut = (km_brut or '').strip().replace(',', '.')
+        prix_brut = (prix[i] if i < len(prix) else '').strip()
+        if not km_brut and not prix_brut:
+            continue
+        try:
+            km = round(float(km_brut), 1)
+            montant = int(round(float(prix_brut or '0')))
+        except ValueError:
+            return None, 'Barème : distances et prix doivent être des nombres.'
+        if km <= 0 or montant < 0:
+            return None, 'Barème : la distance doit être positive et le prix ≥ 0.'
+        lignes.append((km, montant))
+
+    lignes.sort(key=lambda x: x[0])
+    if len({km for km, _ in lignes}) != len(lignes):
+        return None, 'Barème : deux tranches ont la même distance.'
+    return lignes, None
+
+
+def remplacer_bareme_livraison(restaurant, lignes):
+    """Remplace toutes les tranches du barème d'un restaurant.
+
+    On efface puis recrée (comme les compléments de plats) : les commandes
+    passées ont leurs frais figés, elles ne sont pas affectées.
+    """
+    from .models_livraison import PalierLivraison
+
+    restaurant.paliers_livraison.all().delete()
+    PalierLivraison.objects.bulk_create([
+        PalierLivraison(restaurant=restaurant, jusqu_a_km=km, prix=montant)
+        for km, montant in lignes
+    ])
+
+
 def est_livreur_independant(utilisateur):
     """Un livreur indépendant a le rôle « livreur », est actif et n'est attaché
     à AUCUN restaurant. Ce sont eux qui prennent les commandes en livraison

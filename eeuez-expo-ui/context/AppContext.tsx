@@ -153,6 +153,10 @@ interface AppContextValue {
   cartCount: number;
   subtotal: number;
   deliveryFee: number;
+  /** L'adresse choisie dépasse la zone de livraison du restaurant (barème). */
+  deliveryHorsZone: boolean;
+  /** Distance estimée restaurant → adresse, en km (null si non calculable). */
+  deliveryDistanceKm: number | null;
   total: number;
 
   // commandes / suivi
@@ -568,15 +572,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const subtotal = useMemo(
     () => cartLines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0), [cartLines],
   );
-  const deliveryFee = useMemo(() => {
+  // Estimation locale, affichée le temps que le serveur réponde : repli sur le
+  // frais du restaurant (barème absent) puis la constante par défaut.
+  const deliveryFeeLocal = useMemo(() => {
     if (!cartLines.length) return 0;
-    // Frais de livraison = le plus élevé parmi les plats du panier (une seule livraison).
-    // Repli sur le frais du restaurant puis la constante par défaut.
+    const resto = restoMap.get(cartLines[0].dish.restoId);
+    if (resto?.paliersLivraison?.length) return resto.paliersLivraison[0].prix;
     const platFees = cartLines.map(l => l.dish.fraisLivraison).filter(f => f > 0);
     if (platFees.length) return Math.max(...platFees);
-    const resto = restoMap.get(cartLines[0].dish.restoId);
     return resto?.fraisLivraison ?? DELIVERY_FEE;
   }, [cartLines, restoMap]);
+
+  // Frais de livraison RÉELS : calculés par le serveur (barème par distance)
+  // dès qu'une adresse de livraison est choisie. Le serveur refait le même
+  // calcul — et le fige — à la création de la commande.
+  const cartRestoId = cartLines.length ? cartLines[0].dish.restoId : null;
+  const [estimation, setEstimation] = useState<{
+    frais: number | null; distanceKm: number | null; horsZone: boolean;
+  } | null>(null);
+
+  const estimLat = deliveryAddress?.latitude ?? userLoc?.lat ?? null;
+  const estimLon = deliveryAddress?.longitude ?? userLoc?.lon ?? null;
+
+  useEffect(() => {
+    if (cartRestoId == null || !deliveryAddress) { setEstimation(null); return; }
+    let annule = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await menu.estimerFraisLivraison({
+          restaurant: cartRestoId,
+          latitude: estimLat != null ? Number(estimLat) : null,
+          longitude: estimLon != null ? Number(estimLon) : null,
+        });
+        if (!annule) {
+          setEstimation({
+            frais: r.frais_livraison, distanceKm: r.distance_km, horsZone: r.hors_zone,
+          });
+        }
+      } catch {
+        if (!annule) setEstimation(null); // repli silencieux sur l'estimation locale
+      }
+    }, 400);
+    return () => { annule = true; clearTimeout(t); };
+  }, [cartRestoId, deliveryAddress, estimLat, estimLon]);
+
+  const deliveryHorsZone = estimation?.horsZone ?? false;
+  const deliveryDistanceKm = estimation?.distanceKm ?? null;
+  const deliveryFee = !cartLines.length
+    ? 0
+    : (estimation && !estimation.horsZone && estimation.frais != null
+        ? estimation.frais
+        : deliveryFeeLocal);
 
   // ─── Commandes / suivi ─────────────────────────────────────
   const checkout = async (
@@ -640,7 +686,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
     pubLikes, togglePubLike, reloadPubLikes,
     cart, addToCart, cartInc, cartDec, cartRemove, clearCart,
-    cartLines, cartCount, subtotal, deliveryFee, total: subtotal + deliveryFee,
+    cartLines, cartCount, subtotal, deliveryFee, deliveryHorsZone, deliveryDistanceKm,
+    total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,
   };
 

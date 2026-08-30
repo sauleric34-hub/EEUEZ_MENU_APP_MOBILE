@@ -1,8 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Q, Sum, Count, Avg
+from django.db.models import Q, Sum, Count, Avg, Exists, OuterRef
 from django.core.paginator import Paginator
 from core.models import RestaurantProfile, User, AuditLog
+from core.models_livraison import PalierLivraison
+from core.delivery import parser_bareme_livraison, remplacer_bareme_livraison
 from .dashboard import admin_required
 
 
@@ -12,6 +14,7 @@ def restaurant_list(request):
         nb_commandes=Count('commandes'),
         ca=Sum('commandes__montant_total'),
         note_avg=Avg('avis_set__note'),
+        a_bareme=Exists(PalierLivraison.objects.filter(restaurant=OuterRef('pk'))),
     )
     q = request.GET.get('q', '')
     statut = request.GET.get('statut', '')
@@ -59,8 +62,36 @@ def restaurant_detail(request, pk):
         'avis': avis,
         'ca': ca,
         'commissions': commissions,
+        'paliers': restaurant.paliers_livraison.all(),
         'active_page': 'restaurants',
     })
+
+
+@admin_required
+def restaurant_bareme(request, pk):
+    """Édition, par un admin, du barème de livraison par distance d'un restaurant
+    (dépannage / support — le restaurant le gère aussi depuis son espace)."""
+    restaurant = get_object_or_404(RestaurantProfile, pk=pk)
+    if request.method == 'POST':
+        lignes, erreur = parser_bareme_livraison(
+            request.POST.getlist('palier_km'), request.POST.getlist('palier_prix'),
+        )
+        if erreur:
+            messages.error(request, erreur)
+            return redirect('core:restaurant_detail', pk=pk)
+        remplacer_bareme_livraison(restaurant, lignes)
+        AuditLog.objects.create(
+            user=request.user, action='UPDATE_BAREME_LIVRAISON',
+            model_name='RestaurantProfile', object_id=str(pk),
+            description={'tranches': [[float(k), m] for k, m in lignes]},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        messages.success(
+            request,
+            f'Barème de livraison mis à jour ({len(lignes)} tranche(s)).' if lignes
+            else 'Barème de livraison retiré — le frais de repli s\'applique.',
+        )
+    return redirect('core:restaurant_detail', pk=pk)
 
 
 @admin_required

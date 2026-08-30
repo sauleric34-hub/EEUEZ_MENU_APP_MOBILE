@@ -63,20 +63,26 @@ class CategorieSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'icone']
 
 
+class PalierLivraisonSerializer(serializers.Serializer):
+    jusqu_a_km = serializers.DecimalField(max_digits=5, decimal_places=1)
+    prix = serializers.DecimalField(max_digits=10, decimal_places=0)
+
+
 class RestaurantProfileSerializer(serializers.ModelSerializer):
     note_moyenne = serializers.ReadOnlyField()
     nombre_plats = serializers.SerializerMethodField()
     nombre_abonnes = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     plat_du_jour = serializers.SerializerMethodField()
+    paliers_livraison = PalierLivraisonSerializer(many=True, read_only=True)
 
     class Meta:
         model = RestaurantProfile
         fields = [
             'id', 'nom', 'description', 'adresse', 'ville', 'latitude', 'longitude',
             'logo', 'cover_image', 'is_open', 'note_moyenne', 'temps_livraison_moyen',
-            'frais_livraison', 'prix_reservation', 'nombre_plats', 'nombre_abonnes',
-            'is_following', 'plat_du_jour',
+            'frais_livraison', 'paliers_livraison', 'prix_reservation', 'nombre_plats',
+            'nombre_abonnes', 'is_following', 'plat_du_jour',
         ]
 
     def get_nombre_plats(self, obj):

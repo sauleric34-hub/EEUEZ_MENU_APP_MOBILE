@@ -36,7 +36,10 @@ export interface Resto {
   longitude: number | null;
   /** Adresse lisible, affichée sous la carte de la fiche restaurant. */
   adresse?: string | null;
+  /** Frais de livraison de repli (barème absent / distance inconnue). */
   fraisLivraison: number;
+  /** Barème par distance, trié par km croissant. Vide = tarif unique. */
+  paliersLivraison: { km: number; prix: number }[];
   prixReservation: number;
   tempsLivraison: number;
   isOpen: boolean;
@@ -199,6 +202,9 @@ export function mapResto(d: RestoDTO): Resto {
     // « adresse, ville » quand les deux existent, sinon celui qui est renseigné.
     adresse: [d.adresse, d.ville].filter(Boolean).join(', ') || null,
     fraisLivraison: Number(d.frais_livraison ?? 0),
+    paliersLivraison: (d.paliers_livraison ?? [])
+      .map(p => ({ km: Number(p.jusqu_a_km), prix: Number(p.prix) }))
+      .sort((a, b) => a.km - b.km),
     prixReservation: Number(d.prix_reservation ?? 0),
     tempsLivraison: d.temps_livraison_moyen ?? 30,
     isOpen: d.is_open,

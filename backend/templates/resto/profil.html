@@ -48,10 +48,11 @@
           <input type="number" name="temps_livraison" class="input-field" value="{{ resto.temps_livraison_moyen }}" min="5" max="120">
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label">Frais de livraison (F)</label>
+          <label class="form-label">Frais de livraison — tarif de repli (F)</label>
           <input type="number" name="frais_livraison" class="input-field" value="{{ resto.frais_livraison }}" min="0" step="100">
           <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
-            Affiché aux clients dans l'application et ajouté au total de leur commande. Mettez 0 pour une livraison offerte.
+            Utilisé quand aucun barème par distance n'est défini ci-dessous, ou quand la position du client
+            n'est pas connue. Mettez 0 pour une livraison offerte.
           </div>
         </div>
         <div class="form-group" style="margin:0;">
@@ -105,10 +106,73 @@
     </p>
   </div>
 </div>
+
+<!-- Barème de livraison par distance -->
+<div class="chart-card anim-fade-up" style="margin-top:20px;">
+  <div class="chart-card-header">
+    <div>
+      <div class="chart-title">Barème de livraison par distance</div>
+      <div class="chart-subtitle">
+        Le prix de la livraison dépend de la distance entre votre restaurant et l'adresse du client
+      </div>
+    </div>
+  </div>
+
+  {% if not resto.latitude %}
+  <div class="glass-card" style="padding:14px;margin-bottom:16px;background:var(--accent-amber-dim,rgba(245,158,11,.12));border:1px solid var(--accent-amber);font-size:0.85rem;">
+    ⚠️ Enregistrez d'abord la <strong>position de votre restaurant</strong> (ci-dessus) : sans elle,
+    la distance ne peut pas être calculée et c'est le tarif de repli qui s'applique.
+  </div>
+  {% endif %}
+
+  <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px;">
+    Chaque ligne = « jusqu'à X km, la livraison coûte Y F ». Exemple : jusqu'à 5 km → 500 F,
+    puis jusqu'à 15 km → 1000 F. <strong>Au-delà de la dernière tranche, le client ne peut pas
+    commander</strong> (hors zone de livraison). Laissez vide pour n'utiliser que le tarif de repli.
+  </p>
+
+  <form method="post" id="baremeForm" style="display:flex;flex-direction:column;gap:12px;">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="bareme">
+
+    <div id="baremeRows" style="display:flex;flex-direction:column;gap:10px;">
+      {% for p in paliers %}
+      <div class="bareme-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:0.85rem;color:var(--text-muted);">jusqu'à</span>
+        <input type="number" name="palier_km" class="input-field" value="{{ p.jusqu_a_km }}" min="0.1" step="0.1" style="width:110px;" placeholder="km">
+        <span style="font-size:0.85rem;color:var(--text-muted);">km &nbsp;→&nbsp;</span>
+        <input type="number" name="palier_prix" class="input-field" value="{{ p.prix }}" min="0" step="50" style="width:130px;" placeholder="F">
+        <span style="font-size:0.85rem;color:var(--text-muted);">F</span>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.bareme-row').remove()">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="ajouterPalier()">+ Ajouter une tranche</button>
+    </div>
+    <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Enregistrer le barème</button>
+  </form>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+function ajouterPalier() {
+  const rows = document.getElementById('baremeRows');
+  const row = document.createElement('div');
+  row.className = 'bareme-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  row.innerHTML =
+    '<span style="font-size:0.85rem;color:var(--text-muted);">jusqu\'à</span>' +
+    '<input type="number" name="palier_km" class="input-field" min="0.1" step="0.1" style="width:110px;" placeholder="km">' +
+    '<span style="font-size:0.85rem;color:var(--text-muted);">km &nbsp;&rarr;&nbsp;</span>' +
+    '<input type="number" name="palier_prix" class="input-field" min="0" step="50" style="width:130px;" placeholder="F">' +
+    '<span style="font-size:0.85rem;color:var(--text-muted);">F</span>' +
+    '<button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.bareme-row\').remove()">&#10005;</button>';
+  rows.appendChild(row);
+}
+
 function capturePosition() {
   const status = document.getElementById('geoStatus');
   const saveBtn = document.getElementById('saveBtn');

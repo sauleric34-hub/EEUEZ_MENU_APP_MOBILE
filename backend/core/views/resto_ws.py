@@ -22,6 +22,7 @@ from core.models import (
     GroupeComplement, OptionComplement, ElementInclus,
 )
 from core import fidelite
+from core.delivery import parser_bareme_livraison, remplacer_bareme_livraison
 from core.publications_utils import (
     MAX_MEDIAS_PAR_PUBLICATION, creer_medias, valider_medias,
 )
@@ -270,8 +271,13 @@ def plat_form(request, pk=None):
                 plat = Plat(restaurant=resto)
             plat.nom = nom
             plat.prix = int(prix)
+            # Frais de livraison : le barème par distance du restaurant (Profil)
+            # a remplacé le frais par plat. On garde le champ (repli historique)
+            # mais on ne l'édite plus ici — encore accepté si un ancien
+            # formulaire l'envoie.
             frais = request.POST.get('frais_livraison', '')
-            plat.frais_livraison = int(frais) if str(frais).isdigit() else 500
+            if str(frais).isdigit():
+                plat.frais_livraison = int(frais)
             plat.description = request.POST.get('description', '')
             plat.ingredients = request.POST.get('ingredients', '')
             plat.allergies = request.POST.get('allergies', '')
@@ -566,6 +572,8 @@ def profil(request):
                 resto.cover_image = request.FILES['cover_image']
             resto.save()
             messages.success(request, 'Profil mis à jour.')
+        elif form == 'bareme':
+            _enregistrer_bareme_livraison(request, resto)
         elif form == 'position':
             # Position actuelle capturée par le navigateur (géolocalisation)
             try:
@@ -583,7 +591,27 @@ def profil(request):
 
     return render(request, 'resto/profil.html', {
         'resto': resto, 'active_page': 'profil',
+        'paliers': resto.paliers_livraison.all(),
     })
+
+
+def _enregistrer_bareme_livraison(request, resto):
+    """Remplace le barème de livraison par distance du restaurant.
+
+    Le formulaire envoie des lignes parallèles : palier_km[] / palier_prix[].
+    """
+    lignes, erreur = parser_bareme_livraison(
+        request.POST.getlist('palier_km'), request.POST.getlist('palier_prix'),
+    )
+    if erreur:
+        messages.error(request, erreur)
+        return
+
+    remplacer_bareme_livraison(resto, lignes)
+    if lignes:
+        messages.success(request, f'Barème de livraison enregistré ({len(lignes)} tranche(s)).')
+    else:
+        messages.success(request, 'Barème de livraison retiré — le frais fixe s\'applique.')
 
 
 # ─── GALERIE ─────────────────────────────────────────────────

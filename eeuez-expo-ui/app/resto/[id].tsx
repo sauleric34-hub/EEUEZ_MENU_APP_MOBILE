@@ -119,7 +119,9 @@ export default function RestoProfile() {
             <View style={[styles.deliveryPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Bike size={16} color={Brand.accentLight} strokeWidth={2.3} />
               <Text style={[bodyFont(13, '700'), { color: colors.text }]}>
-                Livraison {resto.fraisLivraison > 0 ? formatPrice(resto.fraisLivraison) : 'offerte'}
+                {resto.paliersLivraison.length
+                  ? `Livraison dès ${formatPrice(resto.paliersLivraison[0].prix)} · selon distance`
+                  : `Livraison ${resto.fraisLivraison > 0 ? formatPrice(resto.fraisLivraison) : 'offerte'}`}
               </Text>
             </View>
             <View style={[styles.deliveryPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>

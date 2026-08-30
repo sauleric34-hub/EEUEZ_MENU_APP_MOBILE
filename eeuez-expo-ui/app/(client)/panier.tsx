@@ -145,7 +145,7 @@ function CartLineRow({ line }: { line: CartLine }) {
 }
 
 export default function PanierScreen() {
-  const { colors, cartLines, clearCart, subtotal, deliveryFee, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
+  const { colors, cartLines, clearCart, subtotal, deliveryFee, deliveryHorsZone, deliveryDistanceKm, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
   const router = useRouter();
   // Le compte de démonstration peut remplir un panier, mais pas commander.
   const { bloquer } = useGardeDemo();
@@ -238,6 +238,10 @@ export default function PanierScreen() {
 
   const submit = async () => {
     if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
+    if (deliveryHorsZone) {
+      setError("Cette adresse est hors de la zone de livraison de ce restaurant.");
+      return;
+    }
     setBusy(true); setError(null);
     try {
       // 1. Créer la commande (toujours)
@@ -410,11 +414,25 @@ export default function PanierScreen() {
                   <Text style={[bodyFont(14, '700'), { color: colors.text }]}>{formatPrice(subtotal)}</Text>
                 </View>
                 <View style={[styles.sumRow, { marginTop: 10 }]}>
-                  <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Livraison</Text>
-                  <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
-                    {formatPrice(deliveryFee)}
-                  </Animated.Text>
+                  <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
+                    Livraison
+                    {deliveryDistanceKm != null && !deliveryHorsZone
+                      ? `  ·  ${deliveryDistanceKm.toFixed(1)} km`
+                      : ''}
+                  </Text>
+                  {deliveryHorsZone ? (
+                    <Text style={[bodyFont(14, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
+                  ) : (
+                    <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
+                      {formatPrice(deliveryFee)}
+                    </Animated.Text>
+                  )}
                 </View>
+                {deliveryHorsZone && (
+                  <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 6 }]}>
+                    Ce restaurant ne livre pas jusqu'à cette adresse. Choisissez un lieu plus proche.
+                  </Text>
+                )}
                 {reduction > 0 && (
                   <View style={[styles.sumRow, { marginTop: 10 }]}>
                     <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
@@ -446,6 +464,10 @@ export default function PanierScreen() {
                 {busy ? (
                   <View style={[styles.checkout, { backgroundColor: Brand.accent, marginTop: 16 }]}>
                     <ActivityIndicator color="#fff" />
+                  </View>
+                ) : deliveryHorsZone ? (
+                  <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
+                    <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Adresse hors zone de livraison</Text>
                   </View>
                 ) : (
                   <PressableScale onPress={() => bloquer(submit)} style={{ marginTop: 16 }}>

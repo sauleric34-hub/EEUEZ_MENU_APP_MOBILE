@@ -160,6 +160,30 @@ class RestaurantProfile(models.Model):
         """Contributions clients à valider — affiché en pastille dans la sidebar."""
         return self.publications.filter(statut='en_attente', supprime_par='').count()
 
+    def frais_livraison_pour_distance(self, distance_km, repli=None):
+        """Frais de livraison à facturer pour une distance donnée (en km).
+
+        Renvoie un couple ``(frais, hors_zone)`` :
+          · barème (paliers) non configuré        → ``(repli, False)``
+          · distance inconnue (pas de GPS…)       → ``(repli, False)``
+          · distance couverte par un palier       → ``(prix_du_palier, False)``
+          · distance au-delà du dernier palier    → ``(None, True)`` (hors zone)
+
+        ``repli`` vaut par défaut le frais fixe du restaurant. On ne recalcule
+        jamais ce montant après la création de la commande (il y est figé).
+        """
+        if repli is None:
+            repli = int(self.frais_livraison or 0)
+        paliers = list(self.paliers_livraison.all())  # triés par jusqu_a_km
+        if not paliers:
+            return repli, False
+        if distance_km is None:
+            return repli, False
+        for palier in paliers:
+            if float(distance_km) <= float(palier.jusqu_a_km):
+                return int(palier.prix), False
+        return None, True
+
 
 class Categorie(models.Model):
     nom = models.CharField(max_length=100)
@@ -638,5 +662,6 @@ from .models_bannieres import Banniere  # noqa: E402,F401
 
 # ─── Livraison libre (paramétrage, paiements livreurs, push) ──
 from .models_livraison import (  # noqa: E402,F401
-    ParametrageLivraison, PaiementLivreur, AbandonLivraison, AppareilPush,
+    ParametrageLivraison, PalierLivraison, PaiementLivreur, AbandonLivraison,
+    AppareilPush,
 )
