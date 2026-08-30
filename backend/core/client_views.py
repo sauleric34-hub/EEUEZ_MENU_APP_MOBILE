@@ -36,7 +36,9 @@ def _parse_coord(value):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def restaurants_list(request):
-    qs = RestaurantProfile.objects.filter(is_open=True, is_verified=True).order_by('-id')
+    qs = RestaurantProfile.objects.filter(
+        is_open=True, is_verified=True,
+    ).prefetch_related('paliers_livraison').order_by('-id')
     q = request.GET.get('q', '').strip()
     if q:
         qs = qs.filter(nom__icontains=q)

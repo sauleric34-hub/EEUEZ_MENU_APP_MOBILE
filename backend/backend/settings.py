@@ -37,7 +37,6 @@ _default_hosts = '*' if DEBUG else 'localhost,127.0.0.1'
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', _default_hosts).split(',') if h.strip()]
 
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -47,7 +46,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
-    'channels',
     'core',
 ]
 
@@ -82,7 +80,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
-ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # Base de données MySQL (cPanel). Les identifiants viennent des variables
@@ -237,19 +234,10 @@ if REDIS_URL:
             },
         }
     }
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {'hosts': [REDIS_URL]},
-        }
-    }
 else:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
-    }
-    CHANNEL_LAYERS = {
-        'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'},
     }
 

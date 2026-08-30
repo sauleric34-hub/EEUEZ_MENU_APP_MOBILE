@@ -148,6 +148,13 @@ cPanel → **Cron Jobs** → ajouter, une fois par jour (ex. 04h00) :
 cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py recalculer_notes
 ```
 
+Et, toutes les 5 minutes, la relance des missions de livraison libre prises
+mais jamais démarrées (sinon la commande reste bloquée) :
+
+```
+*/5 * * * * cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py relancer_livraisons
+```
+
 *(adapte les chemins à ton hébergement — le chemin du `python` de l'app est
 visible dans « Setup Python App ».)*
 
@@ -371,6 +378,21 @@ Détails complets dans [`load_test/README.md`](../load_test/README.md).
 - [ ] `creer_compte_demo`
 - [ ] `generer_apercus`
 - [ ] `recalculer_notes` (+ cron quotidien)
+- [ ] `relancer_livraisons` en cron (toutes les 5 min) — remet au pool les
+      missions de livraison libre prises mais jamais démarrées
+- [ ] App mobile : `npx expo install` (nouvelles dépendances : `expo-notifications`,
+      `expo-keep-awake`, `react-native-qrcode-svg`) puis build EAS avec les
+      identifiants push (clé FCM Android + clé APNs iOS) pour les notifications
+- [ ] Régler la part livreur / le seuil de versement dans
+      `/admin-panel/livreurs/parametrage/` (défauts : 70 %, 5 000 F)
+- [ ] Barème de livraison par distance : chaque restaurant doit enregistrer
+      sa **position GPS** puis ses tranches de prix dans `/admin-panel/resto/profil/`
+      (« Barème de livraison par distance »). Sans barème, le « frais de repli »
+      s'applique. Au-delà de la dernière tranche, le client est hors zone.
+      Côté admin : coefficient routier global (défaut 1,3) sur
+      `/admin-panel/livreurs/parametrage/` ; suivi des restos non configurés
+      dans la liste `/admin-panel/restaurants/` (badge) ; édition de dépannage
+      du barème d'un resto depuis sa fiche.
 
 **Montée en charge, par ordre de rentabilité :**
 - [ ] Phase 3 — poser `REDIS_URL`

@@ -13,6 +13,12 @@ export interface UserDTO {
   /** Fidélité : solde de points et niveau déduit (bronze/argent/or). */
   points_solde?: number;
   niveau?: NiveauFidelite;
+  /** Livreur : compte mobile money cible des versements + soldes. */
+  paiement_numero?: string;
+  paiement_operateur?: '' | 'mtn_money' | 'orange_money';
+  gain_total?: string;
+  nombre_livraisons?: number;
+  solde_livreur?: number;
 }
 
 export type NiveauFidelite = 'bronze' | 'argent' | 'or';
@@ -134,12 +140,26 @@ export interface RestoDTO {
   note_moyenne: number;
   temps_livraison_moyen: number;
   frais_livraison: string;
+  /** Barème de livraison par distance (trié par jusqu_a_km croissant). Vide = tarif unique. */
+  paliers_livraison?: PalierLivraisonDTO[];
   prix_reservation?: string;
   nombre_plats: number;
   nombre_abonnes: number;
   is_following?: boolean;
   plat_du_jour?: number | null;
   plats?: PlatDTO[];
+}
+
+export interface PalierLivraisonDTO {
+  jusqu_a_km: string;
+  prix: string;
+}
+
+/** Réponse de POST /client/livraison/estimer */
+export interface EstimationLivraisonDTO {
+  frais_livraison: number | null;
+  distance_km: number | null;
+  hors_zone: boolean;
 }
 
 export interface LigneCommandeDTO {
@@ -155,6 +175,12 @@ export interface CommandeDTO {
   statut: string;
   livraison_statut: string | null;
   montant_total: string;
+  frais_livraison?: string;
+  part_livreur?: string;
+  /** Renseigné selon le demandeur (client complet, contact réduit pour le livreur, sinon null). */
+  client_details?: {
+    id: number; first_name: string; last_name: string; telephone: string;
+  } | null;
   adresse_livraison: string;
   notes: string;
   delai_estime: number | null;
@@ -251,6 +277,43 @@ export interface SuiviDTO {
   destination: GeoPointDTO | null;
   restaurant_position: GeoPointDTO | null;
   code_present: boolean;
+  eta_minutes?: number | null;
+  /** Présent seulement pour le livreur assigné / le client / le resto. */
+  client?: { nom: string; telephone: string; adresse: string } | null;
+}
+
+// ─── Livraison libre (app livreur) ───────────────────────────
+export interface MissionPoolDTO {
+  id: number;
+  restaurant: {
+    nom: string; adresse: string; ville: string;
+    latitude: number | null; longitude: number | null;
+  } | null;
+  zone_livraison: string;
+  montant_total: string;
+  frais_livraison: string;
+  part_livreur: string;
+  nb_articles: number;
+  created_at: string;
+}
+
+export interface CourseLivraisonDTO {
+  id: number;
+  commande: number;
+  statut: 'assignee' | 'en_collecte' | 'en_livraison' | 'livree_sans_code' | 'livree' | 'echec';
+  code_confirmation: string;
+  confirmee_par: string;
+  motif_sans_code: string;
+  latitude_actuelle: string | null;
+  longitude_actuelle: string | null;
+  estimated_delivery_time: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+/** Une course active = la commande complète (contact client visible) + le bloc livraison. */
+export interface CourseDTO extends CommandeDTO {
+  livraison: CourseLivraisonDTO;
 }
 
 export interface RecoPlatDTO extends PlatDTO {

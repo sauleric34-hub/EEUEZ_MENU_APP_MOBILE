@@ -17,7 +17,6 @@ import { PressableScale, CenterMessage, displayFont, bodyFont } from '../compone
 import { ConfirmReception } from '../components/ConfirmReception';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import { useToast } from '../context/ToastContext';
-import { useTrackingSocket } from '../hooks/useTrackingSocket';
 
 export default function TrackingScreen() {
   const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
@@ -25,9 +24,11 @@ export default function TrackingScreen() {
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const etaLabel = TRACK_ETA[trackStep] ?? TRACK_ETA[0];
   const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
   const suivi = activeOrder?.suivi ?? null;
+  const etaLabel = enLivraison && suivi?.eta_minutes
+    ? `Arrive dans ~${suivi.eta_minutes} min`
+    : (TRACK_ETA[trackStep] ?? TRACK_ETA[0]);
   // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
   const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
 
@@ -56,11 +57,6 @@ export default function TrackingScreen() {
       return () => clearInterval(id);
     }, [reloadOrders]),
   );
-
-  // Bonus temps réel : dès que le serveur signale un changement (commande
-  // acceptée, livreur assigné, position, livraison terminée…), on recharge
-  // immédiatement au lieu d'attendre le prochain tick du polling ci-dessus.
-  useTrackingSocket(activeOrder?.id ?? null, !!activeOrder, reloadOrders);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

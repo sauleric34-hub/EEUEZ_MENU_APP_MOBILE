@@ -36,7 +36,10 @@ export interface Resto {
   longitude: number | null;
   /** Adresse lisible, affichée sous la carte de la fiche restaurant. */
   adresse?: string | null;
+  /** Frais de livraison de repli (barème absent / distance inconnue). */
   fraisLivraison: number;
+  /** Barème par distance, trié par km croissant. Vide = tarif unique. */
+  paliersLivraison: { km: number; prix: number }[];
   prixReservation: number;
   tempsLivraison: number;
   isOpen: boolean;
@@ -199,6 +202,9 @@ export function mapResto(d: RestoDTO): Resto {
     // « adresse, ville » quand les deux existent, sinon celui qui est renseigné.
     adresse: [d.adresse, d.ville].filter(Boolean).join(', ') || null,
     fraisLivraison: Number(d.frais_livraison ?? 0),
+    paliersLivraison: (d.paliers_livraison ?? [])
+      .map(p => ({ km: Number(p.jusqu_a_km), prix: Number(p.prix) }))
+      .sort((a, b) => a.km - b.km),
     prixReservation: Number(d.prix_reservation ?? 0),
     tempsLivraison: d.temps_livraison_moyen ?? 30,
     isOpen: d.is_open,
@@ -255,12 +261,13 @@ export const DELIVERY_FEE = 800;
 
 // Étapes du suivi de livraison (mappées sur les statuts de commande)
 export const TRACK_STEPS = [
-  { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande', statuts: ['en_attente', 'acceptee'] },
-  { title: 'En préparation',     desc: 'Vos plats sont en cuisine',            statuts: ['en_preparation', 'prete', 'assignee'] },
-  { title: 'En route',           desc: 'Le livreur a récupéré votre commande', statuts: ['en_livraison', 'en_collecte'] },
-  { title: 'Livré',              desc: 'Bon appétit !',                        statuts: ['livree'] },
+  { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande',        statuts: ['en_attente', 'acceptee'] },
+  { title: 'En préparation',     desc: 'Vos plats sont en cuisine, le livreur arrive', statuts: ['en_preparation', 'prete', 'assignee', 'en_collecte'] },
+  { title: 'En route',           desc: 'Le livreur a récupéré votre commande',         statuts: ['en_livraison'] },
+  { title: 'Livré',              desc: 'Bon appétit !',                               statuts: ['livree', 'livree_sans_code'] },
 ];
-export const TRACK_ETA = ['Arrive dans ~22 min', 'Arrive dans ~16 min', 'Arrive dans ~8 min', 'Livré'];
+// Repli quand le serveur ne fournit pas d'ETA (pas de coordonnées).
+export const TRACK_ETA = ['Bientôt', 'En préparation', 'Arrive bientôt', 'Livré'];
 
 /** Convertit un statut de commande en index d'étape de suivi. */
 export function statutToStep(statut: string): number {

@@ -13,15 +13,23 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     niveau = serializers.SerializerMethodField()
+    solde_livreur = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'role',
             'telephone', 'allergies', 'avatar', 'points_solde', 'niveau',
+            'paiement_numero', 'paiement_operateur',
+            'gain_total', 'nombre_livraisons', 'solde_livreur',
         ]
-        # Le solde ne se modifie que via le grand livre des points.
-        read_only_fields = ['role', 'points_solde']
+        # Le solde (points) et les gains ne se modifient jamais via l'API profil.
+        read_only_fields = [
+            'role', 'points_solde', 'gain_total', 'nombre_livraisons',
+        ]
+
+    def get_solde_livreur(self, obj):
+        return int(obj.solde_livreur) if obj.role == 'livreur' else 0
 
     def get_niveau(self, obj):
         from .fidelite import niveau
@@ -55,20 +63,26 @@ class CategorieSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'icone']
 
 
+class PalierLivraisonSerializer(serializers.Serializer):
+    jusqu_a_km = serializers.DecimalField(max_digits=5, decimal_places=1)
+    prix = serializers.DecimalField(max_digits=10, decimal_places=0)
+
+
 class RestaurantProfileSerializer(serializers.ModelSerializer):
     note_moyenne = serializers.ReadOnlyField()
     nombre_plats = serializers.SerializerMethodField()
     nombre_abonnes = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     plat_du_jour = serializers.SerializerMethodField()
+    paliers_livraison = PalierLivraisonSerializer(many=True, read_only=True)
 
     class Meta:
         model = RestaurantProfile
         fields = [
             'id', 'nom', 'description', 'adresse', 'ville', 'latitude', 'longitude',
             'logo', 'cover_image', 'is_open', 'note_moyenne', 'temps_livraison_moyen',
-            'frais_livraison', 'prix_reservation', 'nombre_plats', 'nombre_abonnes',
-            'is_following', 'plat_du_jour',
+            'frais_livraison', 'paliers_livraison', 'prix_reservation', 'nombre_plats',
+            'nombre_abonnes', 'is_following', 'plat_du_jour',
         ]
 
     def get_nombre_plats(self, obj):
@@ -236,7 +250,7 @@ class LigneCommandeSerializer(serializers.ModelSerializer):
 class CommandeSerializer(serializers.ModelSerializer):
     lignes = LigneCommandeSerializer(many=True, read_only=True)
     restaurant_details = RestaurantProfileSerializer(source='restaurant', read_only=True)
-    client_details = UserSerializer(source='client', read_only=True)
+    client_details = serializers.SerializerMethodField()
     livraison_statut = serializers.SerializerMethodField()
     suivi = serializers.SerializerMethodField()
 
@@ -244,10 +258,34 @@ class CommandeSerializer(serializers.ModelSerializer):
         model = Commande
         fields = [
             'id', 'client', 'client_details', 'restaurant', 'restaurant_details',
-            'statut', 'livraison_statut', 'montant_total', 'adresse_livraison',
+            'statut', 'livraison_statut', 'montant_total', 'frais_livraison',
+            'part_livreur', 'adresse_livraison',
             'notes', 'delai_estime', 'created_at', 'lignes', 'paiement_confirme',
             'suivi', 'points_utilises', 'reduction_points',
         ]
+
+    def get_client_details(self, obj):
+        """Profil client complet pour le client lui-même et son restaurant ;
+        contact réduit (nom + téléphone) pour le livreur assigné ; rien sinon."""
+        if not obj.client:
+            return None
+        demandeur = getattr(self.context.get('request'), 'user', None)
+        r = obj.restaurant
+        est_proprio = demandeur and (
+            demandeur.pk == obj.client_id
+            or (r and demandeur.pk == getattr(r, 'user_id', None))
+        )
+        if est_proprio:
+            return UserSerializer(obj.client, context=self.context).data
+        liv = getattr(obj, 'livraison', None)
+        if demandeur and liv and demandeur.pk == liv.livreur_id:
+            return {
+                'id': obj.client.pk,
+                'first_name': obj.client.first_name,
+                'last_name': obj.client.last_name,
+                'telephone': obj.client.telephone,
+            }
+        return None
 
     def get_livraison_statut(self, obj):
         liv = getattr(obj, 'livraison', None)
@@ -255,8 +293,11 @@ class CommandeSerializer(serializers.ModelSerializer):
 
     def get_suivi(self, obj):
         """Données de suivi cartographique en direct pour l'app cliente :
-        position du livreur, lieu de livraison, point de collecte (restaurant)
-        et coordonnées du livreur. Renvoie None hors livraison active."""
+        position du livreur, lieu de livraison, point de collecte (restaurant),
+        coordonnées du livreur et ETA. Renvoie None hors livraison active.
+
+        Le bloc `client` (nom + téléphone) n'est exposé qu'au livreur assigné,
+        au client lui-même ou au restaurant de la commande."""
         liv = getattr(obj, 'livraison', None)
         if not liv:
             return None
@@ -268,7 +309,7 @@ class CommandeSerializer(serializers.ModelSerializer):
 
         livreur = liv.livreur
         r = obj.restaurant
-        return {
+        data = {
             'statut': liv.statut,
             'livreur': {
                 'nom': (livreur.get_full_name() or livreur.username) if livreur else None,
@@ -279,7 +320,72 @@ class CommandeSerializer(serializers.ModelSerializer):
             'destination': _pt(obj.latitude_livraison, obj.longitude_livraison),
             'restaurant_position': _pt(getattr(r, 'latitude', None), getattr(r, 'longitude', None)) if r else None,
             'code_present': bool(liv.code_confirmation),
+            'eta_minutes': self._eta_minutes(obj, liv),
         }
+
+        demandeur = getattr(self.context.get('request'), 'user', None)
+        autorise = demandeur and (
+            demandeur.pk == obj.client_id
+            or demandeur.pk == liv.livreur_id
+            or (r and demandeur.pk == getattr(r, 'user_id', None))
+        )
+        if autorise and obj.client:
+            data['client'] = {
+                'nom': obj.client.get_full_name() or obj.client.username,
+                'telephone': obj.client.telephone,
+                'adresse': obj.adresse_livraison,
+            }
+        return data
+
+    @staticmethod
+    def _eta_minutes(obj, liv):
+        if liv.statut != 'en_livraison' or obj.latitude_livraison is None:
+            return None
+        from .utils import geo
+        r = obj.restaurant
+        lat = liv.latitude_actuelle if liv.latitude_actuelle is not None else (r.latitude if r else None)
+        lon = liv.longitude_actuelle if liv.longitude_actuelle is not None else (r.longitude if r else None)
+        if lat is None or lon is None:
+            return None
+        dist = geo.calculer_distance(lat, lon, obj.latitude_livraison, obj.longitude_livraison)
+        return geo.estimer_temps_livraison(dist, temps_preparation_minutes=0)
+
+
+class MissionPoolSerializer(serializers.ModelSerializer):
+    """Commande offerte au pool de livreurs indépendants, AVANT acceptation.
+
+    N'expose rien d'identifiant sur le client (ni nom, ni téléphone, ni adresse
+    exacte) : seulement une zone approximative. Les coordonnées précises et le
+    contact n'apparaissent qu'une fois la mission acceptée (CommandeSerializer)."""
+
+    restaurant = serializers.SerializerMethodField()
+    zone_livraison = serializers.SerializerMethodField()
+    nb_articles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Commande
+        fields = [
+            'id', 'restaurant', 'zone_livraison', 'montant_total',
+            'frais_livraison', 'part_livreur', 'nb_articles', 'created_at',
+        ]
+
+    def get_restaurant(self, obj):
+        r = obj.restaurant
+        if not r:
+            return None
+        return {
+            'nom': r.nom, 'adresse': r.adresse, 'ville': r.ville,
+            'latitude': float(r.latitude) if r.latitude is not None else None,
+            'longitude': float(r.longitude) if r.longitude is not None else None,
+        }
+
+    def get_zone_livraison(self, obj):
+        # Dernier segment de l'adresse (quartier / ville), jamais l'adresse complète.
+        bribe = (obj.adresse_livraison or '').split(',')[-1].strip()
+        return bribe or (obj.restaurant.ville if obj.restaurant else '')
+
+    def get_nb_articles(self, obj):
+        return sum(l.quantite for l in obj.lignes.all())
 
 
 class LivraisonSerializer(serializers.ModelSerializer):
@@ -290,6 +396,19 @@ class LivraisonSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'commande', 'commande_details', 'livreur', 'statut',
             'latitude_actuelle', 'longitude_actuelle', 'estimated_delivery_time', 'delivered_at',
+        ]
+
+
+class LivraisonCourseSerializer(serializers.ModelSerializer):
+    """Vue « livreur » d'une livraison : contient le code de confirmation à
+    montrer au client (QR), sans ré-embarquer toute la commande."""
+
+    class Meta:
+        model = Livraison
+        fields = [
+            'id', 'commande', 'statut', 'code_confirmation', 'confirmee_par',
+            'motif_sans_code', 'latitude_actuelle', 'longitude_actuelle',
+            'estimated_delivery_time', 'delivered_at', 'created_at',
         ]
 
 

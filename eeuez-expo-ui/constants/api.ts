@@ -17,15 +17,6 @@ export const API_TIMEOUT = 10000;
 // Base pour les fichiers média (images) : API_BASE_URL sans le suffixe /api
 export const MEDIA_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
-// WebSocket (suivi en direct) — dérivé de API_BASE_URL : même hôte, schéma
-// ws/wss selon http/https. ⚠️ Le serveur doit router les connexions
-// WebSocket vers le processus ASGI (Daphne) — ex. nginx :
-// `location /ws/ { proxy_pass http://127.0.0.1:<port_daphne>; proxy_http_version 1.1;
-// proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; }`
-// Tant que ce n'est pas en place côté hébergeur, la connexion échoue
-// silencieusement et l'app continue de fonctionner via le polling habituel.
-export const API_WS_URL = MEDIA_BASE_URL.replace(/^http/, 'ws') + '/ws';
-
 // Clés de stockage AsyncStorage
 export const AUTH_TOKEN_KEY = '@menu_auth_token';
 export const REFRESH_TOKEN_KEY = '@menu_refresh_token';

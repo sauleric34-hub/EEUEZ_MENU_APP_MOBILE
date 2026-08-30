@@ -8,6 +8,7 @@ import type {
   CategorieDTO, PlatDTO, RestoDTO, CommandeDTO,
   FavoriToggleDTO, AbonnementToggleDTO, RecommandationsDTO,
   ConversationDTO, MessageDTO, NoteResultDTO, CamerPayPaymentDTO, BanniereDTO,
+  EstimationLivraisonDTO,
 } from './dto';
 
 // ─── Catalogue ───────────────────────────────────────────────
@@ -125,6 +126,14 @@ export const fetchFideliteApercu = (montant: number) =>
   apiGet<FideliteApercuDTO>('/client/fidelite', { query: { montant }, auth: true });
 export const createOrder = (params: CreateOrderParams) =>
   apiPost<CommandeDTO>('/client/commandes/', params, { auth: true });
+
+/** Frais de livraison réels pour un restaurant + une adresse, calculés par le
+ *  serveur (barème par distance). À afficher au panier AVANT le paiement. */
+export const estimerFraisLivraison = (params: {
+  restaurant: number;
+  latitude: number | null;
+  longitude: number | null;
+}) => apiPost<EstimationLivraisonDTO>('/client/livraison/estimer', params, { auth: true });
 
 export const fetchOrders = () => apiGet<CommandeDTO[]>('/client/commandes/', { auth: true });
 

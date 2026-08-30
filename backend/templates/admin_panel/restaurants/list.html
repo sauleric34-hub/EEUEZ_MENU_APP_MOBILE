@@ -57,6 +57,11 @@
             <div>
               <div class="td-primary" style="color:var(--text-primary);">{{ r.nom }}</div>
               <div style="font-size:0.75rem;color:var(--text-muted);">{{ r.user.email }}</div>
+              {% if not r.latitude %}
+              <span class="badge badge-red" style="margin-top:4px;">Sans position GPS</span>
+              {% elif not r.a_bareme %}
+              <span class="badge badge-amber" style="margin-top:4px;">Barème non configuré</span>
+              {% endif %}
             </div>
           </div>
         </td>

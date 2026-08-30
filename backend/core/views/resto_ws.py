@@ -14,7 +14,6 @@ from django.db.models import Sum, Count, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
-from core.tracking_ws import broadcast_tracking
 from core.models import (
     User, RestaurantProfile, Plat, PlatImage, Categorie, Commande, Livraison,
     Conversation, Message, Favori, Abonnement, RetraitFonds, AuditLog,
@@ -23,9 +22,23 @@ from core.models import (
     GroupeComplement, OptionComplement, ElementInclus,
 )
 from core import fidelite
+from core.delivery import parser_bareme_livraison, remplacer_bareme_livraison
 from core.publications_utils import (
     MAX_MEDIAS_PAR_PUBLICATION, creer_medias, valider_medias,
 )
+
+
+def _notifier_pool_nouvelle_mission(commande):
+    """Push aux livreurs indépendants actifs quand une commande entre au pool."""
+    try:
+        from core.push import envoyer_push, livreurs_independants_actifs
+        envoyer_push(
+            livreurs_independants_actifs(), 'Nouvelle mission disponible',
+            f'Une course à {int(commande.frais_livraison or 0)} F de frais vient de se libérer.',
+            data={'type': 'mission', 'commande_id': commande.pk},
+        )
+    except Exception:
+        pass
 
 
 def resto_required(view):
@@ -176,6 +189,7 @@ def commande_action(request, pk):
             messages.error(request, 'Cette commande a déjà un livreur assigné.')
             return redirect('core:resto_commandes')
         commande.livraison_libre = True
+        _notifier_pool_nouvelle_mission(commande)
         messages.success(
             request,
             f'Commande #{commande.pk} confiée aux livreurs indépendants. '
@@ -190,7 +204,6 @@ def commande_action(request, pk):
         return redirect('core:resto_commandes')
 
     commande.save()
-    broadcast_tracking(commande.pk)
     AuditLog.objects.create(
         user=request.user, action=f'COMMANDE_{(action or "?").upper()}',
         model_name='Commande', object_id=str(commande.pk),
@@ -258,8 +271,13 @@ def plat_form(request, pk=None):
                 plat = Plat(restaurant=resto)
             plat.nom = nom
             plat.prix = int(prix)
+            # Frais de livraison : le barème par distance du restaurant (Profil)
+            # a remplacé le frais par plat. On garde le champ (repli historique)
+            # mais on ne l'édite plus ici — encore accepté si un ancien
+            # formulaire l'envoie.
             frais = request.POST.get('frais_livraison', '')
-            plat.frais_livraison = int(frais) if str(frais).isdigit() else 500
+            if str(frais).isdigit():
+                plat.frais_livraison = int(frais)
             plat.description = request.POST.get('description', '')
             plat.ingredients = request.POST.get('ingredients', '')
             plat.allergies = request.POST.get('allergies', '')
@@ -554,6 +572,8 @@ def profil(request):
                 resto.cover_image = request.FILES['cover_image']
             resto.save()
             messages.success(request, 'Profil mis à jour.')
+        elif form == 'bareme':
+            _enregistrer_bareme_livraison(request, resto)
         elif form == 'position':
             # Position actuelle capturée par le navigateur (géolocalisation)
             try:
@@ -571,7 +591,27 @@ def profil(request):
 
     return render(request, 'resto/profil.html', {
         'resto': resto, 'active_page': 'profil',
+        'paliers': resto.paliers_livraison.all(),
     })
+
+
+def _enregistrer_bareme_livraison(request, resto):
+    """Remplace le barème de livraison par distance du restaurant.
+
+    Le formulaire envoie des lignes parallèles : palier_km[] / palier_prix[].
+    """
+    lignes, erreur = parser_bareme_livraison(
+        request.POST.getlist('palier_km'), request.POST.getlist('palier_prix'),
+    )
+    if erreur:
+        messages.error(request, erreur)
+        return
+
+    remplacer_bareme_livraison(resto, lignes)
+    if lignes:
+        messages.success(request, f'Barème de livraison enregistré ({len(lignes)} tranche(s)).')
+    else:
+        messages.success(request, 'Barème de livraison retiré — le frais fixe s\'applique.')
 
 
 # ─── GALERIE ─────────────────────────────────────────────────

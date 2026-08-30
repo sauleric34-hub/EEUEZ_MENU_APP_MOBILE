@@ -181,3 +181,23 @@ class AdminLivreursTest(TestCase):
         self.nav.post(f'/admin-panel/livreurs/{livreur.pk}/toggle/')
         livreur.refresh_from_db()
         self.assertFalse(livreur.is_active)
+
+    def test_pages_admin_livraison_rendent(self):
+        for url in (
+            '/admin-panel/deliveries/',
+            '/admin-panel/livreurs/',
+            '/admin-panel/livreurs/paiements/',
+            '/admin-panel/livreurs/parametrage/',
+        ):
+            self.assertEqual(self.nav.get(url).status_code, 200, url)
+
+    def test_parametrage_enregistre(self):
+        from core.models_livraison import ParametrageLivraison
+        self.nav.post('/admin-panel/livreurs/parametrage/', {
+            'pourcentage_livreur': 65, 'seuil_paiement_auto': 8000,
+            'delai_relance_minutes': 15, 'max_abandons': 4, 'fenetre_abandons_jours': 10,
+            'actif': 'on',
+        })
+        cfg = ParametrageLivraison.get_solo()
+        self.assertEqual(cfg.pourcentage_livreur, 65)
+        self.assertEqual(cfg.seuil_paiement_auto, 8000)

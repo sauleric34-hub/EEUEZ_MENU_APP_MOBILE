@@ -22,6 +22,7 @@ urlpatterns = [
     path('restaurants/<int:pk>/toggle/', restaurants.restaurant_toggle, name='restaurant_toggle'),
     path('restaurants/<int:pk>/verify/', restaurants.restaurant_verify, name='restaurant_verify'),
     path('restaurants/<int:pk>/commission/', restaurants.restaurant_commission, name='restaurant_commission'),
+    path('restaurants/<int:pk>/bareme-livraison/', restaurants.restaurant_bareme, name='restaurant_bareme'),
 
     # Users
     path('users/', users.user_list, name='user_list'),
@@ -51,8 +52,12 @@ urlpatterns = [
 
     # Deliveries
     path('deliveries/', deliveries.deliveries_view, name='deliveries'),
+    path('deliveries/<int:pk>/action/', deliveries.delivery_action, name='delivery_action'),
     path('livreurs/', livreurs_admin.livreurs_view, name='admin_livreurs'),
     path('livreurs/<int:pk>/toggle/', livreurs_admin.livreur_toggle, name='admin_livreur_toggle'),
+    path('livreurs/paiements/', livreurs_admin.paiements_view, name='admin_livreur_paiements'),
+    path('livreurs/paiements/<int:pk>/action/', livreurs_admin.paiement_action, name='admin_livreur_paiement_action'),
+    path('livreurs/parametrage/', livreurs_admin.parametrage_view, name='admin_livreur_parametrage'),
 
     # Reviews
     path('reviews/', reviews.reviews_view, name='reviews'),

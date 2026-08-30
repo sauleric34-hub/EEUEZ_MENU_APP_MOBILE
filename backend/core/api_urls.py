@@ -23,6 +23,11 @@ urlpatterns = [
     # Client — profil
     path('client/profile', api_views.ClientProfileView.as_view(), name='api-client-profile'),
     path('client/restaurants/nearby', api_views.nearby_restaurants, name='api-client-nearby'),
+    path('client/livraison/estimer', api_views.estimer_frais_livraison, name='api-client-livraison-estimer'),
+
+    # Livreur — profil (compte mobile money) + push
+    path('livreur/profile', api_views.LivreurProfileView.as_view(), name='api-livreur-profile'),
+    path('push/register', api_views.push_register, name='api-push-register'),
 
     # Client — catalogue (app mobile)
     path('client/restaurants', client_views.restaurants_list, name='api-client-restaurants'),

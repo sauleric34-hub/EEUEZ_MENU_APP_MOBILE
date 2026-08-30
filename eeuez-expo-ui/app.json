@@ -52,6 +52,12 @@
         {
           "cameraPermission": "Menu utilise la caméra pour scanner le QR code du livreur et confirmer la réception de votre commande."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#f26a1b"
+        }
       ]
     ],
     "extra": {
