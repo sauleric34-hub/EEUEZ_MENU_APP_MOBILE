@@ -50,11 +50,17 @@ export const LeafletPickerMap = forwardRef<LeafletPickerHandle, Props>(
 
     // Construit le HTML une seule fois (les déplacements passent par __moveTo).
     const html = useMemo(() => buildHtml(initialLat, initialLng, dark), [dark]);
+    // Le `source` doit garder la même référence tant que `html` ne change pas :
+    // un objet `{ html }` recréé à chaque rendu force Android à recharger la
+    // WebView (loadDataWithBaseURL n'a pas de garde anti-doublon, contrairement
+    // à la branche `uri`), ce qui relance `L.map(...).setView(...)`, qui émet
+    // à son tour un `moveend` → `onCenterChange` → nouveau rendu → boucle infinie.
+    const source = useMemo(() => ({ html }), [html]);
 
     return (
       <WebView
         ref={webRef}
-        source={{ html }}
+        source={source}
         style={StyleSheet.absoluteFill}
         originWhitelist={['*']}
         javaScriptEnabled

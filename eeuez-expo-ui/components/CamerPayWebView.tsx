@@ -76,21 +76,30 @@ export function CamerPayWebView({ paymentUrl, orderId, onSuccess, onCancel, onRe
   const verifyPayment = async () => {
     setVerifying(true);
     if (orderId != null) {
+      let confirmed = false;
       for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
         try {
           const commande = await fetchOrder(orderId);
-          if (commande.paiement_confirme) break;
+          if (commande.paiement_confirme) { confirmed = true; break; }
         } catch {
           // Tentative suivante — on ne cède qu'après épuisement du quota.
         }
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
       }
+      setVerifying(false);
+      // CamerPay redirige vers l'URL de succès même pour un paiement annulé/
+      // refusé (aucune URL d'échec distincte configurée côté fournisseur) : on
+      // ne peut donc se fier qu'à `paiement_confirme`, jamais à la seule
+      // navigation vers /payment/success. Si le quota de tentatives est
+      // épuisé sans confirmation, le paiement n'a PAS abouti.
+      if (confirmed) onSuccess();
+      else setPaymentFailed(true);
     } else {
       // Pas d'identifiant fourni par l'appelant : repli minimal.
       await new Promise(resolve => setTimeout(resolve, 800));
+      setVerifying(false);
+      onSuccess();
     }
-    setVerifying(false);
-    onSuccess();
   };
 
   const handleNavChange = (nav: WebViewNavigation) => {

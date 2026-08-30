@@ -14,4 +14,4 @@ requests
 reportlab
 qrcode
 python-dotenv
-mysqli
+mysqlclient==2.2.8

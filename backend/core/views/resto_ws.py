@@ -14,6 +14,7 @@ from django.db.models import Sum, Count, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
+from core.tracking_ws import broadcast_tracking
 from core.models import (
     User, RestaurantProfile, Plat, PlatImage, Categorie, Commande, Livraison,
     Conversation, Message, Favori, Abonnement, RetraitFonds, AuditLog,
@@ -189,6 +190,7 @@ def commande_action(request, pk):
         return redirect('core:resto_commandes')
 
     commande.save()
+    broadcast_tracking(commande.pk)
     AuditLog.objects.create(
         user=request.user, action=f'COMMANDE_{(action or "?").upper()}',
         model_name='Commande', object_id=str(commande.pk),

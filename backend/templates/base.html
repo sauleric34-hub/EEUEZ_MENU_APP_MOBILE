@@ -110,7 +110,7 @@
     <!-- Topbar -->
     <header class="topbar">
       <div class="topbar-left">
-        <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('active');">
+        <button class="sidebar-toggle" aria-label="Ouvrir le menu">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>

@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   slidingPill: {
-    position: 'absolute', top: 9, width: PILL_WIDTH, height: PILL_HEIGHT,
+    position: 'absolute', top: 9, left: 0, width: PILL_WIDTH, height: PILL_HEIGHT,
     borderRadius: Radius.pill, backgroundColor: Brand.accent + '22',
   },
   item: { alignItems: 'center', gap: 3, flex: 1 },

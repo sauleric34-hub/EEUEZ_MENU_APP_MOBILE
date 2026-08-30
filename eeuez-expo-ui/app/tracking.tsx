@@ -17,6 +17,7 @@ import { PressableScale, CenterMessage, displayFont, bodyFont } from '../compone
 import { ConfirmReception } from '../components/ConfirmReception';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import { useToast } from '../context/ToastContext';
+import { useTrackingSocket } from '../hooks/useTrackingSocket';
 
 export default function TrackingScreen() {
   const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
@@ -51,10 +52,15 @@ export default function TrackingScreen() {
   useFocusEffect(
     useCallback(() => {
       reloadOrders();                                   // immédiat
-      const id = setInterval(reloadOrders, 5000);       // puis toutes les 5 s
+      const id = setInterval(reloadOrders, 5000);       // puis toutes les 5 s (filet de sécurité)
       return () => clearInterval(id);
     }, [reloadOrders]),
   );
+
+  // Bonus temps réel : dès que le serveur signale un changement (commande
+  // acceptée, livreur assigné, position, livraison terminée…), on recharge
+  // immédiatement au lieu d'attendre le prochain tick du polling ci-dessus.
+  useTrackingSocket(activeOrder?.id ?? null, !!activeOrder, reloadOrders);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -223,7 +229,14 @@ export default function TrackingScreen() {
           visible={showConfirm}
           orderId={activeOrder.id}
           onClose={() => setShowConfirm(false)}
-          onConfirmed={() => { setShowConfirm(false); reloadOrders(); }}
+          onConfirmed={async () => {
+            setShowConfirm(false);
+            // Recharge avant de quitter : la page Profil (liste « Mes commandes »)
+            // doit déjà voir la commande comme livrée à son arrivée.
+            await reloadOrders();
+            router.replace('/profil');
+            toast.success('Commande livrée avec succès !');
+          }}
         />
       )}
     </ScreenBg>

@@ -79,3 +79,12 @@ desktop.ini
 # .vscode/ laissé versionnable (config partagée) ;
 # décommenter la ligne suivante pour l'ignorer :
 # .vscode/
+
+# ─── Node ────────────────────────────────────────────────────
+node_modules/
+
+# ─── Outillage local Claude Code ─────────────────────────────
+.claude/
+
+# ─── Réglages Django de prévisualisation locale (non versionnés) ─
+backend/backend/preview_settings.py

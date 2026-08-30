@@ -9,6 +9,8 @@
 from django.db import transaction
 from django.utils import timezone
 
+from core.tracking_ws import broadcast_tracking
+
 
 def est_livreur_independant(utilisateur):
     """Un livreur indépendant a le rôle « livreur » et n'est attaché à AUCUN
@@ -56,7 +58,12 @@ def prendre_commande_libre(commande_id, livreur):
         # La commande sort du statut « en attente d'assignation ».
         commande.statut = 'en_preparation'
         commande.save(update_fields=['statut', 'updated_at'])
-        return livraison
+
+    # Hors transaction : le signal ne doit partir qu'une fois la prise
+    # effectivement validée en base (évite de notifier une prise qui,
+    # concurrentiellement, pourrait encore échouer avant le commit).
+    broadcast_tracking(commande_id)
+    return livraison
 
 
 def finaliser_livraison(livraison):
@@ -82,4 +89,5 @@ def finaliser_livraison(livraison):
         livreur.nombre_livraisons = (livreur.nombre_livraisons or 0) + 1
         livreur.save(update_fields=['gain_total', 'nombre_livraisons'])
 
+    broadcast_tracking(commande.pk if commande else None)
     return livraison

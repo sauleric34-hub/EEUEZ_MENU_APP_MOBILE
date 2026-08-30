@@ -85,7 +85,13 @@ export default function LocationPicker() {
   // La carte Leaflet remonte son centre uniquement une fois le geste terminé
   // (événement Leaflet `moveend`) : c'est donc le point exact où faire
   // rebondir le pin.
+  // Tolérance sous laquelle deux coordonnées sont considérées identiques
+  // (bruit de calcul Leaflet/flottant, pas un vrai déplacement de carte).
+  const COORD_EPSILON = 1e-6;
   const onCenterChange = (lat: number, lng: number) => {
+    const unchanged = Math.abs(lat - center.latitude) < COORD_EPSILON
+      && Math.abs(lng - center.longitude) < COORD_EPSILON;
+    if (unchanged) return;
     setCenter({ latitude: lat, longitude: lng });
     resolveCenter(lat, lng);
     bouncePin();

@@ -25,6 +25,7 @@ from .delivery import (
     est_livreur_independant,
 )
 from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
+from .tracking_ws import broadcast_tracking
 from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
 from . import fidelite
 
@@ -383,14 +384,16 @@ class RestaurantCommandeViewSet(viewsets.ModelViewSet):
             return Response({"error": "Commande ne peut pas être acceptée"}, status=400)
         commande.statut = 'acceptee'
         commande.save()
+        broadcast_tracking(commande.pk)
         return Response(CommandeSerializer(commande).data)
-        
+
     @action(detail=True, methods=['put'])
     def refuse(self, request, pk=None):
         commande = self.get_object()
         commande.statut = 'refusee'
         commande.notes = request.data.get('raison', commande.notes)
         commande.save()
+        broadcast_tracking(commande.pk)
         return Response(CommandeSerializer(commande).data)
 
 # --- LIVREUR ---
@@ -445,6 +448,7 @@ class LivreurMissionViewSet(viewsets.ViewSet):
         livraison.save(update_fields=['statut'])
         livraison.commande.statut = 'en_livraison'
         livraison.commande.save(update_fields=['statut', 'updated_at'])
+        broadcast_tracking(livraison.commande_id)
         return Response(LivraisonSerializer(livraison).data)
 
     @action(detail=True, methods=['put'])

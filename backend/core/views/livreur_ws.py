@@ -19,6 +19,7 @@ from core.models import Livraison, AuditLog, Commande
 from core.delivery import (
     est_livreur_independant, prendre_commande_libre, PriseImpossible,
 )
+from core.tracking_ws import broadcast_tracking
 
 # Statuts d'une commande prête à être livrée (offerte au pool libre).
 STATUTS_LIBERABLES = ['acceptee', 'en_preparation', 'prete']
@@ -177,6 +178,7 @@ def position_update(request, pk):
     livraison.latitude_actuelle = lat
     livraison.longitude_actuelle = lon
     livraison.save(update_fields=['latitude_actuelle', 'longitude_actuelle'])
+    broadcast_tracking(livraison.commande_id)
     return JsonResponse({'ok': True})
 
 
@@ -209,6 +211,7 @@ def livraison_action(request, pk):
         return redirect('core:livreur_dashboard')
 
     livraison.save()
+    broadcast_tracking(livraison.commande_id)
     AuditLog.objects.create(
         user=request.user, action=f'LIVRAISON_{(action or "?").upper()}',
         model_name='Livraison', object_id=str(livraison.pk),
