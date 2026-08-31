@@ -1,0 +1,132 @@
+/* ═══════════════════════════════════════════════════════════
+   Éditeur de barème de livraison par distance
+   Partagé entre l'espace restaurant (resto/profil.html) et le
+   panel admin (admin_panel/restaurants/detail.html).
+   ═══════════════════════════════════════════════════════════ */
+
+.bareme-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bareme-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: var(--transition);
+}
+.bareme-row:hover { border-color: var(--border-hover); }
+.bareme-row--error { border-color: var(--accent-red); background: var(--accent-red-dim); }
+
+.bareme-row-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-green-dim);
+  color: var(--accent-green);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bareme-row--error .bareme-row-num { background: var(--accent-red-dim); color: var(--accent-red); }
+
+.bareme-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 120px;
+  min-width: 100px;
+}
+
+.bareme-field-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.bareme-input-group { position: relative; display: flex; align-items: center; }
+.bareme-input-group .input-field { padding-right: 38px; }
+.bareme-unit {
+  position: absolute;
+  right: 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.bareme-row-range {
+  flex: 1 1 180px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.bareme-row--error .bareme-row-range { color: var(--accent-red); font-weight: 600; }
+
+.bareme-remove {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.bareme-remove:hover { background: var(--accent-red-dim); border-color: rgba(239, 68, 68, 0.3); color: var(--accent-red); }
+.bareme-remove svg { width: 15px; height: 15px; stroke: currentColor; }
+
+.bareme-empty {
+  padding: 18px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.bareme-summary {
+  background: var(--accent-green-dim);
+  border: 1px solid rgba(56, 161, 105, 0.25);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 4px;
+}
+
+.bareme-summary-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-green);
+  margin-bottom: 8px;
+}
+
+.bareme-summary-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bareme-summary-list li {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bareme-summary-list li strong { color: var(--accent-green); font-weight: 700; }
+.bareme-summary-list li.bareme-summary-out { color: var(--text-muted); }
+.bareme-summary-list li.bareme-summary-out strong { color: var(--text-muted); }

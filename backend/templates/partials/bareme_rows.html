@@ -1,0 +1,74 @@
+{% load l10n %}
+{# ═══════════════════════════════════════════════════════════
+   Lignes du barème de livraison par distance.
+   Partagé entre resto/profil.html et admin_panel/restaurants/detail.html.
+   Le conteneur englobant (le <form>) doit porter data-bareme-editor et,
+   sur son bouton d'envoi, data-submit — voir static/js/bareme.js.
+   Contexte attendu : `paliers` (queryset/liste triée par jusqu_a_km).
+   ═══════════════════════════════════════════════════════════ #}
+<div class="bareme-rows" data-rows {% if not paliers %}hidden{% endif %}>
+  {% for p in paliers %}
+  <div class="bareme-row" data-bareme-row>
+    <div class="bareme-row-num" data-num>{{ forloop.counter }}</div>
+    <div class="bareme-field">
+      <span class="bareme-field-label">Jusqu'à</span>
+      <div class="bareme-input-group">
+        <input type="number" name="palier_km" class="input-field" data-km
+               value="{{ p.jusqu_a_km|unlocalize }}" min="0.1" step="0.1"
+               inputmode="decimal" placeholder="km">
+        <span class="bareme-unit">km</span>
+      </div>
+    </div>
+    <div class="bareme-field">
+      <span class="bareme-field-label">Prix</span>
+      <div class="bareme-input-group">
+        <input type="number" name="palier_prix" class="input-field" data-prix
+               value="{{ p.prix|unlocalize }}" min="0" step="50"
+               inputmode="numeric" placeholder="F">
+        <span class="bareme-unit">F</span>
+      </div>
+    </div>
+    <div class="bareme-row-range" data-range></div>
+    <button type="button" class="bareme-remove" data-remove title="Supprimer cette tranche" aria-label="Supprimer cette tranche">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="bareme-empty" data-empty {% if paliers %}hidden{% endif %}>
+  Aucune tranche définie pour l'instant — le tarif de repli s'applique à toutes les commandes.
+</div>
+
+<template data-row-template>
+  <div class="bareme-row" data-bareme-row>
+    <div class="bareme-row-num" data-num></div>
+    <div class="bareme-field">
+      <span class="bareme-field-label">Jusqu'à</span>
+      <div class="bareme-input-group">
+        <input type="number" name="palier_km" class="input-field" data-km min="0.1" step="0.1" inputmode="decimal" placeholder="km">
+        <span class="bareme-unit">km</span>
+      </div>
+    </div>
+    <div class="bareme-field">
+      <span class="bareme-field-label">Prix</span>
+      <div class="bareme-input-group">
+        <input type="number" name="palier_prix" class="input-field" data-prix min="0" step="50" inputmode="numeric" placeholder="F">
+        <span class="bareme-unit">F</span>
+      </div>
+    </div>
+    <div class="bareme-row-range" data-range></div>
+    <button type="button" class="bareme-remove" data-remove title="Supprimer cette tranche" aria-label="Supprimer cette tranche">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
+  </div>
+</template>
+
+<div style="margin-bottom:14px;">
+  <button type="button" class="btn btn-secondary btn-sm" data-add-row>+ Ajouter une tranche</button>
+</div>
+
+<div class="bareme-summary" data-summary hidden>
+  <div class="bareme-summary-title">Aperçu pour vos clients</div>
+  <ul class="bareme-summary-list" data-summary-list></ul>
+</div>
