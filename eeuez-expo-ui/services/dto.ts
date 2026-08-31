@@ -194,6 +194,28 @@ export interface CommandeDTO {
   suivi?: SuiviDTO | null;
 }
 
+/** Restaurant écarté d'un checkout groupé (hors zone, fermé, panier vide
+ *  pour lui…) — ses plats restent dans le panier local. */
+export interface ExclusionCommandeDTO {
+  restaurant_id: number;
+  restaurant_nom: string;
+  motif: 'hors_zone' | 'ferme' | 'aucun_plat_valide' | 'complement_invalide';
+  message: string;
+  distance_km: number | null;
+}
+
+/** Panier multi-restaurant : une Commande par restaurant livrable, réglées
+ *  en un seul paiement. `exclusions` liste les restaurants écartés (paiement
+ *  partiel assumé) — absents de `commandes`. */
+export interface CommandeGroupeDTO {
+  id: number;
+  montant_total: string;
+  paiement_confirme: boolean;
+  commandes: CommandeDTO[];
+  exclusions: ExclusionCommandeDTO[];
+  created_at: string;
+}
+
 // ─── Publications (fil social) ───────────────────────────────
 export interface AuteurMiniDTO {
   id: number;

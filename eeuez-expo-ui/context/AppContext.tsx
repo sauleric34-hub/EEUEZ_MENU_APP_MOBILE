@@ -20,7 +20,7 @@ import { useToast } from './ToastContext';
 import * as addr from '../services/addresses';
 import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
-import type { UserDTO, CommandeDTO, AdresseDTO, BanniereDTO } from '../services/dto';
+import type { UserDTO, CommandeDTO, CommandeGroupeDTO, AdresseDTO, BanniereDTO } from '../services/dto';
 import { estCompteDemo } from '../constants/demo';
 
 /** Complément retenu sur une ligne de panier (libellé figé pour l'affichage). */
@@ -55,6 +55,24 @@ export interface CartLine {
  *  sélections identiques faites dans un ordre différent se regroupent. */
 export function cleLigne(platId: number, optionIds: number[]): string {
   return `${platId}:${[...optionIds].sort((a, b) => a - b).join(',')}`;
+}
+
+/** Panier regroupé par restaurant : le panier peut mélanger plusieurs
+ *  restaurants (une Commande par restaurant à la validation), et chacun a
+ *  son propre frais de livraison (son barème, sa distance à l'adresse). */
+export interface CartGroup {
+  restoId: number;
+  resto: Resto | undefined;
+  lines: CartLine[];
+  /** Sous-total de CE restaurant (plats + suppléments), hors livraison. */
+  subtotal: number;
+  /** Frais de livraison de CE restaurant : estimation serveur si connue, sinon repli local. */
+  deliveryFee: number;
+  /** Distance restaurant → adresse, en km (null si pas encore estimée). */
+  distanceKm: number | null;
+  /** Cette adresse est hors de la zone de livraison de CE restaurant : ses
+   *  plats ne seront PAS inclus dans le paiement (mais restent au panier). */
+  horsZone: boolean;
 }
 
 /** Lieu de livraison choisi pour la commande en cours. */
@@ -149,21 +167,31 @@ interface AppContextValue {
   cartDec: (cle: string) => void;
   cartRemove: (cle: string) => void;
   clearCart: () => void;
+  /** Retire du panier les lignes des restaurants donnés (après un checkout
+   *  réussi pour eux) — les autres restaurants restent au panier. */
+  removeCartForRestaurants: (restoIds: number[]) => void;
   cartLines: CartLine[];
+  /** Panier groupé par restaurant — un restaurant hors zone y reste visible,
+   *  mais son sous-total/frais sont exclus de `subtotal`/`deliveryFee`. */
+  cartGroups: CartGroup[];
   cartCount: number;
+  /** Somme des sous-totaux des restaurants PAYABLES (hors zone exclue). */
   subtotal: number;
+  /** Somme des frais de livraison des restaurants PAYABLES (hors zone exclue). */
   deliveryFee: number;
-  /** L'adresse choisie dépasse la zone de livraison du restaurant (barème). */
+  /** Vrai quand AUCUN restaurant du panier n'est payable (tous hors zone). */
   deliveryHorsZone: boolean;
-  /** Distance estimée restaurant → adresse, en km (null si non calculable). */
-  deliveryDistanceKm: number | null;
   total: number;
 
   // commandes / suivi
   orders: CommandeDTO[];
   /** Résout à false en cas d'échec, plutôt que d'échouer silencieusement. */
   reloadOrders: () => Promise<boolean>;
-  checkout: (mode?: PaymentMode, utiliserPoints?: boolean) => Promise<CommandeDTO>;
+  /** Crée une Commande par restaurant du panier (ceux hors zone/fermés sont
+   *  écartés, voir `exclusions` dans la réponse). Ne modifie PAS le panier —
+   *  à l'appelant de retirer les restaurants effectivement commandés une
+   *  fois le paiement confirmé (`removeCartForRestaurants`). */
+  checkout: (mode?: PaymentMode, utiliserPoints?: boolean) => Promise<CommandeGroupeDTO>;
   activeOrder: CommandeDTO | null;
   trackStep: number;
 }
@@ -548,6 +576,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const next = { ...s }; delete next[cle]; return next;
   });
 
+  const clearCart = () => setCart({});
+
   const cartLines = useMemo<CartLine[]>(
     () => Object.entries(cart)
       .map(([cle, ligne]) => {
@@ -568,84 +598,122 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const cartCount = useMemo(
     () => Object.values(cart).reduce((a, l) => a + l.qty, 0), [cart],
   );
-  // Le sous-total inclut les suppléments : c'est ce que le client voit et paie.
-  const subtotal = useMemo(
-    () => cartLines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0), [cartLines],
-  );
-  // Estimation locale, affichée le temps que le serveur réponde : repli sur le
-  // frais du restaurant (barème absent) puis la constante par défaut.
-  const deliveryFeeLocal = useMemo(() => {
-    if (!cartLines.length) return 0;
-    const resto = restoMap.get(cartLines[0].dish.restoId);
-    if (resto?.paliersLivraison?.length) return resto.paliersLivraison[0].prix;
-    const platFees = cartLines.map(l => l.dish.fraisLivraison).filter(f => f > 0);
-    if (platFees.length) return Math.max(...platFees);
-    return resto?.fraisLivraison ?? DELIVERY_FEE;
-  }, [cartLines, restoMap]);
 
-  // Frais de livraison RÉELS : calculés par le serveur (barème par distance)
-  // dès qu'une adresse de livraison est choisie. Le serveur refait le même
-  // calcul — et le fige — à la création de la commande.
-  const cartRestoId = cartLines.length ? cartLines[0].dish.restoId : null;
-  const [estimation, setEstimation] = useState<{
-    frais: number | null; distanceKm: number | null; horsZone: boolean;
-  } | null>(null);
+  const removeCartForRestaurants = (restoIds: number[]) => {
+    if (!restoIds.length) return;
+    const aRetirer = new Set(restoIds);
+    setCart(s => {
+      const next: typeof s = {};
+      for (const [cle, ligne] of Object.entries(s)) {
+        const dish = dishMap.get(ligne.platId);
+        if (dish && aRetirer.has(dish.restoId)) continue; // commandé → retiré
+        next[cle] = ligne;
+      }
+      return next;
+    });
+  };
+
+  // ─── Panier groupé par restaurant + frais de livraison PAR restaurant ──
+  // Chaque restaurant du panier a son propre barème et sa propre distance à
+  // l'adresse choisie : impossible de résumer ça en un frais unique dès que
+  // le panier mélange plusieurs restaurants.
+  const cartRestoIdsKey = useMemo(
+    () => Array.from(new Set(cartLines.map(l => l.dish.restoId))).sort((a, b) => a - b).join(','),
+    [cartLines],
+  );
+
+  // Estimations RÉELLES (serveur), une par restaurant du panier. Le serveur
+  // refait le même calcul — et le fige — à la création de chaque commande.
+  const [estimations, setEstimations] = useState<
+    Record<number, { frais: number | null; distanceKm: number | null; horsZone: boolean } | undefined>
+  >({});
 
   const estimLat = deliveryAddress?.latitude ?? userLoc?.lat ?? null;
   const estimLon = deliveryAddress?.longitude ?? userLoc?.lon ?? null;
 
   useEffect(() => {
-    if (cartRestoId == null || !deliveryAddress) { setEstimation(null); return; }
+    if (!cartRestoIdsKey || !deliveryAddress) { setEstimations({}); return; }
+    const restoIds = cartRestoIdsKey.split(',').map(Number);
     let annule = false;
     const t = setTimeout(async () => {
-      try {
-        const r = await menu.estimerFraisLivraison({
-          restaurant: cartRestoId,
-          latitude: estimLat != null ? Number(estimLat) : null,
-          longitude: estimLon != null ? Number(estimLon) : null,
-        });
-        if (!annule) {
-          setEstimation({
-            frais: r.frais_livraison, distanceKm: r.distance_km, horsZone: r.hors_zone,
+      const resultats = await Promise.all(restoIds.map(async (id) => {
+        try {
+          const r = await menu.estimerFraisLivraison({
+            restaurant: id,
+            latitude: estimLat != null ? Number(estimLat) : null,
+            longitude: estimLon != null ? Number(estimLon) : null,
           });
+          return [id, { frais: r.frais_livraison, distanceKm: r.distance_km, horsZone: r.hors_zone }] as const;
+        } catch {
+          return [id, undefined] as const; // repli silencieux sur l'estimation locale
         }
-      } catch {
-        if (!annule) setEstimation(null); // repli silencieux sur l'estimation locale
-      }
+      }));
+      if (!annule) setEstimations(Object.fromEntries(resultats));
     }, 400);
     return () => { annule = true; clearTimeout(t); };
-  }, [cartRestoId, deliveryAddress, estimLat, estimLon]);
+  }, [cartRestoIdsKey, deliveryAddress, estimLat, estimLon]);
 
-  const deliveryHorsZone = estimation?.horsZone ?? false;
-  const deliveryDistanceKm = estimation?.distanceKm ?? null;
-  const deliveryFee = !cartLines.length
-    ? 0
-    : (estimation && !estimation.horsZone && estimation.frais != null
-        ? estimation.frais
-        : deliveryFeeLocal);
+  const cartGroups = useMemo<CartGroup[]>(() => {
+    const parResto = new Map<number, CartLine[]>();
+    cartLines.forEach(l => {
+      const lignes = parResto.get(l.dish.restoId) ?? [];
+      lignes.push(l);
+      parResto.set(l.dish.restoId, lignes);
+    });
+    return Array.from(parResto.entries()).map(([restoId, lines]) => {
+      const resto = restoMap.get(restoId);
+      const subtotal = lines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0);
+      // Repli local, affiché le temps que le serveur réponde (ou s'il échoue).
+      const fraisLocal = resto?.paliersLivraison?.length
+        ? resto.paliersLivraison[0].prix
+        : (() => {
+            const platFees = lines.map(l => l.dish.fraisLivraison).filter(f => f > 0);
+            return platFees.length ? Math.max(...platFees) : (resto?.fraisLivraison ?? DELIVERY_FEE);
+          })();
+      const estim = estimations[restoId];
+      const horsZone = estim?.horsZone ?? false;
+      const deliveryFee = horsZone
+        ? 0
+        : (estim && estim.frais != null ? estim.frais : fraisLocal);
+      return { restoId, resto, lines, subtotal, deliveryFee, distanceKm: estim?.distanceKm ?? null, horsZone };
+    });
+  }, [cartLines, restoMap, estimations]);
+
+  // Agrégats PAYABLES : un restaurant hors zone n'entre dans aucun des deux —
+  // ses plats restent visibles au panier mais ne comptent pas dans le total.
+  const groupesPayables = useMemo(() => cartGroups.filter(g => !g.horsZone), [cartGroups]);
+  const subtotal = useMemo(
+    () => groupesPayables.reduce((a, g) => a + g.subtotal, 0), [groupesPayables],
+  );
+  const deliveryFee = useMemo(
+    () => groupesPayables.reduce((a, g) => a + g.deliveryFee, 0), [groupesPayables],
+  );
+  // Vrai seulement si RIEN n'est payable (tous les restaurants du panier sont
+  // hors zone) — un panier partiellement hors zone reste commandable.
+  const deliveryHorsZone = cartGroups.length > 0 && groupesPayables.length === 0;
 
   // ─── Commandes / suivi ─────────────────────────────────────
   const checkout = async (
     mode: PaymentMode = 'especes', utiliserPoints = false,
-  ): Promise<CommandeDTO> => {
+  ): Promise<CommandeGroupeDTO> => {
     if (!cartLines.length) throw new Error('Panier vide');
     if (!deliveryAddress || !deliveryAddress.adresse) {
       throw new Error('Choisissez un lieu de livraison.');
     }
-    const restaurant = cartLines[0].dish.restoId;
-    const items = cartLines
-      .filter(l => l.dish.restoId === restaurant)
+    // Un item par ligne de panier, TOUS restaurants confondus : le serveur
+    // retrouve lui-même le restaurant de chaque plat_id (seule source de
+    // vérité) et crée une Commande par restaurant livrable.
+    const items = cartLines.map(l => ({
+      plat_id: l.dish.id,
+      quantite: l.qty,
       // On n'envoie QUE les identifiants d'options : le serveur retrouve les
       // prix lui-même. Transmettre un montant depuis l'app le rendrait
       // falsifiable.
-      .map(l => ({
-        plat_id: l.dish.id,
-        quantite: l.qty,
-        complements: l.complements.map(c => c.optionId),
-      }));
+      complements: l.complements.map(c => c.optionId),
+    }));
     const adresseText = [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ');
-    const order = await menu.createOrder({
-      restaurant, adresse_livraison: adresseText, items, mode_paiement: mode,
+    const groupe = await menu.createOrderGroup({
+      adresse_livraison: adresseText, items, mode_paiement: mode,
       // Coordonnées GPS précises du lieu de livraison → carte du livreur + suivi
       latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
       longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
@@ -653,14 +721,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     // La dépense de points modifie le solde : on resynchronise le profil.
     if (utiliserPoints) await refreshUser();
-    // On NE vide PAS le panier ici : pour le mobile money la commande n'existe
-    // vraiment qu'une fois payée. Le panier est vidé par l'appelant (espèces
-    // tout de suite, mobile money seulement après confirmation du paiement).
+    // On NE MODIFIE PAS le panier ici : pour le mobile money, la commande
+    // n'existe vraiment qu'une fois payée. C'est à l'appelant de retirer les
+    // restaurants effectivement commandés une fois le paiement confirmé
+    // (espèces tout de suite, mobile money après le webhook) via
+    // `removeCartForRestaurants` — les restaurants exclus (hors zone…)
+    // restent au panier dans tous les cas.
     await reloadOrders();
-    return order;
+    return groupe;
   };
-
-  const clearCart = () => setCart({});
 
   const activeOrder = useMemo(() => {
     const live = orders.filter(o => o.statut !== 'livree' && o.statut !== 'refusee' && o.statut !== 'annulee');
@@ -685,8 +754,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     likes, toggleLike, favList,
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
     pubLikes, togglePubLike, reloadPubLikes,
-    cart, addToCart, cartInc, cartDec, cartRemove, clearCart,
-    cartLines, cartCount, subtotal, deliveryFee, deliveryHorsZone, deliveryDistanceKm,
+    cart, addToCart, cartInc, cartDec, cartRemove, clearCart, removeCartForRestaurants,
+    cartLines, cartGroups, cartCount, subtotal, deliveryFee, deliveryHorsZone,
     total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,
   };

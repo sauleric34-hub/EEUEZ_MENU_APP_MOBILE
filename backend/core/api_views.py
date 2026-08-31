@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -14,12 +15,14 @@ import json
 import uuid
 import requests as http_requests
 
-from .models import User, RestaurantProfile, Plat, Commande, LigneCommande, Livraison, Avis, Transaction, Reservation
-from .models_livraison import ParametrageLivraison
+from .models import (
+    User, RestaurantProfile, Plat, Commande, Livraison, Avis, Transaction,
+    Reservation, CommandeGroupe, PaiementGroupe,
+)
 from .serializers import (
     UserSerializer, RestaurantProfileSerializer, PlatSerializer,
-    CommandeSerializer, LivraisonSerializer, LivraisonCourseSerializer,
-    MissionPoolSerializer,
+    CommandeSerializer, CommandeGroupeSerializer, LivraisonSerializer,
+    LivraisonCourseSerializer, MissionPoolSerializer,
 )
 from .utils import geo
 from .delivery import (
@@ -28,7 +31,10 @@ from .delivery import (
     marquer_livree_sans_code, abandonner_livraison, calculer_frais_livraison,
     STATUTS_LIBERABLES, STATUTS_ACTIFS,
 )
-from .complements import resoudre_choix, enregistrer_choix, ComplementInvalide
+from .checkout_groupe import (
+    construire_commande, enregistrer_transaction_paiement, creer_commandes_groupees,
+    RestaurantExclu, mode_paiement_valide,
+)
 from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
 from . import fidelite
 
@@ -220,11 +226,15 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """Création d'une commande.
+        """Création d'une commande (un seul restaurant).
 
         Toute la méthode est transactionnelle : si le débit des points échoue
         (solde insuffisant, concurrence), la commande entière est annulée —
         jamais de commande réduite sans points débités, ni l'inverse.
+
+        Pour un panier multi-restaurant, voir `commandes_groupees` ci-dessous :
+        même moteur de construction (`checkout_groupe.construire_commande`),
+        une Commande par restaurant.
         """
         user = request.user
         data = request.data
@@ -234,18 +244,11 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         except RestaurantProfile.DoesNotExist:
             return Response({"error": "Restaurant introuvable"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not restaurant.is_open:
-            return Response({"error": "Le restaurant est fermé"}, status=status.HTTP_400_BAD_REQUEST)
-
         items = data.get('items', [])
         if not items:
             return Response({"error": "Le panier est vide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Mode de paiement (par défaut : espèces à la livraison)
-        VALID_MODES = {'especes', 'mtn_money', 'orange_money', 'carte'}
-        mode_paiement = data.get('mode_paiement', 'especes')
-        if mode_paiement not in VALID_MODES:
-            mode_paiement = 'especes'
+        mode_paiement = mode_paiement_valide(data.get('mode_paiement', 'especes'))
 
         def _coord(v):
             try:
@@ -253,81 +256,15 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 return None
 
-        commande = Commande.objects.create(
-            client=user,
-            restaurant=restaurant,
-            adresse_livraison=data.get('adresse_livraison', ''),
-            latitude_livraison=_coord(data.get('latitude')),
-            longitude_livraison=_coord(data.get('longitude')),
-            notes=data.get('notes', ''),
-            statut='en_attente',
-            delai_estime=restaurant.temps_livraison_moyen,
-        )
-
-        sous_total_client = 0  # ce que paie le client (prix de base + %)
-        sous_total_base = 0    # ce qui revient au restaurant (prix de base)
-        frais_plats = []       # frais de livraison des plats commandés
-        for item in items:
-            try:
-                plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
-            except (Plat.DoesNotExist, KeyError):
-                continue
-            qte = max(1, int(item.get('quantite', 1)))
-
-            # Compléments : le supplément est recalculé depuis la base, jamais
-            # repris de la requête — sinon un client modifié se paierait des
-            # options gratuites.
-            try:
-                descriptions, supplement = resoudre_choix(
-                    plat, item.get('complements'),
-                )
-            except ComplementInvalide as e:
-                commande.delete()
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-            supplement = int(supplement)
-            prix_base = int(plat.prix) + supplement
-            # Le supplément s'ajoute après la majoration plateforme : il est
-            # reversé au restaurant tel quel, sans commission.
-            prix_client = plat.prix_client + supplement
-
-            ligne = LigneCommande.objects.create(
-                commande=commande, plat=plat, quantite=qte, prix_unitaire=prix_client,
+        try:
+            commande = construire_commande(
+                user=user, restaurant=restaurant, items=items,
+                adresse_livraison=data.get('adresse_livraison', ''),
+                latitude=_coord(data.get('latitude')), longitude=_coord(data.get('longitude')),
+                notes=data.get('notes', ''), mode_paiement=mode_paiement,
             )
-            enregistrer_choix(ligne, descriptions)
-
-            sous_total_client += prix_client * qte
-            sous_total_base += prix_base * qte
-            frais_plats.append(float(plat.frais_livraison))
-
-        if sous_total_client == 0:
-            commande.delete()
-            return Response({"error": "Aucun plat valide dans la commande"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Frais de livraison : barème du restaurant selon la distance
-        # restaurant → adresse de livraison. Repli sur le frais le plus élevé
-        # parmi les plats commandés (sinon le frais fixe du restaurant) quand
-        # aucun barème n'est configuré ou que la distance n'est pas mesurable.
-        repli_frais = int(round(max(frais_plats))) if frais_plats else int(restaurant.frais_livraison or 0)
-        frais_liv, hors_zone, _distance_km = calculer_frais_livraison(
-            restaurant, commande.latitude_livraison, commande.longitude_livraison,
-            repli=repli_frais,
-        )
-        if hors_zone:
-            commande.delete()
-            return Response(
-                {"error": "Cette adresse est hors de la zone de livraison du restaurant."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        # On FIGE les frais et la part livreur sur la commande : ni le restaurant
-        # ni la plateforme ne peuvent les faire varier après coup.
-        commande.frais_livraison = int(round(frais_liv))
-        commande.part_livreur = ParametrageLivraison.get_solo().part_livreur(frais_liv)
-        # Le client paie les plats majorés + la livraison
-        commande.montant_total = sous_total_client + frais_liv
-        # Le restaurant ne perçoit que ses prix de base ; la majoration revient à la plateforme
-        commande.montant_restaurant = sous_total_base
-        commande.commission_eeuez = sous_total_client - sous_total_base
+        except RestaurantExclu as e:
+            return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
 
         # ── Réduction fidélité ────────────────────────────────────────────
         # Le montant est TOUJOURS recalculé côté serveur : le client demande
@@ -343,19 +280,13 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
                     # La plateforme finance la réduction sur sa marge : la part
                     # du restaurant et les frais du livreur restent intacts.
                     commande.commission_eeuez = commande.commission_eeuez - reduction
+                    commande.save(update_fields=[
+                        'points_utilises', 'reduction_points', 'montant_total', 'commission_eeuez',
+                    ])
 
-        # Mobile money : commande non confirmée tant que le paiement n'a pas abouti.
-        commande.paiement_confirme = (mode_paiement == 'especes')
-        commande.save()
-
-        # Trace du paiement (espèces = à encaisser à la livraison)
-        Transaction.objects.create(
-            commande=commande,
-            type='paiement_client',
-            montant=commande.montant_total,
-            mode_paiement=mode_paiement,
-            statut='complete' if mode_paiement == 'especes' else 'en_attente',
-        )
+        # Trace du paiement (espèces = à encaisser à la livraison), montant
+        # DÉFINITIF (après une éventuelle réduction fidélité ci-dessus).
+        enregistrer_transaction_paiement(commande, mode_paiement)
 
         return Response(
             CommandeSerializer(commande, context={'request': request}).data,
@@ -448,6 +379,131 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
         finaliser_livraison(livraison, par='client')
         return Response(CommandeSerializer(commande, context={'request': request}).data)
+
+
+# ── Checkout multi-restaurant (panier mélangeant plusieurs restaurants) ─────
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def commandes_groupees(request):
+    """
+    POST /api/client/commandes/groupees/
+    Body : { adresse_livraison, latitude, longitude, notes, mode_paiement,
+              utiliser_points, items: [{plat_id, quantite, complements}, …] }
+
+    Le panier peut mélanger des plats de plusieurs restaurants : UNE Commande
+    est créée par restaurant (son propre frais de livraison, selon SON
+    barème et SA distance), reliées par un CommandeGroupe.
+
+    Un restaurant hors zone / fermé / sans plat valide est simplement écarté
+    — les autres sont commandés normalement (paiement partiel assumé).
+    Réponse 201 tant qu'AU MOINS une commande a pu être créée ; 400
+    seulement si aucune ne l'a pu (voir `exclusions` dans les deux cas).
+    """
+    user = request.user
+    data = request.data
+    items = data.get('items', [])
+    if not items:
+        return Response({"error": "Le panier est vide"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _coord(v):
+        try:
+            return round(float(v), 6)
+        except (TypeError, ValueError):
+            return None
+
+    with transaction.atomic():
+        groupe, commandes, exclusions, erreur = creer_commandes_groupees(
+            user=user, items=items,
+            adresse_livraison=data.get('adresse_livraison', ''),
+            latitude=_coord(data.get('latitude')), longitude=_coord(data.get('longitude')),
+            notes=data.get('notes', ''),
+            mode_paiement=mode_paiement_valide(data.get('mode_paiement', 'especes')),
+            utiliser_points=bool(data.get('utiliser_points')),
+        )
+        if erreur:
+            return Response({'error': erreur, 'exclusions': exclusions}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = CommandeGroupeSerializer(groupe, context={'request': request}).data
+        payload['exclusions'] = exclusions
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def initier_paiement_groupe(request, groupe_id):
+    """
+    POST /api/client/commandes/groupes/{id}/initier_paiement/
+    Body (optionnel) : { "phone": "6XXXXXXXX" }
+    Retourne : { "payment_url": "https://..." }
+
+    Un seul paiement CamerPay pour tout le groupe — miroir de
+    `initier_paiement` (commande unique), mais adossé à PaiementGroupe :
+    la confirmation du webhook créditera toutes les commandes d'un coup.
+    """
+    groupe = get_object_or_404(CommandeGroupe, pk=groupe_id, client=request.user)
+    paiement = getattr(groupe, 'paiement', None)
+    if not paiement or paiement.statut != 'en_attente':
+        return Response(
+            {'error': 'Aucun paiement mobile money en attente pour ce groupe.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    payment_ref = paiement.reference or f'EEUEZG-{groupe.id}-{uuid.uuid4().hex[:8].upper()}'
+    if not paiement.reference:
+        paiement.reference = payment_ref
+        paiement.save(update_fields=['reference'])
+
+    phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
+
+    transaction_uuid, pay_url, error = camerpay_initier_paiement(
+        amount=int(paiement.montant), merchant_invoice_id=payment_ref,
+        payment_method=PAYMENT_METHOD_PAR_MODE.get(paiement.mode_paiement, ''),
+        customer_phone=phone, customer_email=request.user.email,
+        customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
+        callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
+        return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
+    )
+    if error:
+        code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
+        return Response({'error': error}, status=code)
+
+    paiement.provider_reference = transaction_uuid
+    paiement.save(update_fields=['provider_reference'])
+    return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def detail_groupe(request, groupe_id):
+    """
+    GET /api/client/commandes/groupes/{id}/
+    Sert au client mobile à vérifier `paiement_confirme` après un retour de
+    paiement CamerPay (polling), comme `fetchOrder` pour une commande seule —
+    mais ici `paiement_confirme` porte sur TOUTES les commandes du groupe.
+    """
+    groupe = get_object_or_404(CommandeGroupe, pk=groupe_id, client=request.user)
+    return Response(CommandeGroupeSerializer(groupe, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def annuler_groupe(request, groupe_id):
+    """Annule un groupe non encore payé (paiement mobile money abandonné) :
+    supprime toutes ses commandes, rend les points éventuellement engagés."""
+    groupe = get_object_or_404(CommandeGroupe, pk=groupe_id, client=request.user)
+    with transaction.atomic():
+        commandes = list(groupe.commandes.all())
+        if any(c.paiement_confirme for c in commandes):
+            return Response(
+                {'error': 'Groupe déjà payé — annulation impossible.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for commande in commandes:
+            fidelite.rembourser_points(commande)
+            commande.delete()
+        groupe.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # --- RESTAURANT ---
 class RestaurantWorkspaceView(views.APIView):
@@ -731,6 +787,64 @@ def _camerpay_notify_reservation(payment_ref, statut_interne):
     return HttpResponse('OK')
 
 
+def _confirmer_paiement_commande(commande):
+    """Marque UNE commande comme payée (idempotent) et prévient le pool de
+    livraison libre si elle y avait déjà été confiée. Partagé entre le
+    paiement d'une commande unique et celui d'un groupe."""
+    if commande.paiement_confirme:
+        return
+    commande.paiement_confirme = True
+    commande.save(update_fields=['paiement_confirme', 'updated_at'])
+    if commande.livraison_libre and not hasattr(commande, 'livraison'):
+        try:
+            from .views.resto_ws import _notifier_pool_nouvelle_mission
+            _notifier_pool_nouvelle_mission(commande)
+        except Exception:
+            pass
+
+
+def _camerpay_notify_groupe(payment_ref, statut_interne, amount_recu, txn_uuid):
+    """Traite la notification CamerPay d'un panier multi-restaurant
+    (ref « EEUEZG-<groupe_id>-... ») : un seul paiement confirme d'un coup
+    TOUTES les commandes du groupe."""
+    try:
+        paiement = PaiementGroupe.objects.select_related('groupe').get(reference=payment_ref)
+    except PaiementGroupe.DoesNotExist:
+        return HttpResponse('OK')  # référence inconnue → 200, pas de retentative
+
+    if paiement.statut == 'complete':
+        return HttpResponse('OK')  # idempotence
+
+    try:
+        if amount_recu and int(float(amount_recu)) != int(paiement.montant):
+            return HttpResponse('Montant incohérent', status=400)
+    except (TypeError, ValueError):
+        pass
+
+    if not paiement.provider_reference and txn_uuid:
+        paiement.provider_reference = txn_uuid
+
+    if statut_interne == 'complete':
+        paiement.statut = 'complete'
+        paiement.save(update_fields=['statut', 'provider_reference'])
+        with transaction.atomic():
+            for commande in paiement.groupe.commandes.select_for_update():
+                _confirmer_paiement_commande(commande)
+                Transaction.objects.filter(
+                    commande=commande, type='paiement_client',
+                ).exclude(statut='complete').update(statut='complete')
+    elif statut_interne in ('echouee', 'remboursee'):
+        paiement.statut = statut_interne
+        paiement.save(update_fields=['statut', 'provider_reference'])
+        Transaction.objects.filter(
+            commande__groupe=paiement.groupe, type='paiement_client', statut='en_attente',
+        ).update(statut=statut_interne)
+    else:
+        paiement.save(update_fields=['provider_reference'])
+
+    return HttpResponse('OK')
+
+
 @csrf_exempt
 @require_POST
 def camerpay_notify(request):
@@ -788,6 +902,12 @@ def camerpay_notify(request):
         if invoice_id.startswith('RESA-'):
             return _camerpay_notify_reservation(invoice_id, statut_interne)
 
+        # ── Paiement d'un GROUPE de commandes (ref « EEUEZG-<id>-... ») ─────
+        # Testé AVANT le chemin commande unique : un groupe utilise
+        # PaiementGroupe, jamais Transaction.reference.
+        if invoice_id.startswith('EEUEZG-'):
+            return _camerpay_notify_groupe(invoice_id, statut_interne, amount_recu, txn_uuid)
+
         try:
             txn = Transaction.objects.get(reference=invoice_id)
         except Transaction.DoesNotExist:
@@ -812,18 +932,8 @@ def camerpay_notify(request):
             txn.statut = 'complete'
             txn.save(update_fields=['statut', 'provider_reference'])
             # Paiement confirmé → la commande devient visible du restaurant.
-            commande = txn.commande
-            if commande and not commande.paiement_confirme:
-                commande.paiement_confirme = True
-                commande.save(update_fields=['paiement_confirme', 'updated_at'])
-                # Si le restaurant l'avait déjà confiée au pool, elle n'était
-                # pas notifiable tant qu'impayée : on prévient maintenant.
-                if commande.livraison_libre and not hasattr(commande, 'livraison'):
-                    try:
-                        from .views.resto_ws import _notifier_pool_nouvelle_mission
-                        _notifier_pool_nouvelle_mission(commande)
-                    except Exception:
-                        pass
+            if txn.commande:
+                _confirmer_paiement_commande(txn.commande)
         elif statut_interne in ('echouee', 'remboursee'):
             txn.statut = statut_interne
             txn.save(update_fields=['statut', 'provider_reference'])
@@ -842,7 +952,9 @@ def camerpay_return(request):
     """
     ref = request.GET.get('ref', '')
     success = False
-    if ref:
+    if ref.startswith('EEUEZG-'):
+        success = PaiementGroupe.objects.filter(reference=ref, statut='complete').exists()
+    elif ref:
         txn = Transaction.objects.filter(reference=ref, statut='complete').first()
         success = txn is not None
 

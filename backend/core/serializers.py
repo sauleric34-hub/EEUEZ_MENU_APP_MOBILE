@@ -4,7 +4,7 @@ from django.db.models import Sum, Avg
 from .models import (
     RestaurantProfile, Categorie, Plat, Commande, LigneCommande,
     Livraison, Avis, Favori, Abonnement, Conversation, Message, AdresseLivraison,
-    RestaurantMedia, Reservation, Banniere,
+    RestaurantMedia, Reservation, Banniere, CommandeGroupe,
 )
 
 User = get_user_model()
@@ -349,6 +349,16 @@ class CommandeSerializer(serializers.ModelSerializer):
             return None
         dist = geo.calculer_distance(lat, lon, obj.latitude_livraison, obj.longitude_livraison)
         return geo.estimer_temps_livraison(dist, temps_preparation_minutes=0)
+
+
+class CommandeGroupeSerializer(serializers.ModelSerializer):
+    """Panier multi-restaurant : les commandes qui ont pu être créées (une par
+    restaurant livrable), plus le montant combiné à payer en une fois."""
+    commandes = CommandeSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CommandeGroupe
+        fields = ['id', 'montant_total', 'paiement_confirme', 'commandes', 'created_at']
 
 
 class MissionPoolSerializer(serializers.ModelSerializer):

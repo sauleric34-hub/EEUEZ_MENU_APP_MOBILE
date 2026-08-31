@@ -22,7 +22,7 @@ import { X, ShieldCheck, TriangleAlert } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Brand, Radius } from '../constants/theme';
 import { CAMERPAY_SUCCESS_URL } from '../constants/api';
-import { fetchOrder } from '../services/menu';
+import { fetchOrder, fetchOrderGroup } from '../services/menu';
 import { bodyFont, displayFont } from './ui';
 
 const POLL_INTERVAL_MS = 1500;
@@ -32,8 +32,14 @@ interface Props {
   /** pay_url CamerPay reçue du backend. */
   paymentUrl: string;
   /** Identifiant de la commande — permet de vérifier réellement le paiement
-   *  (paiement_confirme) plutôt que de se fier à un simple délai. */
+   *  (paiement_confirme) plutôt que de se fier à un simple délai. Ignoré si
+   *  `groupeId` est fourni (panier multi-restaurant : un seul paiement pour
+   *  plusieurs commandes, voir `groupeId`). */
   orderId?: number;
+  /** Identifiant du groupe de commandes (panier multi-restaurant) — la
+   *  vérification porte alors sur `paiement_confirme` du GROUPE (toutes ses
+   *  commandes), pas d'une commande isolée. Prioritaire sur `orderId`. */
+  groupeId?: number;
   /** Appelé quand le paiement est confirmé (ou, à défaut d'orderId, après
    *  détection de la page de succès). */
   onSuccess: () => void;
@@ -46,7 +52,7 @@ interface Props {
   amount?: number;
 }
 
-export function CamerPayWebView({ paymentUrl, orderId, onSuccess, onCancel, onRetry, amount }: Props) {
+export function CamerPayWebView({ paymentUrl, orderId, groupeId, onSuccess, onCancel, onRetry, amount }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
@@ -75,12 +81,16 @@ export function CamerPayWebView({ paymentUrl, orderId, onSuccess, onCancel, onRe
    *  plafond de tentatives, borné dans le temps (~12 s) même sur réseau lent. */
   const verifyPayment = async () => {
     setVerifying(true);
-    if (orderId != null) {
+    if (groupeId != null || orderId != null) {
       let confirmed = false;
       for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
         try {
-          const commande = await fetchOrder(orderId);
-          if (commande.paiement_confirme) { confirmed = true; break; }
+          // Groupe (panier multi-restaurant) : TOUTES ses commandes doivent
+          // être confirmées. Sinon, commande isolée comme avant.
+          const paye = groupeId != null
+            ? (await fetchOrderGroup(groupeId)).paiement_confirme
+            : (await fetchOrder(orderId as number)).paiement_confirme;
+          if (paye) { confirmed = true; break; }
         } catch {
           // Tentative suivante — on ne cède qu'après épuisement du quota.
         }

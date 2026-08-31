@@ -281,6 +281,12 @@ class Commande(models.Model):
     # livreurs INDÉPENDANTS (non attachés à un restaurant). Tant qu'aucune
     # Livraison n'existe, tout livreur indépendant peut la prendre.
     livraison_libre = models.BooleanField(default=False)
+    # Panier multi-restaurant : plusieurs Commande (une par restaurant) reliées
+    # au même passage en caisse. Nul pour une commande créée hors de ce flux
+    # (ancien endpoint, seed, etc.). Voir models_commande_groupe.py.
+    groupe = models.ForeignKey(
+        'core.CommandeGroupe', on_delete=models.SET_NULL, null=True, blank=True, related_name='commandes',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -665,3 +671,6 @@ from .models_livraison import (  # noqa: E402,F401
     ParametrageLivraison, PalierLivraison, PaiementLivreur, AbandonLivraison,
     AppareilPush,
 )
+
+# ─── Panier multi-restaurant (checkout groupé) ────────────────
+from .models_commande_groupe import CommandeGroupe, PaiementGroupe  # noqa: E402,F401

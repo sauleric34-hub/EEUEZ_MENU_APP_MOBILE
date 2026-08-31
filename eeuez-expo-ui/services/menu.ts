@@ -5,7 +5,7 @@
 import { apiGet, apiPost, apiUpload } from './http';
 import { ajouterFichier } from './upload';
 import type {
-  CategorieDTO, PlatDTO, RestoDTO, CommandeDTO,
+  CategorieDTO, PlatDTO, RestoDTO, CommandeDTO, CommandeGroupeDTO,
   FavoriToggleDTO, AbonnementToggleDTO, RecommandationsDTO,
   ConversationDTO, MessageDTO, NoteResultDTO, CamerPayPaymentDTO, BanniereDTO,
   EstimationLivraisonDTO,
@@ -126,6 +126,43 @@ export const fetchFideliteApercu = (montant: number) =>
   apiGet<FideliteApercuDTO>('/client/fidelite', { query: { montant }, auth: true });
 export const createOrder = (params: CreateOrderParams) =>
   apiPost<CommandeDTO>('/client/commandes/', params, { auth: true });
+
+// ─── Checkout multi-restaurant (panier mélangeant plusieurs restaurants) ──
+/** Un item du panier n'a plus besoin de préciser son restaurant : le serveur
+ *  le retrouve lui-même depuis `plat_id` (seule source de vérité). */
+export interface CreateOrderGroupParams {
+  adresse_livraison: string;
+  items: CreateOrderItem[];
+  mode_paiement?: PaymentMode;
+  latitude?: number | null;
+  longitude?: number | null;
+  notes?: string;
+  utiliser_points?: boolean;
+}
+
+/** Crée une Commande par restaurant présent dans le panier. Un restaurant
+ *  hors zone / fermé est écarté (voir `exclusions` dans la réponse) SANS
+ *  empêcher les autres d'être commandés — sauf si aucun ne peut l'être, où
+ *  la promesse est rejetée avec un message détaillant chaque restaurant. */
+export const createOrderGroup = (params: CreateOrderGroupParams) =>
+  apiPost<CommandeGroupeDTO>('/client/commandes/groupees/', params, { auth: true });
+
+/** Paiement CamerPay unique pour tout le groupe (toutes ses commandes). */
+export const initiateCamerPayPaymentGroupe = (groupeId: number, phone?: string) =>
+  apiPost<CamerPayPaymentDTO>(
+    `/client/commandes/groupes/${groupeId}/initier_paiement/`,
+    phone ? { phone } : {},
+    { auth: true },
+  );
+
+/** Annule un groupe non encore payé (mobile money abandonné). */
+export const cancelOrderGroup = (groupeId: number) =>
+  apiPost<void>(`/client/commandes/groupes/${groupeId}/annuler/`, {}, { auth: true });
+
+/** Un groupe précis — sert à vérifier `paiement_confirme` (TOUTES ses
+ *  commandes) après un retour de paiement CamerPay, par polling. */
+export const fetchOrderGroup = (groupeId: number) =>
+  apiGet<CommandeGroupeDTO>(`/client/commandes/groupes/${groupeId}/`, { auth: true });
 
 /** Frais de livraison réels pour un restaurant + une adresse, calculés par le
  *  serveur (barème par distance). À afficher au panier AVANT le paiement. */

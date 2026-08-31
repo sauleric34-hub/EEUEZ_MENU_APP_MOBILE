@@ -11,14 +11,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
-import { useApp, type CartLine } from '../../context/AppContext';
+import { useApp, type CartLine, type CartGroup } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
 import type { PaymentMode, FideliteApercuDTO } from '../../services/menu';
-import { initiateCamerPayPayment, cancelOrder, fetchFideliteApercu } from '../../services/menu';
+import { initiateCamerPayPaymentGroupe, cancelOrderGroup, fetchFideliteApercu } from '../../services/menu';
+import type { CommandeGroupeDTO } from '../../services/dto';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { CamerPayWebView } from '../../components/CamerPayWebView';
 import { useGardeDemo } from '../../hooks/useGardeDemo';
+import { useToast } from '../../context/ToastContext';
 import { animateListChange } from '../../lib/layoutAnimation';
 
 const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
@@ -34,8 +36,9 @@ const GAP = 13;
 
 /** Une ligne de panier : glisser vers la gauche pour supprimer (plutôt qu'un
  *  petit bouton ×), avec fondu + collapse de hauteur à la sortie. Le chiffre
- *  de quantité fait un bref « bump » à chaque tap +/-. */
-function CartLineRow({ line }: { line: CartLine }) {
+ *  de quantité fait un bref « bump » à chaque tap +/-. `dimmed` signale un
+ *  plat dont le restaurant est hors zone : visible, mais pas commandable. */
+function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
   const { colors, cartInc, cartDec, cartRemove } = useApp();
   const { cle, dish, qty, complements, prixUnitaire } = line;
 
@@ -96,7 +99,10 @@ function CartLineRow({ line }: { line: CartLine }) {
         },
       ]}
     >
-      <View onLayout={e => { if (measuredHeight == null) setMeasuredHeight(e.nativeEvent.layout.height); }}>
+      <View
+        onLayout={e => { if (measuredHeight == null) setMeasuredHeight(e.nativeEvent.layout.height); }}
+        style={dimmed && { opacity: 0.5 }}
+      >
         {/* Zone de suppression révélée derrière la ligne pendant le glissement */}
         <Animated.View style={[styles.deleteZone, { opacity: deleteOpacity }]}>
           <Trash2 size={20} color="#fff" strokeWidth={2.3} />
@@ -144,9 +150,54 @@ function CartLineRow({ line }: { line: CartLine }) {
   );
 }
 
+/** Un restaurant du panier : ses plats, sa propre distance/frais de livraison
+ *  (chaque restaurant a SON barème), et — s'il est hors zone pour l'adresse
+ *  choisie — un signalement clair : ses plats restent visibles mais ne
+ *  seront PAS commandés (les autres restaurants du panier, eux, le seront). */
+function CartGroupSection({ group }: { group: CartGroup }) {
+  const { colors } = useApp();
+  const { resto, lines, deliveryFee, distanceKm, horsZone } = group;
+
+  return (
+    <View style={{ marginTop: 22 }}>
+      <View style={styles.groupHeader}>
+        <Text numberOfLines={1} style={[displayFont(14.5, '800'), { color: colors.text, flex: 1 }]}>
+          {resto?.name ?? 'Restaurant'}
+        </Text>
+        {horsZone ? (
+          <View style={[styles.zoneBadge, { backgroundColor: '#ff6b7022', borderColor: '#ff6b7055' }]}>
+            <TriangleAlert size={12} color="#ff6b70" strokeWidth={2.4} />
+            <Text style={[bodyFont(11, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
+          </View>
+        ) : (
+          <Text style={[bodyFont(12, '700'), { color: '#8fd6a8' }]}>
+            {distanceKm != null ? `${distanceKm.toFixed(1)} km · ` : ''}{formatPrice(deliveryFee)}
+          </Text>
+        )}
+      </View>
+
+      {lines.map(line => <CartLineRow key={line.cle} line={line} dimmed={horsZone} />)}
+
+      {horsZone && (
+        <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: -4, marginBottom: 4 }]}>
+          Ce restaurant ne livre pas jusqu'à cette adresse — ces plats ne seront pas commandés.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function PanierScreen() {
-  const { colors, cartLines, clearCart, subtotal, deliveryFee, deliveryHorsZone, deliveryDistanceKm, total, cartCount, checkout, reloadOrders, deliveryAddress, user } = useApp();
+  const {
+    colors, cartGroups, removeCartForRestaurants,
+    subtotal, deliveryFee, deliveryHorsZone, total, cartCount, checkout, reloadOrders, deliveryAddress, user,
+  } = useApp();
+  // Restaurants réellement payables (hors zone exclue) — c'est CE périmètre
+  // que le paiement porte ; les autres restent visibles mais de côté.
+  const groupesPayables = cartGroups.filter(g => !g.horsZone);
+  const groupesExclus = cartGroups.filter(g => g.horsZone);
   const router = useRouter();
+  const toast = useToast();
   // Le compte de démonstration peut remplir un panier, mais pas commander.
   const { bloquer } = useGardeDemo();
   const [mode, setMode] = useState<PaymentMode>('mtn_money');
@@ -203,15 +254,42 @@ export default function PanierScreen() {
 
   // ─── État WebView CamerPay ────────────────────────────
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-  // Commande créée mais non encore payée (mobile money). Tant qu'elle n'est pas
-  // confirmée, elle est invisible du restaurant et peut être relancée ou annulée.
-  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+  // Groupe de commandes créé mais non encore payé (mobile money) — un seul
+  // paiement CamerPay pour toutes ses commandes (une par restaurant). Tant
+  // qu'il n'est pas confirmé, elles sont invisibles des restaurants et
+  // peuvent être relancées ou annulées ENSEMBLE.
+  const [pendingGroup, setPendingGroup] = useState<CommandeGroupeDTO | null>(null);
 
-  /** Lance (ou relance) le widget CamerPay pour une commande déjà créée. */
-  const launchPayment = async (orderId: number) => {
+  /** Restaurants effectivement commandés dans `groupe` (ceux exclus — hors
+   *  zone, fermés — n'y figurent pas et restent au panier). */
+  const restosCommandes = (groupe: CommandeGroupeDTO) =>
+    groupe.commandes.map(c => c.restaurant).filter((id): id is number => id != null);
+
+  /** Où envoyer le client une fois le groupe payé : le suivi habituel pour
+   *  une seule commande, la liste « Mes commandes » si plusieurs restaurants
+   *  ont été commandés en une fois (pas d'écran de suivi multi-livraisons). */
+  const routeApresPaiement = (groupe: CommandeGroupeDTO) =>
+    groupe.commandes.length > 1 ? '/(client)/profil' : '/tracking';
+
+  /** Le serveur peut exclure un restaurant AU MOMENT de la validation (hors
+   *  zone / fermé entre-temps) sans que l'estimation affichée au panier ne
+   *  l'ait anticipé — le client doit le savoir, même si la commande des
+   *  autres restaurants a réussi. */
+  const signalerExclusions = (groupe: CommandeGroupeDTO) => {
+    if (!groupe.exclusions.length) return;
+    const noms = groupe.exclusions.map(e => e.restaurant_nom).join(', ');
+    toast.error(
+      groupe.exclusions.length === 1
+        ? `${noms} n'a pas pu être commandé : ${groupe.exclusions[0].message}`
+        : `Certains restaurants n'ont pas pu être commandés : ${noms}.`,
+    );
+  };
+
+  /** Lance (ou relance) le widget CamerPay pour un groupe déjà créé. */
+  const launchPayment = async (groupeId: number) => {
     setBusy(true); setError(null);
     try {
-      const data = await initiateCamerPayPayment(orderId, phone || undefined);
+      const data = await initiateCamerPayPaymentGroupe(groupeId, phone || undefined);
       if (data.payment_url) setPaymentUrl(data.payment_url);
       else setError('Paiement indisponible pour le moment. Réessayez.');
     } catch (e) {
@@ -221,17 +299,17 @@ export default function PanierScreen() {
     }
   };
 
-  /** Supprime la commande non payée puis réinitialise l'état de paiement. */
+  /** Supprime le groupe non payé puis réinitialise l'état de paiement. */
   const abandonOrder = async () => {
-    const orderId = pendingOrderId;
-    setPendingOrderId(null);
-    if (orderId == null) return;
+    const groupe = pendingGroup;
+    setPendingGroup(null);
+    if (!groupe) return;
     try {
-      await cancelOrder(orderId);
+      await cancelOrderGroup(groupe.id);
     } catch {
-      // La commande non confirmée n'est de toute façon pas visible du restaurant.
+      // Le groupe non confirmé n'est de toute façon pas visible des restaurants.
     } finally {
-      // Rafraîchit la liste (la commande non payée disparaît) ; le panier est conservé.
+      // Rafraîchit la liste (le groupe non payé disparaît) ; le panier est conservé.
       reloadOrders();
     }
   };
@@ -239,25 +317,29 @@ export default function PanierScreen() {
   const submit = async () => {
     if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
     if (deliveryHorsZone) {
-      setError("Cette adresse est hors de la zone de livraison de ce restaurant.");
+      setError('Aucun restaurant de ce panier ne livre jusqu\'à cette adresse.');
       return;
     }
     setBusy(true); setError(null);
     try {
-      // 1. Créer la commande (toujours)
-      const order = await checkout(mode, usePoints);
+      // 1. Créer une Commande par restaurant payable (toujours)
+      const groupe = await checkout(mode, usePoints);
 
       if (CAMERPAY_MODES.includes(mode)) {
-        // 2. Pour MTN/Orange Money → initier le paiement CamerPay.
-        //    On NE vide PAS le panier : la commande n'existe vraiment qu'une fois
-        //    payée. Si le paiement est abandonné, les plats restent au panier.
-        setPendingOrderId(order.id);
-        await launchPayment(order.id);
+        // 2. Pour MTN/Orange Money → initier UN SEUL paiement CamerPay pour
+        //    tout le groupe. On NE retire RIEN du panier : les commandes
+        //    n'existent vraiment qu'une fois payées. Si le paiement est
+        //    abandonné, les plats restent au panier.
+        setPendingGroup(groupe);
+        await launchPayment(groupe.id);
         // Le WebView gère la suite (onSuccess / onCancel)
       } else {
-        // Espèces → commande confirmée : on vide le panier et on suit la livraison.
-        clearCart();
-        router.push('/tracking');
+        // Espèces → commandes confirmées tout de suite : on retire du panier
+        // uniquement les restaurants effectivement commandés (les exclus —
+        // hors zone — y restent) et on suit la livraison.
+        removeCartForRestaurants(restosCommandes(groupe));
+        signalerExclusions(groupe);
+        router.push(routeApresPaiement(groupe));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La commande a échoué.');
@@ -289,9 +371,9 @@ export default function PanierScreen() {
             </View>
           ) : (
             <>
-              <View style={{ marginTop: 20 }}>
-                {cartLines.map(line => <CartLineRow key={line.cle} line={line} />)}
-              </View>
+              {/* Un restaurant à la fois : chacun garde son propre frais de
+                  livraison (son barème, sa distance à l'adresse choisie). */}
+              {cartGroups.map(group => <CartGroupSection key={group.restoId} group={group} />)}
 
               {/* Lieu de livraison (GPS précis) */}
               <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 22, marginBottom: 10 }]}>Lieu de livraison</Text>
@@ -413,24 +495,53 @@ export default function PanierScreen() {
                   <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Sous-total</Text>
                   <Text style={[bodyFont(14, '700'), { color: colors.text }]}>{formatPrice(subtotal)}</Text>
                 </View>
-                <View style={[styles.sumRow, { marginTop: 10 }]}>
-                  <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
-                    Livraison
-                    {deliveryDistanceKm != null && !deliveryHorsZone
-                      ? `  ·  ${deliveryDistanceKm.toFixed(1)} km`
-                      : ''}
-                  </Text>
-                  {deliveryHorsZone ? (
-                    <Text style={[bodyFont(14, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
-                  ) : (
-                    <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
-                      {formatPrice(deliveryFee)}
-                    </Animated.Text>
-                  )}
-                </View>
+
+                {/* Un restaurant payable : distance + frais sur une ligne.
+                    Plusieurs : détail par restaurant, puis le total livraison. */}
+                {groupesPayables.length <= 1 ? (
+                  <View style={[styles.sumRow, { marginTop: 10 }]}>
+                    <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
+                      Livraison
+                      {groupesPayables[0]?.distanceKm != null ? `  ·  ${groupesPayables[0].distanceKm.toFixed(1)} km` : ''}
+                    </Text>
+                    {deliveryHorsZone ? (
+                      <Text style={[bodyFont(14, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
+                    ) : (
+                      <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
+                        {formatPrice(deliveryFee)}
+                      </Animated.Text>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ marginTop: 10 }}>
+                    {groupesPayables.map(g => (
+                      <View key={g.restoId} style={[styles.sumRow, { marginTop: 4 }]}>
+                        <Text numberOfLines={1} style={[bodyFont(12.5, '500'), { color: colors.muted, flexShrink: 1 }]}>
+                          Livraison · {g.resto?.name ?? 'Restaurant'}
+                          {g.distanceKm != null ? ` (${g.distanceKm.toFixed(1)} km)` : ''}
+                        </Text>
+                        <Text style={[bodyFont(12.5, '700'), { color: '#8fd6a8' }]}>{formatPrice(g.deliveryFee)}</Text>
+                      </View>
+                    ))}
+                    <View style={[styles.sumRow, { marginTop: 8 }]}>
+                      <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Livraison totale</Text>
+                      <Animated.Text style={[bodyFont(14, '700'), { color: '#8fd6a8', transform: [{ scale: rebondLivraison }] }]}>
+                        {formatPrice(deliveryFee)}
+                      </Animated.Text>
+                    </View>
+                  </View>
+                )}
+
                 {deliveryHorsZone && (
                   <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 6 }]}>
-                    Ce restaurant ne livre pas jusqu'à cette adresse. Choisissez un lieu plus proche.
+                    Aucun restaurant de ce panier ne livre jusqu'à cette adresse. Choisissez un lieu plus proche.
+                  </Text>
+                )}
+                {!deliveryHorsZone && groupesExclus.length > 0 && (
+                  <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 6 }]}>
+                    {groupesExclus.length === 1
+                      ? `${groupesExclus[0].resto?.name ?? 'Un restaurant'} ne livre pas jusqu'à cette adresse : ses plats ne seront pas commandés.`
+                      : `${groupesExclus.length} restaurants ne livrent pas jusqu'à cette adresse : leurs plats ne seront pas commandés.`}
                   </Text>
                 )}
                 {reduction > 0 && (
@@ -485,19 +596,23 @@ export default function PanierScreen() {
     </ScreenBg>
 
     {/* ─── Modal WebView CamerPay ─────────────────── */}
-    {paymentUrl && (
+    {paymentUrl && pendingGroup && (
       <CamerPayWebView
         paymentUrl={paymentUrl}
-        orderId={pendingOrderId ?? undefined}
+        groupeId={pendingGroup.id}
         amount={totalAPayer}
-        onRetry={() => { if (pendingOrderId != null) launchPayment(pendingOrderId); }}
+        onRetry={() => launchPayment(pendingGroup.id)}
         onSuccess={() => {
           setPaymentUrl(null);
-          setPendingOrderId(null);
-          // Paiement confirmé → c'est une vraie commande : on vide le panier.
-          clearCart();
+          // Paiement confirmé → ce sont de vraies commandes : on retire du
+          // panier les restaurants commandés (les exclus y restent déjà —
+          // ils n'ont jamais fait partie de ce groupe).
+          removeCartForRestaurants(restosCommandes(pendingGroup));
+          signalerExclusions(pendingGroup);
+          const destination = routeApresPaiement(pendingGroup);
+          setPendingGroup(null);
           reloadOrders();
-          router.push('/tracking');
+          router.push(destination);
         }}
         onCancel={() => {
           setPaymentUrl(null);
@@ -515,7 +630,7 @@ export default function PanierScreen() {
               },
               {
                 text: 'Réessayer',
-                onPress: () => { if (pendingOrderId != null) launchPayment(pendingOrderId); },
+                onPress: () => launchPayment(pendingGroup.id),
               },
             ],
             { cancelable: false },
@@ -532,6 +647,11 @@ const styles = StyleSheet.create({
   emptyIcon: { width: 96, height: 96, borderRadius: 32, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   emptyTxt: { textAlign: 'center', maxWidth: 220, marginTop: 6, lineHeight: 19 },
   browseBtn: { paddingHorizontal: 26, paddingVertical: 14, borderRadius: Radius.pill },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  zoneBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.pill, borderWidth: 1,
+  },
   lineWrap: { borderRadius: 20, overflow: 'hidden' },
   deleteZone: {
     ...StyleSheet.absoluteFillObject, backgroundColor: Brand.danger,

@@ -25,6 +25,23 @@ urlpatterns = [
     path('client/restaurants/nearby', api_views.nearby_restaurants, name='api-client-nearby'),
     path('client/livraison/estimer', api_views.estimer_frais_livraison, name='api-client-livraison-estimer'),
 
+    # Client — checkout multi-restaurant (panier mélangeant plusieurs
+    # restaurants). AVANT le routeur DRF ci-dessous : « groupees »/« groupes »
+    # ne doivent jamais être capturés par le <pk> de client/commandes/<pk>/.
+    path('client/commandes/groupees/', api_views.commandes_groupees, name='api-client-commandes-groupees'),
+    path(
+        'client/commandes/groupes/<int:groupe_id>/',
+        api_views.detail_groupe, name='api-client-groupe-detail',
+    ),
+    path(
+        'client/commandes/groupes/<int:groupe_id>/initier_paiement/',
+        api_views.initier_paiement_groupe, name='api-client-groupe-initier-paiement',
+    ),
+    path(
+        'client/commandes/groupes/<int:groupe_id>/annuler/',
+        api_views.annuler_groupe, name='api-client-groupe-annuler',
+    ),
+
     # Livreur — profil (compte mobile money) + push
     path('livreur/profile', api_views.LivreurProfileView.as_view(), name='api-livreur-profile'),
     path('push/register', api_views.push_register, name='api-push-register'),
