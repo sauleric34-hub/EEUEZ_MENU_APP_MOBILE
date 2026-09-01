@@ -129,6 +129,13 @@ STORAGES = {
     },
 }
 
+# En dev, le stockage « manifeste » est trop strict : tout {% static %} vers un
+# fichier absent de staticfiles.json lève une ValueError (donc un 500) tant que
+# collectstatic n'a pas été relancé. On le désactive pour le dev local ; la prod
+# (DEBUG=False) garde le manifeste + la compression WhiteNoise.
+if DEBUG:
+    STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/admin-panel/login/'

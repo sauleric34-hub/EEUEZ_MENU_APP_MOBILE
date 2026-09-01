@@ -12,7 +12,11 @@
 backend/.env
 
 # ─── Python / Django ─────────────────────────────────────────
+# Les fichiers compilés (.pyc / __pycache__) ne doivent JAMAIS être versionnés :
+# ils sont régénérés à chaque exécution et polluent les diffs. S'ils réapparaissent
+# dans `git status`, c'est qu'ils sont encore suivis → `git rm -r --cached <chemin>`.
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
