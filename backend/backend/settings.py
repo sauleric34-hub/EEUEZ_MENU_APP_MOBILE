@@ -208,6 +208,12 @@ APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
 # Tant que désactivé, les retraits sont traités manuellement (aucun versement auto).
 CAMERPAY_PAYOUT_ENABLED = _env_bool('CAMERPAY_PAYOUT_ENABLED', False)
 
+# ─── CARTO (fonds de carte) ─────────────────────────────────────────────────────
+# Depuis 2025, CARTO exige une clé API sur ses tuiles basemaps.cartocdn.com
+# (sinon un filigrane "API KEY REQUIRED" s'affiche sur la carte). Clé gratuite
+# jusqu'à 5M requêtes/mois : https://carto.com/basemaps/apikey/
+CARTO_API_KEY = os.environ.get('CARTO_API_KEY', '')
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),

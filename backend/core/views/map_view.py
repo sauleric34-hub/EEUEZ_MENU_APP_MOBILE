@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from core.models import RestaurantProfile
@@ -12,6 +13,7 @@ def map_view(request):
         'total': total,
         'with_coords': with_coords,
         'active_page': 'map',
+        'carto_api_key': settings.CARTO_API_KEY,
     })
 
 

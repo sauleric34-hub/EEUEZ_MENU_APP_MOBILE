@@ -6,6 +6,7 @@
 import json
 from functools import wraps
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
@@ -156,6 +157,7 @@ def carte(request):
         'nb_missions': len(missions),
         'resto_attache': livreur.restaurant_attache,
         'active_page': 'carte',
+        'carto_api_key': settings.CARTO_API_KEY,
     })
 
 

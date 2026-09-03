@@ -1,5 +1,12 @@
 /* ===================== MENU ADMIN — MAP.JS ===================== */
 
+// Tuiles CARTO : depuis 2025, une clé API est exigée (sinon filigrane
+// "API KEY REQUIRED"). Clé injectée par le template via window.CARTO_API_KEY.
+function cartoTileUrl() {
+  const key = window.CARTO_API_KEY || '';
+  return `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${key ? `?api_key=${encodeURIComponent(key)}` : ''}`;
+}
+
 let map, allMarkers = [], markerGroup;
 
 document.addEventListener('DOMContentLoaded', initMap);
@@ -17,7 +24,7 @@ function initMap() {
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer(cartoTileUrl(), {
     attribution: '© OpenStreetMap © CARTO',
     subdomains: 'abcd',
     maxZoom: 19,
@@ -148,7 +155,7 @@ function initMiniMap(containerId, lat, lng, label = '') {
   if (!el || !lat || !lng) return;
 
   const miniMap = L.map(containerId, { zoomControl: false, dragging: false, scrollWheelZoom: false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 17 }).addTo(miniMap);
+  L.tileLayer(cartoTileUrl(), { maxZoom: 17 }).addTo(miniMap);
   miniMap.setView([lat, lng], 14);
 
   L.circleMarker([lat, lng], {

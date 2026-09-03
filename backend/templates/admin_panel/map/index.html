@@ -134,5 +134,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>window.CARTO_API_KEY = '{{ carto_api_key|escapejs }}';</script>
 <script src="{% static 'js/map.js' %}"></script>
 {% endblock %}
