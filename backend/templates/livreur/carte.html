@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const missions = {{ missions_json|safe }};
   const csrftoken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
   const map = L.map('livreur-map', { zoomControl: true }).setView([4.05, 9.70], 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key={{ carto_api_key|urlencode }}', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key={{ carto_api_key|urlencode }}', {
     attribution: '© OpenStreetMap © CARTO', maxZoom: 19,
   }).addTo(map);
 

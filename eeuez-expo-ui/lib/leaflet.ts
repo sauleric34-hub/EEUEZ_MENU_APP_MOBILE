@@ -45,7 +45,7 @@ export const tileUrl = (dark: boolean): string => {
   const base = dark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-  return CARTO_API_KEY ? `${base}?api_key=${encodeURIComponent(CARTO_API_KEY)}` : base;
+  return CARTO_API_KEY ? `${base}?key=${encodeURIComponent(CARTO_API_KEY)}` : base;
 };
 
 /** Extrait de code JS qui pose la couche de tuiles (rétine incluse) sur `map`. */

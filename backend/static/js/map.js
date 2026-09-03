@@ -4,7 +4,7 @@
 // "API KEY REQUIRED"). Clé injectée par le template via window.CARTO_API_KEY.
 function cartoTileUrl() {
   const key = window.CARTO_API_KEY || '';
-  return `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${key ? `?api_key=${encodeURIComponent(key)}` : ''}`;
+  return `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${key ? `?key=${encodeURIComponent(key)}` : ''}`;
 }
 
 let map, allMarkers = [], markerGroup;
