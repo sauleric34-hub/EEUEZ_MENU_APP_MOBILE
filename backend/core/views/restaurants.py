@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Q, Sum, Count, Avg, Exists, OuterRef
 from django.core.paginator import Paginator
-from core.models import RestaurantProfile, User, AuditLog
+from core.models import RestaurantProfile, User, AuditLog, Commande
 from core.models_livraison import PalierLivraison
 from core.delivery import parser_bareme_livraison, remplacer_bareme_livraison
 from .dashboard import admin_required
@@ -52,7 +52,7 @@ def restaurant_detail(request, pk):
     avis = restaurant.avis_set.order_by('-created_at')[:5]
     ca = restaurant.chiffre_affaires
     # Revenu réel de la plateforme = majoration encaissée sur les commandes livrées
-    commissions = restaurant.commandes.filter(statut='livree') \
+    commissions = restaurant.commandes.filter(statut__in=Commande.STATUTS_FINALISES) \
         .aggregate(t=Sum('commission_eeuez'))['t'] or 0
 
     return render(request, 'admin_panel/restaurants/detail.html', {

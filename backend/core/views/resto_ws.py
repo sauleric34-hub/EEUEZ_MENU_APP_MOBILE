@@ -55,8 +55,10 @@ def resto_required(view):
 
 
 def _solde_disponible(resto):
-    """Gains cumulés (commandes livrées) − retraits non refusés."""
-    gains = resto.commandes.filter(statut='livree').aggregate(t=Sum('montant_restaurant'))['t'] or 0
+    """Gains cumulés (commandes livrées ou récupérées sur place) − retraits non refusés."""
+    gains = resto.commandes.filter(
+        statut__in=Commande.STATUTS_FINALISES,
+    ).aggregate(t=Sum('montant_restaurant'))['t'] or 0
     retire = resto.retraits.exclude(statut='refuse').aggregate(t=Sum('montant'))['t'] or 0
     return float(gains) - float(retire)
 
@@ -73,7 +75,7 @@ def dashboard(request):
     cmd_jour = commandes.filter(created_at__date=today).count()
     cmd_mois = commandes.filter(created_at__month=now.month, created_at__year=now.year).count()
     en_attente = commandes.filter(statut='en_attente').count()
-    revenus = commandes.filter(statut='livree').aggregate(t=Sum('montant_restaurant'))['t'] or 0
+    revenus = commandes.filter(statut__in=Commande.STATUTS_FINALISES).aggregate(t=Sum('montant_restaurant'))['t'] or 0
     nb_plats = resto.plats.filter(is_visible=True).count()
     nb_abonnes = resto.abonnes.count()
     nb_likes = Favori.objects.filter(plat__restaurant=resto).count()
@@ -151,7 +153,24 @@ def commande_action(request, pk):
         messages.error(request, 'Cette commande n\'est pas payée.')
         return redirect('core:resto_commandes')
 
-    if action == 'accepter' and commande.statut == 'en_attente':
+    # Les actions de livraison (livreur maison / pool libre) n'ont pas de sens
+    # pour une commande à retirer sur place.
+    if commande.emporter and action in ('assigner', 'liberer', 'reprendre_libre'):
+        messages.error(request, 'Cette commande est à emporter — aucune livraison à organiser.')
+        return redirect('core:resto_commandes')
+
+    if action == 'valider_retrait' and commande.emporter \
+            and commande.statut in ('acceptee', 'en_preparation', 'prete'):
+        code_saisi = (request.POST.get('code') or '').strip().upper()
+        if not commande.code_retrait or code_saisi != commande.code_retrait:
+            messages.error(request, 'Code de retrait invalide — demandez au client le code affiché dans son application.')
+            return redirect('core:resto_commandes')
+        commande.statut = 'recuperee'
+        messages.success(
+            request,
+            f'Commande #{commande.pk} récupérée — les fonds sont débloqués sur votre solde.',
+        )
+    elif action == 'accepter' and commande.statut == 'en_attente':
         commande.statut = 'acceptee'
         messages.success(request, f'Commande #{commande.pk} acceptée.')
     elif action == 'refuser' and commande.statut == 'en_attente':
@@ -167,7 +186,10 @@ def commande_action(request, pk):
         messages.success(request, f'Commande #{commande.pk} en préparation.')
     elif action == 'prete' and commande.statut in ('acceptee', 'en_preparation'):
         commande.statut = 'prete'
-        messages.success(request, f'Commande #{commande.pk} prête — assignez un livreur.')
+        if commande.emporter:
+            messages.success(request, f'Commande #{commande.pk} prête — le client peut venir la récupérer.')
+        else:
+            messages.success(request, f'Commande #{commande.pk} prête — assignez un livreur.')
     elif action == 'assigner' and commande.statut in ('acceptee', 'en_preparation', 'prete'):
         livreur = get_object_or_404(
             User, pk=request.POST.get('livreur'), role='livreur', restaurant_attache=resto,
@@ -512,15 +534,18 @@ def finances(request):
             messages.success(request, f'Demande de retrait de {montant} F enregistrée — traitement sous 48 h.')
         return redirect('core:resto_finances')
 
-    livrees = resto.commandes.filter(statut='livree')
+    # « Livrées » au sens comptable = livrées par un livreur OU récupérées sur
+    # place (commande à emporter validée par le restaurant via le code de retrait).
+    livrees = resto.commandes.filter(statut__in=Commande.STATUTS_FINALISES)
     gains_total = livrees.aggregate(t=Sum('montant_restaurant'))['t'] or 0
     commission_total = livrees.aggregate(t=Sum('commission_eeuez'))['t'] or 0
-    # Argent gelé : commandes payées mais pas encore livrées (en cours).
-    # Le montant n'entre dans le solde disponible qu'à la confirmation de réception.
+    # Argent gelé : commandes payées mais pas encore livrées / récupérées (en cours).
+    # Le montant n'entre dans le solde disponible qu'à la confirmation de réception
+    # (livraison) ou à la saisie du code de retrait (à emporter).
     EN_COURS = ['en_attente', 'acceptee', 'en_preparation', 'prete', 'en_livraison']
-    argent_gele = resto.commandes.filter(statut__in=EN_COURS) \
+    argent_gele = resto.commandes.filter(statut__in=EN_COURS, paiement_confirme=True) \
         .aggregate(t=Sum('montant_restaurant'))['t'] or 0
-    nb_gele = resto.commandes.filter(statut__in=EN_COURS).count()
+    nb_gele = resto.commandes.filter(statut__in=EN_COURS, paiement_confirme=True).count()
     now = timezone.now()
     gains_mois = livrees.filter(created_at__month=now.month, created_at__year=now.year) \
         .aggregate(t=Sum('montant_restaurant'))['t'] or 0
@@ -587,6 +612,13 @@ def profil(request):
             resto.is_open = not resto.is_open
             resto.save(update_fields=['is_open'])
             messages.success(request, 'Restaurant ' + ('ouvert' if resto.is_open else 'fermé') + '.')
+        elif form == 'services':
+            # Services optionnels : réservation de table et vente à emporter.
+            # Le bouton correspondant n'apparaît dans l'app que s'il est actif ici.
+            resto.reservations_actives = request.POST.get('reservations_actives') == 'on'
+            resto.plats_a_emporter_actifs = request.POST.get('plats_a_emporter_actifs') == 'on'
+            resto.save(update_fields=['reservations_actives', 'plats_a_emporter_actifs'])
+            messages.success(request, 'Services mis à jour.')
         return redirect('core:resto_profil')
 
     return render(request, 'resto/profil.html', {
@@ -766,7 +798,16 @@ def reservations(request):
     resto = request.resto
     if request.method == 'POST':
         form = request.POST.get('form')
-        if form == 'prix':
+        if form == 'toggle_actif':
+            resto.reservations_actives = not resto.reservations_actives
+            resto.save(update_fields=['reservations_actives'])
+            messages.success(
+                request,
+                'Réservation de table activée — le bouton apparaît dans l\'application.'
+                if resto.reservations_actives else
+                'Réservation de table désactivée — le bouton est masqué dans l\'application.',
+            )
+        elif form == 'prix':
             try:
                 resto.prix_reservation = int(request.POST.get('prix_reservation', resto.prix_reservation) or 0)
                 resto.save(update_fields=['prix_reservation'])

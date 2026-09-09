@@ -8,7 +8,21 @@
     <h1 class="page-title gradient-text">Réservations</h1>
     <p class="page-subtitle">{{ en_attente }} en attente · gérez les demandes de table</p>
   </div>
+  <form method="post" style="margin-left:auto;">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="toggle_actif">
+    <button type="submit" class="btn {% if resto.reservations_actives %}btn-danger{% else %}btn-primary{% endif %}">
+      {% if resto.reservations_actives %}Désactiver la réservation{% else %}Activer la réservation{% endif %}
+    </button>
+  </form>
 </div>
+
+{% if not resto.reservations_actives %}
+<div class="alert alert-warning anim-fade-up" style="margin-bottom:18px;">
+  Service désactivé — le bouton « Réserver une place » est <strong>masqué</strong> dans l'application.
+  Activez-le pour recevoir des demandes de table.
+</div>
+{% endif %}
 
 <!-- Prix de réservation -->
 <form method="post" class="glass-card anim-fade-up" style="padding:18px 20px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:end;gap:14px;">

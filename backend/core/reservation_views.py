@@ -52,6 +52,12 @@ def reservations(request):
     except RestaurantProfile.DoesNotExist:
         return Response({'error': 'Restaurant introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
+    if not resto.reservations_actives:
+        return Response(
+            {'error': "Ce restaurant ne propose pas la réservation de table."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     date_reservation = data.get('date_reservation')  # ISO « YYYY-MM-DDTHH:MM »
     if not date_reservation:
         return Response({'error': 'Date et heure requises.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -18,6 +18,24 @@
   </form>
 </div>
 
+<!-- Services proposés -->
+<div class="glass-card anim-fade-up" style="padding:18px 20px;margin-bottom:18px;">
+  <div class="chart-title" style="margin-bottom:12px;">Services proposés</div>
+  <form method="post" style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;">
+    {% csrf_token %}
+    <input type="hidden" name="form" value="services">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" name="reservations_actives" {% if resto.reservations_actives %}checked{% endif %}>
+      <span>Réservation de table <span style="color:var(--text-muted);font-size:0.8rem;">(bouton « Réserver » dans l'app)</span></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" name="plats_a_emporter_actifs" {% if resto.plats_a_emporter_actifs %}checked{% endif %}>
+      <span>Vente à emporter <span style="color:var(--text-muted);font-size:0.8rem;">(choix « à emporter » au panier · fonds débloqués à la saisie du code de retrait)</span></span>
+    </label>
+    <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+  </form>
+</div>
+
 <div class="charts-grid charts-grid-2">
   <!-- Informations générales -->
   <div class="chart-card anim-fade-up">

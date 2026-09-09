@@ -83,6 +83,7 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
             'logo', 'cover_image', 'is_open', 'note_moyenne', 'temps_livraison_moyen',
             'frais_livraison', 'paliers_livraison', 'prix_reservation', 'nombre_plats',
             'nombre_abonnes', 'is_following', 'plat_du_jour',
+            'reservations_actives', 'plats_a_emporter_actifs',
         ]
 
     def get_nombre_plats(self, obj):
@@ -253,16 +254,25 @@ class CommandeSerializer(serializers.ModelSerializer):
     client_details = serializers.SerializerMethodField()
     livraison_statut = serializers.SerializerMethodField()
     suivi = serializers.SerializerMethodField()
+    code_retrait = serializers.SerializerMethodField()
 
     class Meta:
         model = Commande
         fields = [
             'id', 'client', 'client_details', 'restaurant', 'restaurant_details',
             'statut', 'livraison_statut', 'montant_total', 'frais_livraison',
-            'part_livreur', 'adresse_livraison',
+            'part_livreur', 'adresse_livraison', 'emporter', 'code_retrait',
             'notes', 'delai_estime', 'created_at', 'lignes', 'paiement_confirme',
             'suivi', 'points_utilises', 'reduction_points',
         ]
+
+    def get_code_retrait(self, obj):
+        """Code de retrait d'une commande à emporter — visible du seul client
+        propriétaire (il le présente au restaurant pour débloquer les fonds)."""
+        if not obj.emporter or not obj.code_retrait:
+            return None
+        demandeur = getattr(self.context.get('request'), 'user', None)
+        return obj.code_retrait if demandeur and demandeur.pk == obj.client_id else None
 
     def get_client_details(self, obj):
         """Profil client complet pour le client lui-même et son restaurant ;

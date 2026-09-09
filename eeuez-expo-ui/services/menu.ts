@@ -96,7 +96,13 @@ export const toggleAbonnement = (restaurantId: number) =>
 
 // ─── Commandes ───────────────────────────────────────────────
 export type PaymentMode = 'especes' | 'mtn_money' | 'orange_money' | 'carte';
-export interface CreateOrderItem { plat_id: number; quantite: number; }
+export interface CreateOrderItem {
+  plat_id: number;
+  quantite: number;
+  complements?: number[];
+  /** true = ce plat est à emporter (aucun frais de livraison). Défaut : livré. */
+  emporter?: boolean;
+}
 export interface CreateOrderParams {
   restaurant: number;
   adresse_livraison: string;

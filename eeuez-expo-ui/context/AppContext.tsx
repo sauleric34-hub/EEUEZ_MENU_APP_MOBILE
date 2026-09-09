@@ -36,6 +36,8 @@ export interface LignePanier {
   platId: number;
   qty: number;
   complements: ComplementChoisi[];
+  /** true = ce plat est à emporter (aucun frais de livraison). Défaut : livré. */
+  emporter: boolean;
 }
 
 export interface CartLine {
@@ -49,12 +51,15 @@ export interface CartLine {
   supplement: number;
   /** Prix unitaire réellement facturé (plat + suppléments). */
   prixUnitaire: number;
+  /** true = à emporter (pas de frais de livraison sur ce plat). */
+  emporter: boolean;
 }
 
-/** Clé de ligne : « 12:3,7 ». Les identifiants sont triés pour que deux
- *  sélections identiques faites dans un ordre différent se regroupent. */
-export function cleLigne(platId: number, optionIds: number[]): string {
-  return `${platId}:${[...optionIds].sort((a, b) => a - b).join(',')}`;
+/** Clé de ligne : « 12:3,7:L ». Les identifiants d'options sont triés pour que
+ *  deux sélections identiques faites dans un ordre différent se regroupent ; le
+ *  suffixe L/E sépare « livré » et « à emporter » pour un même plat. */
+export function cleLigne(platId: number, optionIds: number[], emporter = false): string {
+  return `${platId}:${[...optionIds].sort((a, b) => a - b).join(',')}:${emporter ? 'E' : 'L'}`;
 }
 
 /** Panier regroupé par restaurant : le panier peut mélanger plusieurs
@@ -66,13 +71,17 @@ export interface CartGroup {
   lines: CartLine[];
   /** Sous-total de CE restaurant (plats + suppléments), hors livraison. */
   subtotal: number;
-  /** Frais de livraison de CE restaurant : estimation serveur si connue, sinon repli local. */
+  /** Frais de livraison de CE restaurant : estimation serveur si connue, sinon
+   *  repli local. Toujours 0 pour un groupe à emporter. */
   deliveryFee: number;
-  /** Distance restaurant → adresse, en km (null si pas encore estimée). */
+  /** Distance restaurant → adresse, en km (null si pas encore estimée ou à emporter). */
   distanceKm: number | null;
   /** Cette adresse est hors de la zone de livraison de CE restaurant : ses
-   *  plats ne seront PAS inclus dans le paiement (mais restent au panier). */
+   *  plats ne seront PAS inclus dans le paiement (mais restent au panier).
+   *  Jamais vrai pour un groupe à emporter. */
   horsZone: boolean;
+  /** Ce groupe est à retirer sur place (pas de livraison, pas d'adresse). */
+  emporter: boolean;
 }
 
 /** Lieu de livraison choisi pour la commande en cours. */
@@ -161,11 +170,13 @@ interface AppContextValue {
   // panier
   /** Panier indexé par clé de ligne (plat + compléments), cf. cleLigne(). */
   cart: Record<string, LignePanier>;
-  addToCart: (platId: number, qty?: number, complements?: ComplementChoisi[]) => void;
-  /** Les trois suivantes prennent une CLÉ DE LIGNE, pas un identifiant de plat. */
+  addToCart: (platId: number, qty?: number, complements?: ComplementChoisi[], emporter?: boolean) => void;
+  /** Les suivantes prennent une CLÉ DE LIGNE, pas un identifiant de plat. */
   cartInc: (cle: string) => void;
   cartDec: (cle: string) => void;
   cartRemove: (cle: string) => void;
+  /** Bascule une ligne entre « livré » et « à emporter » (change sa clé). */
+  cartSetEmporter: (cle: string, emporter: boolean) => void;
   clearCart: () => void;
   /** Retire du panier les lignes des restaurants donnés (après un checkout
    *  réussi pour eux) — les autres restaurants restent au panier. */
@@ -177,10 +188,13 @@ interface AppContextValue {
   cartCount: number;
   /** Somme des sous-totaux des restaurants PAYABLES (hors zone exclue). */
   subtotal: number;
-  /** Somme des frais de livraison des restaurants PAYABLES (hors zone exclue). */
+  /** Somme des frais de livraison des groupes LIVRÉS payables (hors zone exclue). */
   deliveryFee: number;
-  /** Vrai quand AUCUN restaurant du panier n'est payable (tous hors zone). */
+  /** Vrai quand AUCUN restaurant du panier n'est payable (tous hors zone).
+   *  Un panier 100 % à emporter n'est jamais « hors zone ». */
   deliveryHorsZone: boolean;
+  /** Au moins une ligne du panier est à livrer → une adresse est requise. */
+  besoinAdresse: boolean;
   total: number;
 
   // commandes / suivi
@@ -546,18 +560,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // par plat : le même Poulet DG avec des frites et avec du riz sont deux
   // lignes distinctes, à quantités et prix distincts.
   const addToCart = (
-    platId: number, qty = 1, complements: ComplementChoisi[] = [],
+    platId: number, qty = 1, complements: ComplementChoisi[] = [], emporter = false,
   ) => {
-    const cle = cleLigne(platId, complements.map(c => c.optionId));
+    const cle = cleLigne(platId, complements.map(c => c.optionId), emporter);
     setCart(s => ({
       ...s,
       [cle]: {
         platId,
         complements,
+        emporter,
         qty: (s[cle]?.qty || 0) + qty,
       },
     }));
   };
+
+  /** Bascule une ligne entre livré / à emporter : la clé de ligne dépend du
+   *  mode, donc on retire l'ancienne et on réinsère sous la nouvelle (fusion
+   *  des quantités si une ligne identique existe déjà dans l'autre mode). */
+  const cartSetEmporter = (cle: string, emporter: boolean) => setCart(s => {
+    const ligne = s[cle];
+    if (!ligne || ligne.emporter === emporter) return s;
+    const nouvelleCle = cleLigne(ligne.platId, ligne.complements.map(c => c.optionId), emporter);
+    const next = { ...s };
+    delete next[cle];
+    next[nouvelleCle] = {
+      ...ligne,
+      emporter,
+      qty: (next[nouvelleCle]?.qty || 0) + ligne.qty,
+    };
+    return next;
+  });
 
   const cartInc = (cle: string) => setCart(s => (
     s[cle] ? { ...s, [cle]: { ...s[cle], qty: s[cle].qty + 1 } } : s
@@ -589,6 +621,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           complements: ligne.complements,
           supplement,
           prixUnitaire: dish.price + supplement,
+          emporter: ligne.emporter ?? false,
         };
       })
       .filter((l): l is CartLine => l !== null),
@@ -617,8 +650,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Chaque restaurant du panier a son propre barème et sa propre distance à
   // l'adresse choisie : impossible de résumer ça en un frais unique dès que
   // le panier mélange plusieurs restaurants.
+  // Seuls les restaurants ayant au moins une ligne LIVRÉE ont besoin d'une
+  // estimation de frais (les lignes à emporter n'ont jamais de livraison).
   const cartRestoIdsKey = useMemo(
-    () => Array.from(new Set(cartLines.map(l => l.dish.restoId))).sort((a, b) => a - b).join(','),
+    () => Array.from(new Set(cartLines.filter(l => !l.emporter).map(l => l.dish.restoId)))
+      .sort((a, b) => a - b).join(','),
     [cartLines],
   );
 
@@ -654,15 +690,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cartRestoIdsKey, deliveryAddress, estimLat, estimLon]);
 
   const cartGroups = useMemo<CartGroup[]>(() => {
-    const parResto = new Map<number, CartLine[]>();
+    // Groupe = (restaurant, mode de retrait) : des plats livrés et des plats à
+    // emporter d'un même restaurant forment deux groupes → deux commandes.
+    const parGroupe = new Map<string, { restoId: number; emporter: boolean; lines: CartLine[] }>();
     cartLines.forEach(l => {
-      const lignes = parResto.get(l.dish.restoId) ?? [];
-      lignes.push(l);
-      parResto.set(l.dish.restoId, lignes);
+      const cle = `${l.dish.restoId}|${l.emporter ? 'E' : 'L'}`;
+      const g = parGroupe.get(cle) ?? { restoId: l.dish.restoId, emporter: l.emporter, lines: [] };
+      g.lines.push(l);
+      parGroupe.set(cle, g);
     });
-    return Array.from(parResto.entries()).map(([restoId, lines]) => {
+    return Array.from(parGroupe.values()).map(({ restoId, emporter, lines }) => {
       const resto = restoMap.get(restoId);
       const subtotal = lines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0);
+      if (emporter) {
+        // Retrait sur place : ni frais, ni distance, jamais hors zone.
+        return { restoId, resto, lines, subtotal, deliveryFee: 0, distanceKm: null, horsZone: false, emporter: true };
+      }
       // Repli local, affiché le temps que le serveur réponde (ou s'il échoue).
       const fraisLocal = resto?.paliersLivraison?.length
         ? resto.paliersLivraison[0].prix
@@ -675,7 +718,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const deliveryFee = horsZone
         ? 0
         : (estim && estim.frais != null ? estim.frais : fraisLocal);
-      return { restoId, resto, lines, subtotal, deliveryFee, distanceKm: estim?.distanceKm ?? null, horsZone };
+      return { restoId, resto, lines, subtotal, deliveryFee, distanceKm: estim?.distanceKm ?? null, horsZone, emporter: false };
     });
   }, [cartLines, restoMap, estimations]);
 
@@ -688,21 +731,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deliveryFee = useMemo(
     () => groupesPayables.reduce((a, g) => a + g.deliveryFee, 0), [groupesPayables],
   );
-  // Vrai seulement si RIEN n'est payable (tous les restaurants du panier sont
-  // hors zone) — un panier partiellement hors zone reste commandable.
-  const deliveryHorsZone = cartGroups.length > 0 && groupesPayables.length === 0;
+  // Groupes livrés uniquement (les groupes à emporter n'ont ni frais ni zone).
+  const groupesLivres = useMemo(() => cartGroups.filter(g => !g.emporter), [cartGroups]);
+  // Vrai seulement si TOUS les groupes livrés sont hors zone (et qu'il y en a) —
+  // un panier partiellement hors zone, ou 100 % à emporter, reste commandable.
+  const deliveryHorsZone = groupesLivres.length > 0 && groupesLivres.every(g => g.horsZone);
+  // Une adresse n'est requise que s'il reste au moins un groupe à livrer.
+  const besoinAdresse = groupesLivres.length > 0;
 
   // ─── Commandes / suivi ─────────────────────────────────────
   const checkout = async (
     mode: PaymentMode = 'especes', utiliserPoints = false,
   ): Promise<CommandeGroupeDTO> => {
     if (!cartLines.length) throw new Error('Panier vide');
-    if (!deliveryAddress || !deliveryAddress.adresse) {
+    if (besoinAdresse && (!deliveryAddress || !deliveryAddress.adresse)) {
       throw new Error('Choisissez un lieu de livraison.');
     }
     // Un item par ligne de panier, TOUS restaurants confondus : le serveur
     // retrouve lui-même le restaurant de chaque plat_id (seule source de
-    // vérité) et crée une Commande par restaurant livrable.
+    // vérité) et crée une Commande par restaurant livrable / à emporter.
     const items = cartLines.map(l => ({
       plat_id: l.dish.id,
       quantite: l.qty,
@@ -710,13 +757,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // prix lui-même. Transmettre un montant depuis l'app le rendrait
       // falsifiable.
       complements: l.complements.map(c => c.optionId),
+      emporter: l.emporter,
     }));
-    const adresseText = [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ');
+    const adresseText = deliveryAddress
+      ? [deliveryAddress.adresse, deliveryAddress.details].filter(Boolean).join(' — ')
+      : '';
     const groupe = await menu.createOrderGroup({
       adresse_livraison: adresseText, items, mode_paiement: mode,
       // Coordonnées GPS précises du lieu de livraison → carte du livreur + suivi
-      latitude: deliveryAddress.latitude ?? userLoc?.lat ?? null,
-      longitude: deliveryAddress.longitude ?? userLoc?.lon ?? null,
+      latitude: deliveryAddress?.latitude ?? userLoc?.lat ?? null,
+      longitude: deliveryAddress?.longitude ?? userLoc?.lon ?? null,
       utiliser_points: utiliserPoints,
     });
     // La dépense de points modifie le solde : on resynchronise le profil.
@@ -732,7 +782,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const activeOrder = useMemo(() => {
-    const live = orders.filter(o => o.statut !== 'livree' && o.statut !== 'refusee' && o.statut !== 'annulee');
+    const live = orders.filter(o => !['livree', 'recuperee', 'refusee', 'annulee'].includes(o.statut));
     return (live[0] ?? orders[0]) ?? null;
   }, [orders]);
   const trackStep = useMemo(
@@ -754,8 +804,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     likes, toggleLike, favList,
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
     pubLikes, togglePubLike, reloadPubLikes,
-    cart, addToCart, cartInc, cartDec, cartRemove, clearCart, removeCartForRestaurants,
-    cartLines, cartGroups, cartCount, subtotal, deliveryFee, deliveryHorsZone,
+    cart, addToCart, cartInc, cartDec, cartRemove, cartSetEmporter, clearCart, removeCartForRestaurants,
+    cartLines, cartGroups, cartCount, subtotal, deliveryFee, deliveryHorsZone, besoinAdresse,
     total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,
   };

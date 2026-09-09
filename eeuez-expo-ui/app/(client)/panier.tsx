@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check } from 'lucide-react-native';
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check, Bike, ShoppingBag } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp, type CartLine, type CartGroup } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
@@ -39,8 +39,9 @@ const GAP = 13;
  *  de quantité fait un bref « bump » à chaque tap +/-. `dimmed` signale un
  *  plat dont le restaurant est hors zone : visible, mais pas commandable. */
 function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
-  const { colors, cartInc, cartDec, cartRemove } = useApp();
+  const { colors, cartInc, cartDec, cartRemove, cartSetEmporter, restoById } = useApp();
   const { cle, dish, qty, complements, prixUnitaire } = line;
+  const emporterDispo = !!restoById(dish.restoId)?.platsAEmporterActifs;
 
   const translateX = useRef(new Animated.Value(0)).current;
   const collapse = useRef(new Animated.Value(1)).current; // 1 = taille normale, 0 = effondrée
@@ -143,6 +144,25 @@ function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
                 <View style={[styles.stepBtn, { backgroundColor: Brand.accent }]}><Plus size={16} color="#fff" strokeWidth={2.6} /></View>
               </PressableScale>
             </View>
+
+            {/* Mode de retrait par plat — visible seulement si le restaurant
+                propose la vente à emporter. Par défaut : livré. */}
+            {emporterDispo && (
+              <View style={[styles.modeSwitch, { backgroundColor: colors.surface2 }]}>
+                <PressableScale onPress={() => cartSetEmporter(cle, false)} style={{ flex: 1 }}>
+                  <View style={[styles.modeChip, !line.emporter && { backgroundColor: Brand.accent }]}>
+                    <Bike size={13} color={!line.emporter ? '#fff' : colors.muted} strokeWidth={2.4} />
+                    <Text style={[bodyFont(10.5, '800'), { color: !line.emporter ? '#fff' : colors.muted }]}>Livrer</Text>
+                  </View>
+                </PressableScale>
+                <PressableScale onPress={() => cartSetEmporter(cle, true)} style={{ flex: 1 }}>
+                  <View style={[styles.modeChip, line.emporter && { backgroundColor: Brand.green }]}>
+                    <ShoppingBag size={13} color={line.emporter ? '#fff' : colors.muted} strokeWidth={2.4} />
+                    <Text style={[bodyFont(10.5, '800'), { color: line.emporter ? '#fff' : colors.muted }]}>À emporter</Text>
+                  </View>
+                </PressableScale>
+              </View>
+            )}
           </View>
         </Animated.View>
       </View>
@@ -156,7 +176,7 @@ function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
  *  seront PAS commandés (les autres restaurants du panier, eux, le seront). */
 function CartGroupSection({ group }: { group: CartGroup }) {
   const { colors } = useApp();
-  const { resto, lines, deliveryFee, distanceKm, horsZone } = group;
+  const { resto, lines, deliveryFee, distanceKm, horsZone, emporter } = group;
 
   return (
     <View style={{ marginTop: 22 }}>
@@ -164,7 +184,12 @@ function CartGroupSection({ group }: { group: CartGroup }) {
         <Text numberOfLines={1} style={[displayFont(14.5, '800'), { color: colors.text, flex: 1 }]}>
           {resto?.name ?? 'Restaurant'}
         </Text>
-        {horsZone ? (
+        {emporter ? (
+          <View style={[styles.zoneBadge, { backgroundColor: Brand.green + '22', borderColor: Brand.green + '55' }]}>
+            <ShoppingBag size={12} color={Brand.green} strokeWidth={2.4} />
+            <Text style={[bodyFont(11, '700'), { color: Brand.green }]}>À emporter</Text>
+          </View>
+        ) : horsZone ? (
           <View style={[styles.zoneBadge, { backgroundColor: '#ff6b7022', borderColor: '#ff6b7055' }]}>
             <TriangleAlert size={12} color="#ff6b70" strokeWidth={2.4} />
             <Text style={[bodyFont(11, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
@@ -178,6 +203,12 @@ function CartGroupSection({ group }: { group: CartGroup }) {
 
       {lines.map(line => <CartLineRow key={line.cle} line={line} dimmed={horsZone} />)}
 
+      {emporter && (
+        <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: -4, marginBottom: 4 }]}>
+          À récupérer au restaurant — aucun frais de livraison. Un code de retrait vous sera
+          fourni après paiement.
+        </Text>
+      )}
       {horsZone && (
         <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: -4, marginBottom: 4 }]}>
           Ce restaurant ne livre pas jusqu'à cette adresse — ces plats ne seront pas commandés.
@@ -190,12 +221,15 @@ function CartGroupSection({ group }: { group: CartGroup }) {
 export default function PanierScreen() {
   const {
     colors, cartGroups, removeCartForRestaurants,
-    subtotal, deliveryFee, deliveryHorsZone, total, cartCount, checkout, reloadOrders, deliveryAddress, user,
+    subtotal, deliveryFee, deliveryHorsZone, besoinAdresse, total, cartCount, checkout, reloadOrders, deliveryAddress, user,
   } = useApp();
   // Restaurants réellement payables (hors zone exclue) — c'est CE périmètre
   // que le paiement porte ; les autres restent visibles mais de côté.
   const groupesPayables = cartGroups.filter(g => !g.horsZone);
   const groupesExclus = cartGroups.filter(g => g.horsZone);
+  // Groupes livrés payables uniquement (les groupes à emporter n'ont pas de
+  // frais / distance à afficher dans le récapitulatif « Livraison »).
+  const groupesLivrables = groupesPayables.filter(g => !g.emporter);
   const router = useRouter();
   const toast = useToast();
   // Le compte de démonstration peut remplir un panier, mais pas commander.
@@ -315,9 +349,9 @@ export default function PanierScreen() {
   };
 
   const submit = async () => {
-    if (!deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
-    if (deliveryHorsZone) {
-      setError('Aucun restaurant de ce panier ne livre jusqu\'à cette adresse.');
+    if (besoinAdresse && !deliveryAddress) { setError('Veuillez choisir un lieu de livraison.'); return; }
+    if (besoinAdresse && deliveryHorsZone) {
+      setError('Aucun restaurant à livrer de ce panier ne livre jusqu\'à cette adresse.');
       return;
     }
     setBusy(true); setError(null);
@@ -373,9 +407,12 @@ export default function PanierScreen() {
             <>
               {/* Un restaurant à la fois : chacun garde son propre frais de
                   livraison (son barème, sa distance à l'adresse choisie). */}
-              {cartGroups.map(group => <CartGroupSection key={group.restoId} group={group} />)}
+              {cartGroups.map(group => (
+                <CartGroupSection key={`${group.restoId}${group.emporter ? 'E' : 'L'}`} group={group} />
+              ))}
 
-              {/* Lieu de livraison (GPS précis) */}
+              {/* Lieu de livraison (GPS précis) — inutile si tout est à emporter */}
+              {besoinAdresse && (<>
               <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 22, marginBottom: 10 }]}>Lieu de livraison</Text>
               <PressableScale onPress={() => router.push('/location-picker')}>
                 <View style={[styles.addrRow, { backgroundColor: colors.surface, borderColor: deliveryAddress ? Brand.accent + '55' : colors.border }]}>
@@ -409,6 +446,7 @@ export default function PanierScreen() {
                   <ChevronRight size={20} color={colors.faint} strokeWidth={2.4} />
                 </View>
               </PressableScale>
+              </>)}
 
               {/* Mode de paiement */}
               <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 20, marginBottom: 10 }]}>Paiement</Text>
@@ -496,13 +534,19 @@ export default function PanierScreen() {
                   <Text style={[bodyFont(14, '700'), { color: colors.text }]}>{formatPrice(subtotal)}</Text>
                 </View>
 
-                {/* Un restaurant payable : distance + frais sur une ligne.
-                    Plusieurs : détail par restaurant, puis le total livraison. */}
-                {groupesPayables.length <= 1 ? (
+                {/* Un restaurant livré : distance + frais sur une ligne.
+                    Plusieurs : détail par restaurant, puis le total livraison.
+                    Les groupes à emporter n'apparaissent pas ici (sans frais). */}
+                {groupesLivrables.length === 0 ? (
+                  <View style={[styles.sumRow, { marginTop: 10 }]}>
+                    <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>Livraison</Text>
+                    <Text style={[bodyFont(14, '700'), { color: '#8fd6a8' }]}>Aucune · à emporter</Text>
+                  </View>
+                ) : groupesLivrables.length === 1 ? (
                   <View style={[styles.sumRow, { marginTop: 10 }]}>
                     <Text style={[bodyFont(14, '500'), { color: colors.muted }]}>
                       Livraison
-                      {groupesPayables[0]?.distanceKm != null ? `  ·  ${groupesPayables[0].distanceKm.toFixed(1)} km` : ''}
+                      {groupesLivrables[0]?.distanceKm != null ? `  ·  ${groupesLivrables[0].distanceKm.toFixed(1)} km` : ''}
                     </Text>
                     {deliveryHorsZone ? (
                       <Text style={[bodyFont(14, '700'), { color: '#ff6b70' }]}>Hors zone</Text>
@@ -514,7 +558,7 @@ export default function PanierScreen() {
                   </View>
                 ) : (
                   <View style={{ marginTop: 10 }}>
-                    {groupesPayables.map(g => (
+                    {groupesLivrables.map(g => (
                       <View key={g.restoId} style={[styles.sumRow, { marginTop: 4 }]}>
                         <Text numberOfLines={1} style={[bodyFont(12.5, '500'), { color: colors.muted, flexShrink: 1 }]}>
                           Livraison · {g.resto?.name ?? 'Restaurant'}
@@ -532,7 +576,7 @@ export default function PanierScreen() {
                   </View>
                 )}
 
-                {deliveryHorsZone && (
+                {besoinAdresse && deliveryHorsZone && (
                   <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 6 }]}>
                     Aucun restaurant de ce panier ne livre jusqu'à cette adresse. Choisissez un lieu plus proche.
                   </Text>
@@ -576,7 +620,7 @@ export default function PanierScreen() {
                   <View style={[styles.checkout, { backgroundColor: Brand.accent, marginTop: 16 }]}>
                     <ActivityIndicator color="#fff" />
                   </View>
-                ) : deliveryHorsZone ? (
+                ) : (besoinAdresse && deliveryHorsZone) ? (
                   <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
                     <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Adresse hors zone de livraison</Text>
                   </View>
@@ -660,6 +704,8 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, padding: 4, alignSelf: 'flex-start', marginTop: 8 },
   stepBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  modeSwitch: { flexDirection: 'row', gap: 4, borderRadius: Radius.pill, padding: 3, marginTop: 8, alignSelf: 'flex-start' },
+  modeChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill },
   complementLigne: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   addrRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

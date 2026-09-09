@@ -81,6 +81,12 @@ class RestaurantProfile(models.Model):
     frais_livraison = models.DecimalField(max_digits=10, decimal_places=0, default=500)
     # Prix par défaut d'une réservation de table (modifiable par le restaurant)
     prix_reservation = models.DecimalField(max_digits=10, decimal_places=0, default=5000)
+    # Services optionnels du restaurant. OFF par défaut : tous les restaurants ne
+    # proposent pas la réservation de table ni la vente à emporter — chacun
+    # active ce qu'il propose depuis son espace. Le bouton correspondant n'est
+    # affiché dans l'app que si le service est actif ici.
+    reservations_actives = models.BooleanField(default=False)
+    plats_a_emporter_actifs = models.BooleanField(default=False)
     # Note moyenne DÉNORMALISÉE : recalculée à chaque nouvelle note (signal) et
     # par la commande recalculer_notes. Sert à servir une liste de restaurants
     # sans requête par restaurant — indispensable sous charge (voir plus bas).
@@ -152,7 +158,7 @@ class RestaurantProfile(models.Model):
     @property
     def chiffre_affaires(self):
         from django.db.models import Sum
-        result = self.commandes.filter(statut='livree').aggregate(total=Sum('montant_total'))
+        result = self.commandes.filter(statut__in=Commande.STATUTS_FINALISES).aggregate(total=Sum('montant_total'))
         return result['total'] or 0
 
     @property
@@ -248,9 +254,15 @@ class Commande(models.Model):
         ('prete', 'Prête'),
         ('en_livraison', 'En livraison'),
         ('livree', 'Livrée'),
+        ('recuperee', 'Récupérée'),
         ('refusee', 'Refusée'),
         ('annulee', 'Annulée'),
     ]
+    # États terminaux qui « débloquent » l'argent du restaurant : livrée (par un
+    # livreur) ou récupérée sur place (commande à emporter, validée par le
+    # restaurant via le code de retrait). Utilisé partout où l'on agrège le
+    # chiffre d'affaires ou le solde disponible.
+    STATUTS_FINALISES = ('livree', 'recuperee')
     client = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='commandes_client')
     restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.SET_NULL, null=True, related_name='commandes')
     statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default='en_attente')
@@ -272,6 +284,12 @@ class Commande(models.Model):
     # Part revenant au livreur sur ces frais, figée à la création selon
     # ParametrageLivraison.pourcentage_livreur.
     part_livreur = models.DecimalField(max_digits=10, decimal_places=0, default=0)
+    # Commande à emporter : le client vient la récupérer au restaurant. Pas de
+    # frais de livraison, pas de livreur, pas d'adresse. L'argent du restaurant
+    # reste gelé jusqu'à ce que le client présente `code_retrait` au restaurant,
+    # qui le saisit dans son espace (la commande passe alors « récupérée »).
+    emporter = models.BooleanField(default=False)
+    code_retrait = models.CharField(max_length=8, blank=True)
     adresse_livraison = models.CharField(max_length=300, blank=True)
     latitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude_livraison = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)

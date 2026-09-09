@@ -794,7 +794,14 @@ def _confirmer_paiement_commande(commande):
     if commande.paiement_confirme:
         return
     commande.paiement_confirme = True
-    commande.save(update_fields=['paiement_confirme', 'updated_at'])
+    champs = ['paiement_confirme', 'updated_at']
+    # Commande à emporter : le code de retrait n'existe qu'une fois la commande
+    # payée (le client le présente au restaurant pour débloquer les fonds).
+    if commande.emporter and not commande.code_retrait:
+        from .models import Livraison
+        commande.code_retrait = Livraison.generer_code()
+        champs.append('code_retrait')
+    commande.save(update_fields=champs)
     if commande.livraison_libre and not hasattr(commande, 'livraison'):
         try:
             from .views.resto_ws import _notifier_pool_nouvelle_mission

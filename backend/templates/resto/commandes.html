@@ -40,7 +40,9 @@
           {% if c.notes %}<div style="font-size:0.72rem;color:var(--accent-amber);">📝 {{ c.notes|truncatechars:60 }}</div>{% endif %}
         </td>
         <td style="font-weight:700;color:var(--accent-green);">{{ c.montant_total }} F</td>
-        <td style="max-width:150px;font-size:0.8rem;">{{ c.adresse_livraison|default:'—'|truncatechars:40 }}</td>
+        <td style="max-width:150px;font-size:0.8rem;">
+          {% if c.emporter %}<span class="badge badge-amber">🥡 À emporter</span>{% else %}{{ c.adresse_livraison|default:'—'|truncatechars:40 }}{% endif %}
+        </td>
         <td><span class="badge badge-{{ c.statut }}">{{ c.get_statut_display }}</span></td>
         <td>
           {% if c.livraison %}
@@ -70,7 +72,16 @@
                 <button class="btn btn-primary btn-sm">✓ Prête</button>
               </form>
             {% endif %}
-            {% if c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
+            {% if c.emporter %}
+              {% if c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
+              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="valider_retrait">
+                <input type="text" name="code" required maxlength="8" placeholder="Code du client" class="input-field" style="padding:6px 10px;font-size:0.78rem;width:130px;text-transform:uppercase;">
+                <button class="btn btn-primary btn-sm" title="Le client donne le code affiché dans son app">✓ Valider le retrait</button>
+              </form>
+              {% endif %}
+            {% elif c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
               {% if not c.livraison %}
                 {% if livreurs %}
                 <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">

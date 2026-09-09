@@ -14,12 +14,13 @@ from .dashboard import admin_required
 
 @admin_required
 def finances_view(request):
-    ca_total = Commande.objects.filter(statut='livree').aggregate(s=Sum('montant_total'))['s'] or 0
-    commissions_total = Commande.objects.filter(statut='livree').aggregate(s=Sum('commission_eeuez'))['s'] or 0
-    reversements_total = Commande.objects.filter(statut='livree').aggregate(s=Sum('montant_restaurant'))['s'] or 0
+    FINALISES = Commande.STATUTS_FINALISES
+    ca_total = Commande.objects.filter(statut__in=FINALISES).aggregate(s=Sum('montant_total'))['s'] or 0
+    commissions_total = Commande.objects.filter(statut__in=FINALISES).aggregate(s=Sum('commission_eeuez'))['s'] or 0
+    reversements_total = Commande.objects.filter(statut__in=FINALISES).aggregate(s=Sum('montant_restaurant'))['s'] or 0
 
     restaurants = RestaurantProfile.objects.filter(
-        commandes__statut='livree'
+        commandes__statut__in=FINALISES
     ).annotate(
         ca=Sum('commandes__montant_total'),
         commissions=Sum('commandes__commission_eeuez'),
@@ -36,7 +37,7 @@ def finances_view(request):
         ms = d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         me = (ms + timedelta(days=32)).replace(day=1)
         months_labels.append(d.strftime('%b %Y'))
-        val = Commande.objects.filter(statut='livree', created_at__gte=ms, created_at__lt=me).aggregate(s=Sum('commission_eeuez'))['s'] or 0
+        val = Commande.objects.filter(statut__in=FINALISES, created_at__gte=ms, created_at__lt=me).aggregate(s=Sum('commission_eeuez'))['s'] or 0
         comm_data.append(float(val))
 
     return render(request, 'admin_panel/finances/index.html', {

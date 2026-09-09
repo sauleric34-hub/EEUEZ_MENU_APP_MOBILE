@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Q, Sum, Count
 from django.core.paginator import Paginator
-from core.models import User, AuditLog
+from core.models import User, AuditLog, Commande
 from .dashboard import admin_required
 
 
@@ -39,7 +39,7 @@ def user_detail(request, pk):
     user = get_object_or_404(User, pk=pk)
     commandes = user.commandes_client.select_related('restaurant').order_by('-created_at')[:10] if user.role == 'client' else []
     avis = user.avis_client.select_related('restaurant').order_by('-created_at')[:5] if user.role == 'client' else []
-    total_depense = user.commandes_client.filter(statut='livree').aggregate(s=Sum('montant_total'))['s'] or 0 if user.role == 'client' else 0
+    total_depense = user.commandes_client.filter(statut__in=Commande.STATUTS_FINALISES).aggregate(s=Sum('montant_total'))['s'] or 0 if user.role == 'client' else 0
 
     return render(request, 'admin_panel/users/detail.html', {
         'user_obj': user,

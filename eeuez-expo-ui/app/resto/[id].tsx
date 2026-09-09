@@ -165,7 +165,7 @@ export default function RestoProfile() {
             </PressableScale>
           </View>
 
-          {/* Galerie + Réservation */}
+          {/* Galerie + Réservation (bouton masqué si le resto ne propose pas ce service) */}
           <View style={styles.secondaryRow}>
             <PressableScale onPress={() => router.push(`/gallery/${resto.id}`)} style={{ flex: 1 }}>
               <View style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -173,12 +173,14 @@ export default function RestoProfile() {
                 <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Galerie</Text>
               </View>
             </PressableScale>
-            <PressableScale onPress={() => setShowReserve(true)} style={{ flex: 1 }}>
-              <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.secondaryBtn, glow(Brand.green, 12)]}>
-                <CalendarCheck size={18} color="#fff" strokeWidth={2.4} />
-                <Text style={[bodyFont(13.5, '800'), { color: '#fff' }]}>Réserver une place</Text>
-              </LinearGradient>
-            </PressableScale>
+            {resto.reservationsActives && (
+              <PressableScale onPress={() => setShowReserve(true)} style={{ flex: 1 }}>
+                <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.secondaryBtn, glow(Brand.green, 12)]}>
+                  <CalendarCheck size={18} color="#fff" strokeWidth={2.4} />
+                  <Text style={[bodyFont(13.5, '800'), { color: '#fff' }]}>Réserver une place</Text>
+                </LinearGradient>
+              </PressableScale>
+            )}
           </View>
 
           {/* Contribuer : le client propose une publication au restaurant */}

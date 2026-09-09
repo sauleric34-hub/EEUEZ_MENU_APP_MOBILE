@@ -37,8 +37,14 @@ class RestaurantExclu(Exception):
 
 
 def construire_commande(*, user, restaurant, items, adresse_livraison, latitude, longitude,
-                         notes, mode_paiement):
+                         notes, mode_paiement, emporter=False):
     """Crée une Commande pour UN restaurant à partir de ses items.
+
+    `emporter=True` : commande à retirer sur place — aucun frais de livraison,
+    aucune part livreur, adresse ignorée, jamais de rejet « hors zone ». Un
+    `code_retrait` est généré tout de suite si le paiement est en espèces (pour
+    le mobile money, il l'est à la confirmation du webhook, cf.
+    `_confirmer_paiement_commande`).
 
     Fige les lignes, le frais de livraison (barème/distance du restaurant),
     la part livreur, les montants, et pose `paiement_confirme` selon le mode
@@ -54,18 +60,24 @@ def construire_commande(*, user, restaurant, items, adresse_livraison, latitude,
     fermé, hors zone pour cette adresse, ou si aucun plat de `items` n'est
     valide pour lui. Renvoie la Commande créée sinon.
     """
-    from .models import Commande, LigneCommande, Plat
+    from .models import Commande, LigneCommande, Plat, Livraison
 
     if not restaurant.is_open:
         raise RestaurantExclu('ferme', f"{restaurant.nom} est actuellement fermé.")
+
+    if emporter and not restaurant.plats_a_emporter_actifs:
+        raise RestaurantExclu(
+            'emporter_indisponible', f"{restaurant.nom} ne propose pas la vente à emporter.",
+        )
 
     with transaction.atomic():
         commande = Commande.objects.create(
             client=user,
             restaurant=restaurant,
-            adresse_livraison=adresse_livraison,
-            latitude_livraison=latitude,
-            longitude_livraison=longitude,
+            emporter=emporter,
+            adresse_livraison='' if emporter else adresse_livraison,
+            latitude_livraison=None if emporter else latitude,
+            longitude_livraison=None if emporter else longitude,
             notes=notes,
             statut='en_attente',
             delai_estime=restaurant.temps_livraison_moyen,
@@ -104,21 +116,29 @@ def construire_commande(*, user, restaurant, items, adresse_livraison, latitude,
             commande.delete()
             raise RestaurantExclu('aucun_plat_valide', f"Aucun plat valide chez {restaurant.nom}.")
 
-        repli_frais = int(round(max(frais_plats))) if frais_plats else int(restaurant.frais_livraison or 0)
-        frais_liv, hors_zone, distance_km = calculer_frais_livraison(
-            restaurant, commande.latitude_livraison, commande.longitude_livraison,
-            repli=repli_frais,
-        )
-        if hors_zone:
-            commande.delete()
-            raise RestaurantExclu(
-                'hors_zone', f"{restaurant.nom} ne livre pas jusqu'à cette adresse.",
-                distance_km=distance_km,
+        if emporter:
+            # Retrait sur place : ni frais de livraison, ni part livreur.
+            frais_liv = 0
+            commande.frais_livraison = 0
+            commande.part_livreur = 0
+            if mode_paiement == 'especes':
+                commande.code_retrait = Livraison.generer_code()
+        else:
+            repli_frais = int(round(max(frais_plats))) if frais_plats else int(restaurant.frais_livraison or 0)
+            frais_liv, hors_zone, distance_km = calculer_frais_livraison(
+                restaurant, commande.latitude_livraison, commande.longitude_livraison,
+                repli=repli_frais,
             )
+            if hors_zone:
+                commande.delete()
+                raise RestaurantExclu(
+                    'hors_zone', f"{restaurant.nom} ne livre pas jusqu'à cette adresse.",
+                    distance_km=distance_km,
+                )
+            from .models_livraison import ParametrageLivraison
+            commande.frais_livraison = int(round(frais_liv))
+            commande.part_livreur = ParametrageLivraison.get_solo().part_livreur(frais_liv)
 
-        from .models_livraison import ParametrageLivraison
-        commande.frais_livraison = int(round(frais_liv))
-        commande.part_livreur = ParametrageLivraison.get_solo().part_livreur(frais_liv)
         commande.montant_total = sous_total_client + frais_liv
         commande.montant_restaurant = sous_total_base
         commande.commission_eeuez = sous_total_client - sous_total_base
@@ -145,29 +165,35 @@ def enregistrer_transaction_paiement(commande, mode_paiement):
 
 
 def grouper_items_par_restaurant(items):
-    """Répartit les items du panier par restaurant RÉEL de chaque plat (une
-    seule requête), dans l'ordre de première apparition (déterministe,
-    pratique pour les tests). On ignore délibérément un éventuel champ
-    `restaurant` fourni par l'app sur chaque item : seul le restaurant
+    """Répartit les items du panier par couple (restaurant RÉEL du plat, mode de
+    retrait) — une seule requête, dans l'ordre de première apparition
+    (déterministe, pratique pour les tests). On ignore délibérément un éventuel
+    champ `restaurant` fourni par l'app sur chaque item : seul le restaurant
     RÉELLEMENT propriétaire du plat en base fait foi, pour qu'aucun plat ne
     puisse être classé (ni donc facturé) sous le mauvais restaurant.
 
-    `items` : liste de dicts avec au moins `plat_id`. Un plat introuvable est
-    ignoré ici (il sera de toute façon écarté par `construire_commande`,
-    « aucun plat valide », si son groupe finit vide).
+    Le mode de retrait vient d'un booléen `emporter` par item (défaut False) :
+    des plats livrés et des plats à emporter d'un même restaurant donnent DEUX
+    commandes distinctes.
+
+    `items` : liste de dicts avec au moins `plat_id`. Renvoie un dict
+    {(restaurant_id, emporter): [items…]}. Un plat introuvable est ignoré ici
+    (il sera de toute façon écarté par `construire_commande` si son groupe
+    finit vide).
     """
     from .models import Plat
 
     ids = [item.get('plat_id') for item in items if item.get('plat_id') is not None]
     resto_par_plat = dict(Plat.objects.filter(id__in=ids).values_list('id', 'restaurant_id'))
 
-    par_resto = {}
+    par_groupe = {}
     for item in items:
         rid = resto_par_plat.get(item.get('plat_id'))
         if rid is None:
             continue
-        par_resto.setdefault(rid, []).append(item)
-    return par_resto
+        cle = (rid, bool(item.get('emporter')))
+        par_groupe.setdefault(cle, []).append(item)
+    return par_groupe
 
 
 def creer_commandes_groupees(*, user, items, adresse_livraison, latitude, longitude,
@@ -196,25 +222,26 @@ def creer_commandes_groupees(*, user, items, adresse_livraison, latitude, longit
     from .models import CommandeGroupe
     from . import fidelite
 
-    par_resto = grouper_items_par_restaurant(items)
-    if not par_resto:
+    par_groupe = grouper_items_par_restaurant(items)
+    if not par_groupe:
         return None, [], [], "Le panier est vide."
 
     from .models import RestaurantProfile
-    restaurants = RestaurantProfile.objects.in_bulk(par_resto.keys())
+    restaurant_ids = {rid for (rid, _emporter) in par_groupe}
+    restaurants = RestaurantProfile.objects.in_bulk(restaurant_ids)
 
     with transaction.atomic():
         commandes = []
         exclusions = []
-        for restaurant_id, items_du_resto in par_resto.items():
+        for (restaurant_id, emporter), items_du_groupe in par_groupe.items():
             restaurant = restaurants.get(restaurant_id)
             if restaurant is None:
                 continue
             try:
                 commande = construire_commande(
-                    user=user, restaurant=restaurant, items=items_du_resto,
+                    user=user, restaurant=restaurant, items=items_du_groupe,
                     adresse_livraison=adresse_livraison, latitude=latitude, longitude=longitude,
-                    notes=notes, mode_paiement=mode_paiement,
+                    notes=notes, mode_paiement=mode_paiement, emporter=emporter,
                 )
                 commandes.append(commande)
             except RestaurantExclu as e:

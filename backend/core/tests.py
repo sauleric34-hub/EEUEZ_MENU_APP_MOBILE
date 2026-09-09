@@ -69,6 +69,7 @@ class ClientApiTests(TestCase):
             user=self.resto_user, nom='Resto Test', adresse='Douala', ville='Douala',
             is_open=True, is_verified=True, frais_livraison=500, temps_livraison_moyen=25,
             commission_rate=10,  # pourcentage de revenu plateforme (majoration client)
+            reservations_actives=True, plats_a_emporter_actifs=True,
         )
         cat = Categorie.objects.create(nom='Grillades')
         self.plat = Plat.objects.create(

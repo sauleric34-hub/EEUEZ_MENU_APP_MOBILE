@@ -143,6 +143,10 @@ export interface RestoDTO {
   /** Barème de livraison par distance (trié par jusqu_a_km croissant). Vide = tarif unique. */
   paliers_livraison?: PalierLivraisonDTO[];
   prix_reservation?: string;
+  /** Services optionnels du restaurant — le bouton correspondant n'est affiché
+   *  dans l'app que si le service est actif. */
+  reservations_actives?: boolean;
+  plats_a_emporter_actifs?: boolean;
   nombre_plats: number;
   nombre_abonnes: number;
   is_following?: boolean;
@@ -182,6 +186,11 @@ export interface CommandeDTO {
     id: number; first_name: string; last_name: string; telephone: string;
   } | null;
   adresse_livraison: string;
+  /** Commande à retirer sur place (pas de livraison, pas de frais). */
+  emporter?: boolean;
+  /** Code de retrait à présenter au restaurant — renseigné pour le seul client
+   *  propriétaire, une fois la commande à emporter payée. */
+  code_retrait?: string | null;
   notes: string;
   delai_estime: number | null;
   created_at: string;

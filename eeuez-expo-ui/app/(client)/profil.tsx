@@ -29,6 +29,7 @@ const STATUT: Record<string, { label: string; color: string; bg: string; Icon: L
   en_preparation: { label: 'En préparation', color: Brand.yellow,      bg: Brand.yellow + '18', Icon: ChefHat },
   prete:          { label: 'Prête',          color: '#8fd6a8',         bg: Brand.green + '1f',  Icon: Package },
   en_livraison:   { label: 'En livraison',   color: Brand.accentLight, bg: Brand.accent + '1f', Icon: Bike },
+  recuperee:      { label: 'Récupérée',      color: '#8fd6a8',         bg: Brand.green + '1f',  Icon: Check },
   livree:         { label: 'Livrée',         color: '#8fd6a8',         bg: Brand.green + '1f',  Icon: Check },
   refusee:        { label: 'Refusée',        color: '#ff6b70',         bg: Brand.danger + '1f', Icon: X },
   annulee:        { label: 'Annulée',        color: '#ff6b70',         bg: Brand.danger + '1f', Icon: X },
@@ -41,7 +42,7 @@ function OrderRow({ order }: { order: CommandeDTO }) {
   const restoName = order.restaurant_details?.nom || resto?.name || 'Commande';
   const st = STATUT[order.statut] ?? STATUT.en_attente;
   const date = new Date(order.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const canTrack = !['livree', 'refusee', 'annulee'].includes(order.statut);
+  const canTrack = !['livree', 'recuperee', 'refusee', 'annulee'].includes(order.statut);
 
   // Détail des plats commandés : nom, photo et prix
   const lignes = order.lignes ?? [];
@@ -61,6 +62,11 @@ function OrderRow({ order }: { order: CommandeDTO }) {
         <Text numberOfLines={1} style={[bodyFont(11, '500'), { color: colors.muted, marginTop: 2 }]}>{restoName} · {date}</Text>
         <Text style={[displayFont(13.5, '800'), { color: Brand.accentLight, marginTop: 3 }]}>{formatPrice(Number(order.montant_total))}</Text>
         <StatusPill Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} style={{ marginTop: 7 }} />
+        {order.emporter && (
+          <Text style={[bodyFont(11, '700'), { color: Brand.green, marginTop: 5 }]}>
+            À emporter{order.code_retrait && order.statut !== 'recuperee' ? ` · code ${order.code_retrait}` : ''}
+          </Text>
+        )}
       </View>
       {canTrack && (
         <PressableScale onPress={() => router.push('/tracking')}>

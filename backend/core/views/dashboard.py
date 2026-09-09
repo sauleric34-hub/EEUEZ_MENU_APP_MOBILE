@@ -29,8 +29,8 @@ def dashboard_view(request):
     commandes_aujourd_hui = Commande.objects.filter(created_at__gte=today_start).count()
     commandes_ce_mois = Commande.objects.filter(created_at__gte=month_start).count()
 
-    ca_total = Commande.objects.filter(statut='livree').aggregate(s=Sum('montant_total'))['s'] or 0
-    commissions_total = Commande.objects.filter(statut='livree').aggregate(s=Sum('commission_eeuez'))['s'] or 0
+    ca_total = Commande.objects.filter(statut__in=Commande.STATUTS_FINALISES).aggregate(s=Sum('montant_total'))['s'] or 0
+    commissions_total = Commande.objects.filter(statut__in=Commande.STATUTS_FINALISES).aggregate(s=Sum('commission_eeuez'))['s'] or 0
     note_globale = Avis.objects.aggregate(avg=Avg('note'))['avg'] or 0
     livraisons_en_cours = Livraison.objects.filter(statut__in=['assignee', 'en_collecte', 'en_livraison']).count()
 
@@ -43,7 +43,7 @@ def dashboard_view(request):
         label = d.strftime('%b %Y')
         ms = d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         me = (ms + timedelta(days=32)).replace(day=1)
-        qs = Commande.objects.filter(statut='livree', created_at__gte=ms, created_at__lt=me)
+        qs = Commande.objects.filter(statut__in=Commande.STATUTS_FINALISES, created_at__gte=ms, created_at__lt=me)
         months_labels.append(label)
         ca_data.append(float(qs.aggregate(s=Sum('montant_total'))['s'] or 0))
         commission_data.append(float(qs.aggregate(s=Sum('commission_eeuez'))['s'] or 0))

@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { ChevronLeft, Bike, Phone, Check, MapPin, Star, PackageSearch, QrCode } from 'lucide-react-native';
+import { ChevronLeft, Bike, Phone, Check, MapPin, Star, PackageSearch, QrCode, ShoppingBag } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { TRACK_STEPS, TRACK_ETA } from '../data/menuData';
@@ -29,6 +29,8 @@ export default function TrackingScreen() {
   const etaLabel = enLivraison && suivi?.eta_minutes
     ? `Arrive dans ~${suivi.eta_minutes} min`
     : (TRACK_ETA[trackStep] ?? TRACK_ETA[0]);
+  // (etaLabel : pour une commande à emporter, l'ETA de livraison n'a pas de sens ;
+  //  le libellé générique par étape suffit.)
   // Vraie carte dès que le livreur est en route ET qu'on a une position à afficher.
   const showLiveMap = enLivraison && !!(suivi?.livreur_position || suivi?.destination);
 
@@ -89,6 +91,18 @@ export default function TrackingScreen() {
 
   const orderRef = `#MENU-${activeOrder.id}`;
   const restoName = activeOrder.restaurant_details?.nom ?? 'Restaurant';
+  const emporter = !!activeOrder.emporter;
+  // Étapes adaptées au retrait sur place (pas de livreur, pas de trajet).
+  const emporterSteps = [
+    { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande', statuts: ['en_attente', 'acceptee'] },
+    { title: 'En préparation', desc: 'Vos plats sont en cuisine', statuts: ['en_preparation'] },
+    { title: 'Prête', desc: 'Venez la récupérer avec votre code', statuts: ['prete'] },
+    { title: 'Récupérée', desc: 'Bon appétit !', statuts: ['recuperee'] },
+  ];
+  const steps = emporter ? emporterSteps : TRACK_STEPS;
+  const stepIndex = emporter
+    ? Math.max(0, emporterSteps.findIndex(s => s.statuts.includes(activeOrder.statut)))
+    : trackStep;
 
   return (
     <ScreenBg>
@@ -108,13 +122,40 @@ export default function TrackingScreen() {
               </View>
             </PressableScale>
             <View>
-              <Text style={[displayFont(22, '800'), { color: colors.text }]}>Suivi en direct</Text>
+              <Text style={[displayFont(22, '800'), { color: colors.text }]}>
+                {emporter ? 'Commande à emporter' : 'Suivi en direct'}
+              </Text>
               <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 2 }]}>{orderRef} · {restoName}</Text>
             </View>
           </View>
 
+          {/* ─── Commande à emporter : code de retrait à présenter au restaurant ─── */}
+          {emporter && (
+            <View style={[styles.pickupCard, { backgroundColor: colors.surface, borderColor: Brand.green + '55' }]}>
+              <View style={styles.row}>
+                <ShoppingBag size={20} color={Brand.green} strokeWidth={2.3} />
+                <Text style={[displayFont(15.5, '800'), { color: colors.text, marginLeft: 8 }]}>À récupérer sur place</Text>
+              </View>
+              {activeOrder.code_retrait ? (
+                <>
+                  <Text style={[bodyFont(12.5, '600'), { color: colors.muted, marginTop: 10 }]}>
+                    Présentez ce code au restaurant pour récupérer votre commande :
+                  </Text>
+                  <Text style={[displayFont(30, '800'), { color: Brand.green, letterSpacing: 4, marginTop: 6 }]}>
+                    {activeOrder.code_retrait}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[bodyFont(12.5, '600'), { color: colors.muted, marginTop: 10 }]}>
+                  Votre code de retrait apparaîtra ici dès que le paiement sera confirmé.
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Carte — vraie carte en direct pendant la livraison, sinon aperçu.
               Fondu enchaîné entre les deux plutôt qu'un basculement brutal. */}
+          {!emporter && (
           <View style={[styles.map, { borderColor: colors.border }]}>
             {renderStyled && (
               <Animated.View style={[
@@ -146,6 +187,7 @@ export default function TrackingScreen() {
               </Animated.View>
             )}
           </View>
+          )}
 
           {/* Livreur — infos réelles dès qu'un livreur est assigné */}
           {suivi?.livreur && (
@@ -195,10 +237,10 @@ export default function TrackingScreen() {
             </View>
 
             <View style={{ marginTop: 16 }}>
-              {TRACK_STEPS.map((step, i) => {
-                const done = i < trackStep;
-                const active = i === trackStep;
-                const last = i === TRACK_STEPS.length - 1;
+              {steps.map((step, i) => {
+                const done = i < stepIndex;
+                const active = i === stepIndex;
+                const last = i === steps.length - 1;
                 const dotBg = done ? Brand.green : active ? Brand.accent : colors.surface2;
                 const dotBorder = done ? Brand.green : active ? Brand.accent : colors.border;
                 const titleColor = done || active ? colors.text : colors.faint;
@@ -311,6 +353,7 @@ const styles = StyleSheet.create({
   courierAvatar: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   contactBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   confirmCta: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15, paddingHorizontal: 18, borderRadius: Radius.pill },
+  pickupCard: { padding: 18, borderRadius: 22, borderWidth: 1, marginTop: 18 },
   progress: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   stepRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   stepAxis: { alignItems: 'center', alignSelf: 'stretch' },

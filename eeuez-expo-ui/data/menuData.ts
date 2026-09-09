@@ -41,6 +41,10 @@ export interface Resto {
   /** Barème par distance, trié par km croissant. Vide = tarif unique. */
   paliersLivraison: { km: number; prix: number }[];
   prixReservation: number;
+  /** Le restaurant propose la réservation de table (bouton affiché si true). */
+  reservationsActives: boolean;
+  /** Le restaurant propose la vente à emporter (choix « à emporter » au panier). */
+  platsAEmporterActifs: boolean;
   tempsLivraison: number;
   isOpen: boolean;
   isFollowing?: boolean;
@@ -206,6 +210,8 @@ export function mapResto(d: RestoDTO): Resto {
       .map(p => ({ km: Number(p.jusqu_a_km), prix: Number(p.prix) }))
       .sort((a, b) => a.km - b.km),
     prixReservation: Number(d.prix_reservation ?? 0),
+    reservationsActives: d.reservations_actives ?? false,
+    platsAEmporterActifs: d.plats_a_emporter_actifs ?? false,
     tempsLivraison: d.temps_livraison_moyen ?? 30,
     isOpen: d.is_open,
     isFollowing: d.is_following,
@@ -264,7 +270,7 @@ export const TRACK_STEPS = [
   { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande',        statuts: ['en_attente', 'acceptee'] },
   { title: 'En préparation',     desc: 'Vos plats sont en cuisine, le livreur arrive', statuts: ['en_preparation', 'prete', 'assignee', 'en_collecte'] },
   { title: 'En route',           desc: 'Le livreur a récupéré votre commande',         statuts: ['en_livraison'] },
-  { title: 'Livré',              desc: 'Bon appétit !',                               statuts: ['livree', 'livree_sans_code'] },
+  { title: 'Livré',              desc: 'Bon appétit !',                               statuts: ['livree', 'livree_sans_code', 'recuperee'] },
 ];
 // Repli quand le serveur ne fournit pas d'ETA (pas de coordonnées).
 export const TRACK_ETA = ['Bientôt', 'En préparation', 'Arrive bientôt', 'Livré'];
