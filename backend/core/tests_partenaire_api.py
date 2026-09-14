@@ -7,6 +7,7 @@ import json
 import time
 from unittest.mock import patch
 
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone as django_timezone
@@ -70,6 +71,15 @@ class PartenaireApiTestCase(TestCase):
         self.assertEqual(resp.status_code, 201)
         p = Partenaire.objects.get(nom_commercial='Nouvo')
         self.assertEqual(p.statut, Partenaire.STATUT_EN_ATTENTE)
+
+    def test_candidature_api_envoie_un_email_de_confirmation(self):
+        self.client.post(reverse('partners:apply'), {
+            'nom_commercial': 'Nouvo', 'contact_nom': 'Awa', 'contact_email': 'awa@nouvo.cm',
+            'description_cas_usage': 'Marketplace multi-restaurants.',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['awa@nouvo.cm'])
+        self.assertIn('candidature', mail.outbox[0].subject.lower())
 
     def test_candidature_incomplete_rejetee(self):
         resp = self.client.post(reverse('partners:apply'), {'nom_commercial': 'Incomplet'})
@@ -137,6 +147,14 @@ class PartenaireApiTestCase(TestCase):
         })
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(Partenaire.objects.filter(nom_commercial='WebCo').exists())
+
+    def test_formulaire_web_envoie_un_email_de_confirmation(self):
+        self.client.post(reverse('partenaire-candidature'), {
+            'nom_commercial': 'WebCo', 'contact_nom': 'Marc', 'contact_email': 'marc@webco.cm',
+            'description_cas_usage': 'Prise de commande in-app.',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['marc@webco.cm'])
 
     # ─── Authentification signée ──────────────────────────────
     def test_signature_valide_donne_acces_catalogue(self):
@@ -411,6 +429,65 @@ class KYBAdminTestCase(TestCase):
         resp = self.client.post(reverse('core:partenaire_credential_emettre', args=[self.partenaire.id]), {'environnement': 'sandbox'})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(APICredential.objects.filter(partenaire=self.partenaire).count(), 1)
+
+    def test_approbation_envoie_un_email_de_decision(self):
+        self.client.post(reverse('core:partenaire_decider', args=[self.partenaire.id]), {'action': 'approuver'})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['awa@candidat.cm'])
+        self.assertIn('approuvée', mail.outbox[0].subject.lower())
+
+    def test_rejet_envoie_un_email_avec_le_motif(self):
+        self.client.post(reverse('core:partenaire_decider', args=[self.partenaire.id]), {
+            'action': 'rejeter', 'motif': 'Dossier incomplet',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Dossier incomplet', mail.outbox[0].body)
+
+    def test_suspension_envoie_un_email_avec_le_motif(self):
+        self.partenaire.approuver(self.admin)
+        mail.outbox.clear()
+        self.client.post(reverse('core:partenaire_decider', args=[self.partenaire.id]), {
+            'action': 'suspendre', 'motif': 'Abus détecté',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Abus détecté', mail.outbox[0].body)
+        self.assertIn('suspendu', mail.outbox[0].subject.lower())
+
+    def test_emission_de_cle_envoie_la_cle_par_email(self):
+        self.partenaire.approuver(self.admin)
+        mail.outbox.clear()
+        self.client.post(reverse('core:partenaire_credential_emettre', args=[self.partenaire.id]), {'environnement': 'sandbox'})
+        credential = APICredential.objects.get(partenaire=self.partenaire)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['awa@candidat.cm'])
+        self.assertIn(credential.api_key, mail.outbox[0].body)
+
+    def test_generation_mot_de_passe_envoie_par_email(self):
+        self.partenaire.approuver(self.admin)
+        mail.outbox.clear()
+        self.client.post(reverse('core:partenaire_mot_de_passe_generer', args=[self.partenaire.id]))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['awa@candidat.cm'])
+        self.assertIn('portail', mail.outbox[0].subject.lower())
+
+    def test_configuration_webhook_envoie_le_secret_par_email(self):
+        self.partenaire.approuver(self.admin)
+        self.partenaire.plan = PLAN_BUSINESS
+        self.partenaire.save(update_fields=['plan'])
+        mail.outbox.clear()
+        self.client.post(reverse('core:partenaire_webhook_configurer', args=[self.partenaire.id]), {'url': 'https://x.cm/hook'})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('https://x.cm/hook', mail.outbox[0].body)
+
+    @patch('core.emailing.send_mail', side_effect=Exception('SMTP down'))
+    def test_echec_envoi_email_ne_casse_pas_le_flux(self, mock_send):
+        # Le SMTP peut tomber : l'action métier doit rester acceptée, seul
+        # l'envoi (best-effort) échoue silencieusement côté fonction.
+        resp = self.client.post(reverse('core:partenaire_decider', args=[self.partenaire.id]), {'action': 'approuver'})
+        self.assertEqual(resp.status_code, 302)
+        self.partenaire.refresh_from_db()
+        self.assertEqual(self.partenaire.statut, Partenaire.STATUT_APPROUVE)
+        self.assertTrue(mock_send.called)
 
     def test_rejet_sans_motif_refuse(self):
         self.client.post(reverse('core:partenaire_decider', args=[self.partenaire.id]), {'action': 'rejeter'})

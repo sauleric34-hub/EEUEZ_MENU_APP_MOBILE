@@ -17,6 +17,10 @@ from django.utils import timezone
 
 from core.models import AuditLog, DocumentKYB, Partenaire, PartenaireWebhookConfig
 from core.models_partenaire import APICredential, PLAN_CHOICES, PLANS
+from core.partner_emails import (
+    email_decision_partenaire, email_identifiant_api, email_mot_de_passe_portail,
+    email_webhook_configure,
+)
 from .dashboard import admin_required
 
 
@@ -131,6 +135,9 @@ def partenaire_decider(request, pk):
         messages.error(request, "Action inconnue.")
         return redirect('core:partenaire_detail', pk=pk)
 
+    if not email_decision_partenaire(partenaire):
+        messages.warning(request, "La notification par e-mail n'a pas pu être envoyée (SMTP) — prévenez le partenaire vous-même.")
+
     AuditLog.objects.create(
         user=request.user, action=f'PARTENAIRE_{action.upper()}',
         model_name='Partenaire', object_id=str(partenaire.pk),
@@ -186,9 +193,11 @@ def credential_emettre(request, pk):
         description={'api_key': credential.api_key, 'environnement': environnement},
         ip_address=request.META.get('REMOTE_ADDR'),
     )
+    envoye = email_identifiant_api(partenaire, credential, secret_clair)
     messages.success(
         request,
-        f"Identifiant émis — à noter MAINTENANT, il ne sera plus jamais affiché : "
+        f"Identifiant émis{' et envoyé par e-mail à ' + partenaire.contact_email if envoye else ''} — "
+        f"à noter MAINTENANT, il ne sera plus jamais affiché : "
         f"clé « {credential.api_key} », secret « {secret_clair} ».",
     )
     return redirect('core:partenaire_detail', pk=pk)
@@ -244,10 +253,11 @@ def mot_de_passe_generer(request, pk):
         model_name='Partenaire', object_id=str(partenaire.pk), description={},
         ip_address=request.META.get('REMOTE_ADDR'),
     )
+    envoye = email_mot_de_passe_portail(partenaire, mot_de_passe)
     messages.success(
         request,
-        f"Accès portail activé pour « {partenaire.contact_email} » — mot de passe "
-        f"(à noter MAINTENANT) : « {mot_de_passe} ».",
+        f"Accès portail activé{' et envoyé par e-mail à ' + partenaire.contact_email if envoye else ''} — "
+        f"mot de passe (à noter MAINTENANT) : « {mot_de_passe} ».",
     )
     return redirect('core:partenaire_detail', pk=pk)
 
@@ -289,8 +299,10 @@ def webhook_configurer(request, pk):
         description={'url': url},
         ip_address=request.META.get('REMOTE_ADDR'),
     )
+    envoye = email_webhook_configure(partenaire, url, secret_clair)
     messages.success(
         request,
-        f"Webhook enregistré — secret de signature (à noter MAINTENANT) : « {secret_clair} ».",
+        f"Webhook enregistré{' et secret envoyé par e-mail à ' + partenaire.contact_email if envoye else ''} — "
+        f"secret de signature (à noter MAINTENANT) : « {secret_clair} ».",
     )
     return redirect('core:partenaire_detail', pk=pk)

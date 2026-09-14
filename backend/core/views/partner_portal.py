@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Partenaire
 from core.models_partenaire import APICredential, PartenaireWebhookConfig
+from core.partner_emails import email_identifiant_api, email_webhook_configure
 from core.partner_portal_auth import (
     connexion_limitee, enregistrer_tentative_connexion, partenaire_connecte,
     partenaire_required, SESSION_KEY,
@@ -90,9 +91,11 @@ def cles(request):
                     description={'api_key': credential.api_key, 'environnement': environnement},
                     ip_address=request.META.get('REMOTE_ADDR'),
                 )
+                envoye = email_identifiant_api(partenaire, credential, secret_clair)
                 messages.success(
                     request,
-                    f"Identifiant émis — à noter MAINTENANT, il ne sera plus jamais affiché : "
+                    f"Identifiant émis{' (une copie vous a été envoyée par e-mail)' if envoye else ''} — "
+                    f"à noter MAINTENANT, il ne sera plus jamais affiché : "
                     f"clé « {credential.api_key} », secret « {secret_clair} ».",
                 )
         elif action == 'revoquer':
@@ -131,7 +134,12 @@ def webhook(request):
             object_id=str(partenaire.pk), description={'url': url},
             ip_address=request.META.get('REMOTE_ADDR'),
         )
-        messages.success(request, f"Webhook enregistré — secret de signature (à noter MAINTENANT) : « {secret_clair} ».")
+        envoye = email_webhook_configure(partenaire, url, secret_clair)
+        messages.success(
+            request,
+            f"Webhook enregistré{' (secret envoyé par e-mail)' if envoye else ''} — "
+            f"secret de signature (à noter MAINTENANT) : « {secret_clair} ».",
+        )
         return redirect('partner_portal:webhook')
 
     return render(request, 'partenaire_portal/webhook.html', {

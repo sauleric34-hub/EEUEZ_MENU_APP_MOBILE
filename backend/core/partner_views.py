@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from .checkout_groupe import RestaurantExclu, construire_commande, enregistrer_transaction_paiement
 from .models import Categorie, Commande, DocumentKYB, Plat, RestaurantProfile
 from .partner_auth import PartnerAPIKeyAuthentication
+from .partner_emails import email_candidature_recue
 from .partner_serializers import (
     DemandePartenaireSerializer, PartenaireCommandeSerializer, PartenairePlatSerializer,
     PartenaireRestaurantProfileSerializer,
@@ -94,6 +95,8 @@ def deposer_candidature(request):
         partenaire = serializer.save()
         for type_document, fichier in fichiers_valides.items():
             DocumentKYB.objects.create(partenaire=partenaire, type_document=type_document, fichier=fichier)
+
+    email_candidature_recue(partenaire)
 
     return Response(
         {

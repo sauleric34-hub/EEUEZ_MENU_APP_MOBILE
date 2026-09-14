@@ -13,6 +13,7 @@ from django.shortcuts import render
 
 from core.models import DocumentKYB, Partenaire
 from core.models_partenaire import PLANS, valider_document_kyb
+from core.partner_emails import email_candidature_recue
 
 CHAMPS_DOCUMENTS = {
     'fichier_rccm': DocumentKYB.TYPE_RCCM,
@@ -78,6 +79,8 @@ def partenaire_candidature(request):
         partenaire = Partenaire.objects.create(**donnees)
         for type_document, fichier in fichiers_valides.items():
             DocumentKYB.objects.create(partenaire=partenaire, type_document=type_document, fichier=fichier)
+
+    email_candidature_recue(partenaire)
 
     return render(request, 'partenaires/candidature.html', {'succes': True})
 

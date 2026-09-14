@@ -1,6 +1,7 @@
 """Portail self-service partenaire : connexion, tableau de bord, gestion des
 clés API et du webhook par le partenaire lui-même (sans passer par l'admin)."""
 
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
@@ -51,9 +52,12 @@ class PortailPartenaireTestCase(TestCase):
 
     def test_emission_de_cle_depuis_le_portail(self):
         self._login()
+        mail.outbox.clear()
         resp = self.client.post(reverse('partner_portal:cles'), {'action': 'emettre', 'environnement': 'sandbox'})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(APICredential.objects.filter(partenaire=self.partenaire).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['jean@superapp.cm'])
 
     def test_emission_cle_live_refusee_si_plan_ne_le_permet_pas(self):
         self.partenaire.plan = PLAN_DECOUVERTE
@@ -71,10 +75,13 @@ class PortailPartenaireTestCase(TestCase):
 
     def test_configuration_webhook_depuis_le_portail(self):
         self._login()
+        mail.outbox.clear()
         resp = self.client.post(reverse('partner_portal:webhook'), {'url': 'https://superapp.cm/hook'})
         self.assertEqual(resp.status_code, 302)
         self.partenaire.refresh_from_db()
         self.assertEqual(self.partenaire.webhook.url, 'https://superapp.cm/hook')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('https://superapp.cm/hook', mail.outbox[0].body)
 
     def test_webhook_refuse_si_plan_ne_l_inclut_pas(self):
         self.partenaire.plan = PLAN_CROISSANCE  # pas de webhooks sur ce plan
