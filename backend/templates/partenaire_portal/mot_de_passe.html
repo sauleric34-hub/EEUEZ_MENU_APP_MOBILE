@@ -1,0 +1,14 @@
+{% extends 'partenaire_portal/base.html' %}
+{% block title %}Mot de passe{% endblock %}
+{% block content %}
+<h1>Changer le mot de passe</h1>
+<div class="card" style="max-width:420px;">
+  <form method="post">
+    {% csrf_token %}
+    <div class="field"><label>Mot de passe actuel</label><input type="password" name="actuel" required></div>
+    <div class="field"><label>Nouveau mot de passe (8 caractères minimum)</label><input type="password" name="nouveau" required minlength="8"></div>
+    <div class="field"><label>Confirmation</label><input type="password" name="confirmation" required minlength="8"></div>
+    <button type="submit">Changer le mot de passe</button>
+  </form>
+</div>
+{% endblock %}

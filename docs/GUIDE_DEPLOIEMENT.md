@@ -215,6 +215,31 @@ process : vérifie qu'elle est bien dans l'environnement de l'app et **redémarr
 > automatiquement sur un cache local + WebSockets en mémoire — pratique en
 > développement, mais **ne fonctionne qu'avec un seul worker**.
 
+### 3.3 — Worker de tâches asynchrones (webhooks partenaires)
+
+Le même `REDIS_URL` alimente aussi une file de tâches (`django-rq`), utilisée
+pour l'instant uniquement par les **webhooks sortants de l'API Partenaires**
+(notifier un partenaire d'un changement de statut de commande, sans bloquer
+la requête qui vient de le déclencher — voir `core/tasks.py`).
+
+Sans `REDIS_URL`, ces notifications sont envoyées en synchrone (dev local,
+aucune action requise). Avec `REDIS_URL`, elles sont mises en file — il faut
+alors un **process worker séparé** pour les traiter :
+
+```
+python manage.py rqworker default
+```
+
+- Ce worker doit tourner en continu (service séparé, ou supervisé par
+  systemd/pm2/le panneau d'hébergement) — ce n'est **pas** la même chose que
+  le process web (`gunicorn`/Daphne).
+- Tant qu'aucun worker ne tourne, les webhooks s'accumulent dans la file sans
+  jamais partir (aucune commande n'est bloquée pour autant : c'est justement
+  le but). `python manage.py rqworker --burst` traite la file existante puis
+  s'arrête, utile pour vérifier qu'elle se vide.
+- Sur Render (voir `render.yaml`), cela correspond à un second service de type
+  `worker` — à ajouter séparément (coût supplémentaire selon le plan).
+
 ---
 
 ## Phase 4 — Décharger les médias (le meilleur gain)

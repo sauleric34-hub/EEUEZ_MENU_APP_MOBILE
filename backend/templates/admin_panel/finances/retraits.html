@@ -32,7 +32,10 @@
       {% for r in retraits %}
       <tr>
         <td>#{{ r.pk }}</td>
-        <td style="font-weight:600;">{{ r.restaurant.nom }}</td>
+        <td style="font-weight:600;">
+          {{ r.restaurant.nom }}
+          {% if not r.restaurant.is_verified %}<div><span class="badge badge-red" title="Aucun versement possible avant vérification">Non vérifié</span></div>{% endif %}
+        </td>
         <td style="font-weight:700;color:var(--accent-green);">{{ r.montant }} F</td>
         <td>{{ r.numero_compte|default:'—' }}</td>
         <td>{{ r.get_mode_paiement_display }}</td>

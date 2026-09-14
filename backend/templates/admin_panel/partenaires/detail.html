@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}{{ partenaire.nom_commercial }} — Partenaires API{% endblock %}
+{% block topbar_title %}Partenaire API{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">{{ partenaire.nom_commercial }}</h1>
+    <p class="page-subtitle">
+      {% if partenaire.statut == 'approuve' %}<span class="badge badge-green">Approuvé</span>
+      {% elif partenaire.statut == 'rejete' %}<span class="badge badge-red">Rejeté</span>
+      {% elif partenaire.statut == 'suspendu' %}<span class="badge badge-amber">Suspendu</span>
+      {% elif partenaire.statut == 'en_verification' %}<span class="badge badge-blue">En vérification</span>
+      {% else %}<span class="badge badge-gray">En attente</span>{% endif %}
+      — candidature du {{ partenaire.created_at|date:"d/m/Y H:i" }}
+    </p>
+  </div>
+  <a href="{% url 'core:partenaires_list' %}" class="btn btn-secondary" style="margin-left:auto;">← Toutes les candidatures</a>
+</div>
+
+<div class="table-wrapper" style="padding:20px;margin-bottom:20px;">
+  <h3 style="margin-top:0;">Informations</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;font-size:0.9rem;">
+    <div><strong>Raison sociale</strong><br>{{ partenaire.raison_sociale|default:"—" }}</div>
+    <div><strong>Pays</strong><br>{{ partenaire.pays }}</div>
+    <div><strong>N° RCCM</strong><br>{{ partenaire.numero_rccm|default:"—" }}</div>
+    <div><strong>NIU</strong><br>{{ partenaire.numero_contribuable|default:"—" }}</div>
+    <div><strong>Secteur</strong><br>{{ partenaire.secteur|default:"—" }}</div>
+    <div><strong>Contact</strong><br>{{ partenaire.contact_nom }} — {{ partenaire.contact_email }}<br>{{ partenaire.contact_telephone }}</div>
+    <div><strong>Adresse</strong><br>{{ partenaire.adresse|default:"—" }}</div>
+    <div><strong>Site web</strong><br>{% if partenaire.site_web %}<a href="{{ partenaire.site_web }}" target="_blank" rel="noopener">{{ partenaire.site_web }}</a>{% else %}—{% endif %}</div>
+    <div><strong>App</strong><br>{% if partenaire.app_url %}<a href="{{ partenaire.app_url }}" target="_blank" rel="noopener">{{ partenaire.app_url }}</a>{% else %}—{% endif %}</div>
+  </div>
+  <div style="margin-top:14px;"><strong>Cas d'usage déclaré</strong><p style="white-space:pre-line;color:var(--text-muted);">{{ partenaire.description_cas_usage }}</p></div>
+  {% if partenaire.motif_rejet %}<div style="margin-top:10px;color:var(--accent-red);"><strong>Motif de rejet :</strong> {{ partenaire.motif_rejet }}</div>{% endif %}
+  {% if partenaire.motif_suspension %}<div style="margin-top:10px;color:var(--accent-amber);"><strong>Motif de suspension :</strong> {{ partenaire.motif_suspension }}</div>{% endif %}
+</div>
+
+<div class="table-wrapper" style="padding:20px;margin-bottom:20px;">
+  <h3 style="margin-top:0;">Pièces KYB</h3>
+  {% if documents %}
+  <table>
+    <thead><tr><th>Type</th><th>Statut</th><th>Commentaire</th><th></th></tr></thead>
+    <tbody>
+      {% for d in documents %}
+      <tr>
+        <td>{{ d.get_type_document_display }}</td>
+        <td>
+          {% if d.statut == 'valide' %}<span class="badge badge-green">Validé</span>
+          {% elif d.statut == 'rejete' %}<span class="badge badge-red">Rejeté</span>
+          {% else %}<span class="badge badge-gray">Soumis</span>{% endif %}
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem;">{{ d.commentaire|default:"—" }}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          <a href="{% url 'core:partenaire_document_telecharger' d.pk %}" class="btn btn-secondary btn-sm">Télécharger</a>
+          <form method="post" action="{% url 'core:partenaire_document_decider' d.pk %}" style="display:flex;gap:4px;">
+            {% csrf_token %}
+            <input type="text" name="commentaire" placeholder="Commentaire (optionnel)" style="font-size:0.75rem;width:140px;">
+            <button type="submit" name="action" value="valide" class="btn btn-secondary btn-sm">Valider</button>
+            <button type="submit" name="action" value="rejete" class="btn btn-danger btn-sm">Rejeter</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-muted);">Aucune pièce jointe à cette candidature.</p>
+  {% endif %}
+</div>
+
+<div class="table-wrapper" style="padding:20px;margin-bottom:20px;">
+  <h3 style="margin-top:0;">Décision</h3>
+  <form method="post" action="{% url 'core:partenaire_decider' partenaire.pk %}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    {% csrf_token %}
+    <input type="text" name="motif" placeholder="Motif (requis pour rejet/suspension)" style="flex:1;min-width:220px;">
+    <button type="submit" name="action" value="en_verification" class="btn btn-secondary btn-sm">Marquer « en vérification »</button>
+    <button type="submit" name="action" value="approuver" class="btn btn-primary btn-sm">Approuver</button>
+    <button type="submit" name="action" value="rejeter" class="btn btn-danger btn-sm">Rejeter</button>
+    {% if partenaire.statut == 'approuve' %}
+    <button type="submit" name="action" value="suspendre" class="btn btn-amber btn-sm">Suspendre</button>
+    {% endif %}
+  </form>
+</div>
+
+{% if partenaire.statut == 'approuve' %}
+<div class="table-wrapper" style="padding:20px;margin-bottom:20px;">
+  <h3 style="margin-top:0;">Plan tarifaire</h3>
+  <p>Plan actuel : <span class="badge badge-blue">{{ plan_config.label }}</span> —
+    {% if plan_config.prix_mensuel_fcfa is None %}sur devis{% elif plan_config.prix_mensuel_fcfa == 0 %}gratuit{% else %}{{ plan_config.prix_mensuel_fcfa }} F/mois{% endif %}{% if plan_config.commission_pourcentage %} + {{ plan_config.commission_pourcentage }}% par commande{% endif %},
+    {% if plan_config.quota_requetes_mois %}{{ plan_config.quota_requetes_mois }} requêtes/mois{% else %}quota illimité{% endif %},
+    {% if plan_config.ecriture_commandes %}écriture commandes{% else %}catalogue seul{% endif %},
+    {% if plan_config.environnement_live %}live autorisé{% else %}sandbox uniquement{% endif %},
+    {% if plan_config.webhooks %}webhooks inclus{% else %}sans webhooks{% endif %}.
+  </p>
+  {% if plan_config.commission_pourcentage %}
+  <p style="color:var(--text-muted);">Commission due ce mois-ci (relevé manuel) : <strong style="color:var(--text-primary);">{{ commission_ce_mois }} F</strong></p>
+  {% endif %}
+  <form method="post" action="{% url 'core:partenaire_plan_changer' partenaire.pk %}" style="display:flex;gap:8px;align-items:center;">
+    {% csrf_token %}
+    <select name="plan">
+      {% for code, label in plans %}
+      <option value="{{ code }}" {% if code == partenaire.plan %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Changer de plan</button>
+  </form>
+</div>
+
+<div class="table-wrapper" style="padding:20px;margin-bottom:20px;">
+  <h3 style="margin-top:0;">Identifiants API</h3>
+  {% if credentials %}
+  <table>
+    <thead><tr><th>Clé</th><th>Environnement</th><th>Statut</th><th>Usage ce mois</th><th>Dernière utilisation</th><th></th></tr></thead>
+    <tbody>
+      {% for c in credentials %}
+      <tr>
+        <td><code>{{ c.api_key }}</code></td>
+        <td>{{ c.get_environnement_display }}</td>
+        <td>{% if c.statut == 'active' %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-gray">Révoquée</span>{% endif %}</td>
+        <td style="font-size:0.8rem;">
+          {{ c.requetes_mois_courant }}{% if plan_config.quota_requetes_mois %} / {{ plan_config.quota_requetes_mois }}{% else %} (illimité){% endif %}
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem;">{{ c.derniere_utilisation|date:"d/m/Y H:i"|default:"jamais" }}</td>
+        <td>
+          {% if c.statut == 'active' %}
+          <form method="post" action="{% url 'core:partenaire_credential_revoquer' c.pk %}" onsubmit="return confirm('Révoquer cette clé ?');">{% csrf_token %}<button class="btn btn-danger btn-sm">Révoquer</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'core:partenaire_credential_emettre' partenaire.pk %}" style="display:flex;gap:8px;align-items:center;margin-top:12px;">
+    {% csrf_token %}
+    <select name="environnement">
+      <option value="sandbox">Sandbox</option>
+      <option value="live">Live</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Émettre un nouvel identifiant</button>
+  </form>
+  <p style="color:var(--text-muted);font-size:0.75rem;margin-top:6px;">Le secret n'est affiché qu'une seule fois, juste après l'émission — notez-le immédiatement et relayez-le au partenaire hors-bande (jamais par ce panneau).</p>
+</div>
+
+<div class="table-wrapper" style="padding:20px;">
+  <h3 style="margin-top:0;">Webhook (notifications de statut de commande)</h3>
+  {% if webhook %}<p>URL actuelle : <code>{{ webhook.url }}</code> — {% if webhook.actif %}<span class="badge badge-green">Actif</span>{% else %}<span class="badge badge-gray">Inactif</span>{% endif %}</p>{% endif %}
+  <form method="post" action="{% url 'core:partenaire_webhook_configurer' partenaire.pk %}" style="display:flex;gap:8px;align-items:center;">
+    {% csrf_token %}
+    <input type="url" name="url" placeholder="https://partenaire.example/webhooks/eeuez" style="flex:1;min-width:260px;" value="{{ webhook.url|default:'' }}">
+    <button type="submit" class="btn btn-primary btn-sm">{% if webhook %}Remplacer{% else %}Configurer{% endif %}</button>
+  </form>
+  <p style="color:var(--text-muted);font-size:0.75rem;margin-top:6px;">Remplacer génère un NOUVEAU secret de signature, affiché une seule fois.</p>
+</div>
+
+<div class="table-wrapper" style="padding:20px;">
+  <h3 style="margin-top:0;">Portail self-service</h3>
+  <p style="color:var(--text-muted);">Le partenaire gère lui-même ses clés, son webhook et consulte ses commandes sur <code>/partenaires/portail/</code>, avec son e-mail de contact comme identifiant.</p>
+  <form method="post" action="{% url 'core:partenaire_mot_de_passe_generer' partenaire.pk %}" onsubmit="return confirm('Générer un nouveau mot de passe portail ? L\'ancien cessera de fonctionner.');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-secondary btn-sm">{% if partenaire.mot_de_passe_hash %}Régénérer{% else %}Activer{% endif %} le mot de passe portail</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

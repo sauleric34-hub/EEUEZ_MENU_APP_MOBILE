@@ -1,0 +1,17 @@
+{% extends 'partenaire_portal/base.html' %}
+{% block title %}Connexion{% endblock %}
+{% block content %}
+<div class="card" style="max-width:380px;margin:60px auto 0;">
+  <h1 style="font-size:1.2rem;">Portail Partenaire</h1>
+  <form method="post">
+    {% csrf_token %}
+    <div class="field"><label>E-mail de contact</label><input type="email" name="email" required autofocus></div>
+    <div class="field"><label>Mot de passe</label><input type="password" name="password" required></div>
+    <button type="submit" style="width:100%;">Se connecter</button>
+  </form>
+  <p style="font-size:.78rem;color:var(--txt2);margin-top:16px;">
+    Pas encore de compte ? <a href="{% url 'partenaire-candidature' %}">Candidatez ici</a>.
+    Mot de passe oublié ? Contactez votre référent EEUEZ.
+  </p>
+</div>
+{% endblock %}

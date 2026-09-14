@@ -1,0 +1,25 @@
+{% extends 'partenaire_portal/base.html' %}
+{% block title %}Commandes{% endblock %}
+{% block content %}
+<h1>Vos commandes</h1>
+<div class="card" style="padding:0;overflow-x:auto;">
+  {% if commandes %}
+  <table>
+    <thead><tr><th>Réf. externe</th><th>Restaurant</th><th>Statut</th><th>Montant</th><th>Créée le</th></tr></thead>
+    <tbody>
+      {% for c in commandes %}
+      <tr>
+        <td style="padding-left:16px;"><code>{{ c.reference_externe|default:"—" }}</code></td>
+        <td>{{ c.restaurant.nom|default:"—" }}</td>
+        <td>{{ c.get_statut_display }}</td>
+        <td>{{ c.montant_total }} F</td>
+        <td style="color:var(--txt2);">{{ c.created_at|date:"d/m/Y H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="padding:20px;color:var(--txt2);">Aucune commande créée via l'API pour l'instant.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -67,7 +67,12 @@ def retraits_view(request):
             retrait.save(update_fields=['statut', 'processed_at'])
             messages.info(request, f'Retrait #{retrait.pk} refusé.')
         elif action == 'payer':
-            # Confirmation manuelle du versement par l'admin
+            # Confirmation manuelle du versement par l'admin — même garde
+            # KYC que le décaissement auto (executer_retrait) : un restaurant
+            # non vérifié ne doit jamais être payé, décaissement manuel ou pas.
+            if not retrait.restaurant.is_verified:
+                messages.error(request, f"Restaurant « {retrait.restaurant.nom} » non vérifié — validez-le avant tout versement.")
+                return redirect('core:admin_retraits')
             retrait.statut = 'paye'
             retrait.processed_at = timezone.now()
             retrait.save(update_fields=['statut', 'processed_at'])

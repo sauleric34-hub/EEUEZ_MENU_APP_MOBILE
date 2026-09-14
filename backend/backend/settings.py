@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
+    'django_rq',
     'core',
 ]
 
@@ -170,7 +172,29 @@ REST_FRAMEWORK = {
         'anon': '60/min',
         'user': '240/min',
         'auth': '10/min',   # login / register (anti brute-force)
+        'partner_catalog': '120/min',   # partenaires API — lecture catalogue
+        'partner_orders': '30/min',     # partenaires API — création de commande
+        'partner_apply': '5/hour',      # candidature KYB (anonyme, anti-spam)
     },
+    # Auto-introspection du schéma pour drf-spectacular (Swagger/Redoc de
+    # l'API Partenaires uniquement — voir core/partner_urls.py). N'affecte
+    # que la génération du schéma, jamais le traitement des requêtes.
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# ─── drf-spectacular (doc OpenAPI de l'API Partenaires) ─────────────────────
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'EEUEZ Menu — API Partenaires',
+    'DESCRIPTION': (
+        "Catalogue restaurants et création de commandes pour les plateformes "
+        "tierces intégrées à EEUEZ Menu. Authentification par clé API + "
+        "signature HMAC-SHA256 (voir /partenaires/documentation/)."
+    ),
+    'VERSION': '1.0.0',
+    # Un seul schéma, celui de core.partner_urls (voir SpectacularAPIView) :
+    # ne doit JAMAIS introspecter /api/ (app mobile), surface interne non
+    # destinée à des tiers.
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 # En-têtes de sécurité (actifs uniquement en production).
@@ -208,11 +232,60 @@ APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
 # Tant que désactivé, les retraits sont traités manuellement (aucun versement auto).
 CAMERPAY_PAYOUT_ENABLED = _env_bool('CAMERPAY_PAYOUT_ENABLED', False)
 
+# ─── Partenaires API (KYB + authentification par clé signée HMAC) ──────────────
+# Les identifiants API partenaires (core.models_partenaire.APICredential et
+# PartenaireWebhookConfig) stockent un secret HMAC CHIFFRÉ, jamais hashé : un
+# HMAC exige de pouvoir re-signer avec le secret, ce qu'un hash à sens unique
+# (comme pour un mot de passe) rend impossible. Générez la clé avec :
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+PARTNER_SECRET_ENCRYPTION_KEY = os.environ.get('PARTNER_SECRET_ENCRYPTION_KEY', '')
+if not PARTNER_SECRET_ENCRYPTION_KEY:
+    if DEBUG:
+        # Dev uniquement : clé dérivée de SECRET_KEY pour fonctionner sans
+        # configuration. La prod DOIT fournir la sienne (voir la levée ci-dessous),
+        # exactement comme SECRET_KEY et CAMERPAY_CALLBACK_SECRET plus haut.
+        import base64
+        import hashlib
+        PARTNER_SECRET_ENCRYPTION_KEY = base64.urlsafe_b64encode(
+            hashlib.sha256(SECRET_KEY.encode()).digest()
+        ).decode()
+    else:
+        raise RuntimeError(
+            'PARTNER_SECRET_ENCRYPTION_KEY manquante : définissez-la en production '
+            '(chiffrement des secrets API partenaires).'
+        )
+
+# Tolérance sur l'horodatage d'une requête partenaire signée (anti-rejeu) : au-delà,
+# une requête — même valablement signée — est refusée. Voir core/partner_auth.py.
+PARTNER_REQUEST_TIMESTAMP_TOLERANCE = 300  # secondes
+
+# Délai max d'attente d'un webhook sortant vers un partenaire (ne doit jamais
+# bloquer longtemps la requête qui change le statut d'une commande).
+PARTNER_WEBHOOK_TIMEOUT = 3  # secondes
+
 # ─── CARTO (fonds de carte) ─────────────────────────────────────────────────────
 # Depuis 2025, CARTO exige une clé API sur ses tuiles basemaps.cartocdn.com
 # (sinon un filigrane "API KEY REQUIRED" s'affiche sur la carte). Clé gratuite
 # jusqu'à 5M requêtes/mois : https://carto.com/basemaps/apikey/
 CARTO_API_KEY = os.environ.get('CARTO_API_KEY', '')
+
+# ─── E-mail (boîte menu@cambus.cm, cPanel) ──────────────────────────────────
+# SMTP uniquement (envoi) : rien dans ce backend ne relève le courrier entrant
+# (IMAP/POP3), donc ces deux-là ne sont pas configurés ici — juste documentés
+# dans .env.example pour un client mail externe.
+# Tant qu'EMAIL_HOST_PASSWORD est vide, Django bascule sur la console (dev) :
+# aucun envoi ne peut échouer silencieusement faute de configuration.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.cambus.cm')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'menu@cambus.cm')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', True)   # port 465 = SSL direct
+EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', False)  # port 587 = STARTTLS (l'un OU l'autre, jamais les deux)
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST_PASSWORD
+    else 'django.core.mail.backends.console.EmailBackend'
+)
 
 from datetime import timedelta
 SIMPLE_JWT = {
@@ -252,5 +325,16 @@ else:
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
+    }
+
+# ─── File de tâches asynchrones (django-rq) ─────────────────────────────────
+# Le « plus tard » annoncé au-dessus, pour ne pas bloquer une requête (ex.
+# livreur qui confirme une livraison) le temps d'un appel HTTP sortant (ex.
+# webhook partenaire, cf. core/tasks.py). Comme le cache/channel layer,
+# REDIS_URL absente → pas de RQ configuré et core/tasks.py retombe sur un
+# appel synchrone (dev sans Redis local).
+if REDIS_URL:
+    RQ_QUEUES = {
+        'default': {'URL': REDIS_URL, 'DEFAULT_TIMEOUT': 30},
     }
 

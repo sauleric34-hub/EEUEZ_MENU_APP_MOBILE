@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devenir partenaire API · EEUEZ Menu</title>
+{% load static %}
+<link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08080E; --bg2: #12121C; --border: rgba(255,255,255,.1);
+    --txt1: #F9FAFB; --txt2: #9CA3AF; --accent: #E8591C; --accent-d: #C94A14;
+    --success: #38A169; --danger: #EF4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--txt1);
+    padding-block: 40px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding-inline: 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+  .brand img { height: 36px; }
+  .brand span { font-weight: 800; font-size: 1.2rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  p.lead { color: var(--txt2); margin: 0 0 28px; line-height: 1.5; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  label { display: block; font-size: .82rem; color: var(--txt2); margin-bottom: 6px; }
+  input, textarea, select {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: #0D0D16; color: var(--txt1); font-family: inherit; font-size: .92rem;
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  input[type="file"] { padding: 8px; font-size: .82rem; }
+  .field { margin-bottom: 14px; }
+  fieldset { border: 1px solid var(--border); border-radius: 12px; margin: 24px 0; padding: 16px; }
+  legend { padding: 0 8px; color: var(--txt2); font-size: .85rem; }
+  button {
+    background: var(--accent); color: #fff; border: none; padding: 13px 22px; border-radius: 10px;
+    font-weight: 700; font-size: .95rem; cursor: pointer; width: 100%;
+  }
+  button:hover { background: var(--accent-d); }
+  .msg { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: .88rem; }
+  .msg.error { background: rgba(239,68,68,.12); color: #FCA5A5; border: 1px solid rgba(239,68,68,.3); }
+  .msg.success { background: rgba(56,161,105,.12); color: #6EE7B7; border: 1px solid rgba(56,161,105,.3); }
+  .success-box { text-align: center; padding: 40px 20px; }
+  .success-box h2 { margin-top: 0; }
+  small.req { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand" style="justify-content:space-between;display:flex;align-items:center;">
+    <span style="display:flex;align-items:center;gap:10px;"><img src="{% static 'logo.png' %}" onerror="this.style.display='none'" alt=""><span>EEUEZ Menu</span></span>
+    <span>
+      <a href="{% url 'partner_portal:login' %}" style="color:var(--txt2);font-size:.82rem;text-decoration:none;margin-right:16px;">Portail partenaire</a>
+      <a href="{% url 'partenaire-documentation' %}" style="color:var(--txt2);font-size:.82rem;text-decoration:none;">Documentation API →</a>
+    </span>
+  </div>
+
+  {% if succes %}
+  <div class="card success-box">
+    <h2>Candidature envoyée ✅</h2>
+    <p class="lead">Merci ! Notre équipe examine votre dossier (RCCM, NIU, pièce d'identité du dirigeant) et vous recontactera à l'adresse indiquée. Un identifiant API vous sera communiqué une fois la vérification terminée.</p>
+  </div>
+  {% else %}
+  <h1>Intégrez le catalogue et les commandes EEUEZ dans votre plateforme</h1>
+  <p class="lead">Ce formulaire ouvre une candidature d'accès à l'API Partenaires (lecture du catalogue restaurants, création de commandes). Chaque candidature est vérifiée manuellement avant l'émission d'un identifiant API.</p>
+
+  {% if messages %}
+    {% for m in messages %}<div class="msg error">{{ m }}</div>{% endfor %}
+  {% endif %}
+
+  <form class="card" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="row">
+      <div class="field"><label>Nom commercial <small class="req">*</small></label><input type="text" name="nom_commercial" value="{{ donnees.nom_commercial|default:'' }}" required></div>
+      <div class="field"><label>Raison sociale</label><input type="text" name="raison_sociale" value="{{ donnees.raison_sociale|default:'' }}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Pays</label><input type="text" name="pays" value="{{ donnees.pays|default:'Cameroun' }}"></div>
+      <div class="field"><label>Secteur d'activité</label><input type="text" name="secteur" value="{{ donnees.secteur|default:'' }}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>N° RCCM (ou équivalent local)</label><input type="text" name="numero_rccm" value="{{ donnees.numero_rccm|default:'' }}"></div>
+      <div class="field"><label>NIU (ou équivalent local)</label><input type="text" name="numero_contribuable" value="{{ donnees.numero_contribuable|default:'' }}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Adresse</label><input type="text" name="adresse" value="{{ donnees.adresse|default:'' }}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Site web</label><input type="url" name="site_web" placeholder="https://…" value="{{ donnees.site_web|default:'' }}"></div>
+      <div class="field"><label>Application / plateforme</label><input type="url" name="app_url" placeholder="https://…" value="{{ donnees.app_url|default:'' }}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Nom du contact <small class="req">*</small></label><input type="text" name="contact_nom" value="{{ donnees.contact_nom|default:'' }}" required></div>
+      <div class="field"><label>Téléphone du contact</label><input type="text" name="contact_telephone" value="{{ donnees.contact_telephone|default:'' }}"></div>
+    </div>
+    <div class="field"><label>Email de contact <small class="req">*</small></label><input type="email" name="contact_email" value="{{ donnees.contact_email|default:'' }}" required></div>
+    <div class="field"><label>Que comptez-vous construire avec l'API ? <small class="req">*</small></label><textarea name="description_cas_usage" required>{{ donnees.description_cas_usage|default:'' }}</textarea></div>
+
+    <fieldset>
+      <legend>Pièces justificatives (PDF/image, optionnel à ce stade)</legend>
+      <div class="row">
+        <div class="field"><label>Registre du Commerce (RCCM)</label><input type="file" name="fichier_rccm"></div>
+        <div class="field"><label>Attestation NIU</label><input type="file" name="fichier_niu"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Pièce d'identité du dirigeant</label><input type="file" name="fichier_piece_identite"></div>
+        <div class="field"><label>Autre document</label><input type="file" name="fichier_autre"></div>
+      </div>
+    </fieldset>
+
+    <button type="submit">Envoyer la candidature</button>
+  </form>
+  {% endif %}
+</div>
+</body>
+</html>

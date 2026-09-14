@@ -23,6 +23,11 @@ class User(AbstractUser):
     # Tant qu'il est vide, aucun paiement n'est déclenché (les gains s'accumulent).
     paiement_numero = models.CharField(max_length=50, blank=True)
     paiement_operateur = models.CharField(max_length=20, blank=True)
+    # Identité vérifiée par un admin (CNI rapprochée du nom déclaré) — condition
+    # requise, en plus du numéro mobile money, avant tout versement à un
+    # livreur indépendant. Équivalent de RestaurantProfile.is_verified côté
+    # livreur. Voir core/payout_livreur.py::declencher_paiement_livreur.
+    identite_verifiee = models.BooleanField(default=False)
     # Livreur rattaché à un restaurant (compte créé par ce restaurant)
     restaurant_attache = models.ForeignKey(
         'RestaurantProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='livreurs',
@@ -305,6 +310,22 @@ class Commande(models.Model):
     groupe = models.ForeignKey(
         'core.CommandeGroupe', on_delete=models.SET_NULL, null=True, blank=True, related_name='commandes',
     )
+    # Commande créée via l'API Partenaires (core/partner_views.py) plutôt que
+    # par un client de l'app. Nul pour toute commande « normale ». `client`
+    # reste nul dans ce cas : pas de compte fictif créé pour l'occasion.
+    partenaire = models.ForeignKey(
+        'core.Partenaire', on_delete=models.SET_NULL, null=True, blank=True, related_name='commandes',
+    )
+    # Identifiant de CETTE commande côté partenaire (leur réconciliation).
+    # Unique par partenaire : sert de clé d'idempotence contre les relances
+    # réseau (voir partner_views.creer_commande_partenaire).
+    reference_externe = models.CharField(max_length=100, blank=True)
+    # Commission due par le partenaire sur CETTE commande (plan Croissance :
+    # 1 % de montant_total, 0 pour un plan à abonnement fixe). Figée à la
+    # création comme les autres montants — jamais recalculée si le plan
+    # change ensuite. Sert de base au relevé mensuel (admin), pas encore à
+    # une collecte automatisée (facturation manuelle en V1).
+    commission_partenaire = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -312,6 +333,11 @@ class Commande(models.Model):
         verbose_name = 'Commande'
         verbose_name_plural = 'Commandes'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['partenaire', 'reference_externe'], name='uniq_partenaire_reference_externe',
+            ),
+        ]
 
     def __str__(self):
         return f"Commande #{self.pk} — {self.restaurant}"
@@ -688,6 +714,11 @@ from .models_bannieres import Banniere  # noqa: E402,F401
 from .models_livraison import (  # noqa: E402,F401
     ParametrageLivraison, PalierLivraison, PaiementLivreur, AbandonLivraison,
     AppareilPush,
+)
+
+# ─── API Partenaires (KYB, identifiants signés, webhooks sortants) ────────────
+from .models_partenaire import (  # noqa: E402,F401
+    Partenaire, DocumentKYB, APICredential, PartenaireWebhookConfig, WebhookDelivery,
 )
 
 # ─── Panier multi-restaurant (checkout groupé) ────────────────

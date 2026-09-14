@@ -76,7 +76,7 @@
     <div class="table-wrapper" style="border:none;">
       <table class="data-table">
         <thead>
-          <tr><th>Livreur</th><th>Contact</th><th>Solde</th><th>En cours</th><th>Livraisons</th><th>Abandons</th><th>État</th><th></th></tr>
+          <tr><th>Livreur</th><th>Contact</th><th>Solde</th><th>En cours</th><th>Livraisons</th><th>Abandons</th><th>Identité</th><th>État</th><th></th></tr>
         </thead>
         <tbody>
           {% for l in livreurs %}
@@ -96,13 +96,26 @@
             <td>{{ l.nombre_livraisons }}</td>
             <td>{% if l.nb_abandons %}<span class="badge badge-red">{{ l.nb_abandons }}</span>{% else %}—{% endif %}</td>
             <td>
+              {% if l.identite_verifiee %}
+                <span class="badge badge-green">Vérifiée</span>
+              {% else %}
+                <span class="badge badge-amber">Non vérifiée</span>
+              {% endif %}
+            </td>
+            <td>
               {% if l.is_active %}
                 <span class="badge badge-green">Actif</span>
               {% else %}
                 <span class="badge badge-red">Désactivé</span>
               {% endif %}
             </td>
-            <td style="text-align:right;">
+            <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+              <form method="post" action="{% url 'core:admin_livreur_verifier' l.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="btn {% if l.identite_verifiee %}btn-secondary{% else %}btn-primary{% endif %} btn-sm">
+                  {% if l.identite_verifiee %}Retirer la vérification{% else %}Vérifier l'identité{% endif %}
+                </button>
+              </form>
               <form method="post" action="{% url 'core:admin_livreur_toggle' l.pk %}" style="display:inline;"
                     onsubmit="return confirm('{% if l.is_active %}Désactiver{% else %}Réactiver{% endif %} ce livreur ?');">
                 {% csrf_token %}
@@ -113,7 +126,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">
+          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">
             Aucun livreur indépendant. Créez-en un avec le formulaire.
           </td></tr>
           {% endfor %}

@@ -1,0 +1,52 @@
+{% extends 'partenaire_portal/base.html' %}
+{% block title %}Clés API{% endblock %}
+{% block content %}
+<h1>Vos identifiants API</h1>
+
+<div class="card">
+  {% if credentials %}
+  <table>
+    <thead><tr><th>Clé</th><th>Environnement</th><th>Statut</th><th>Dernière utilisation</th><th></th></tr></thead>
+    <tbody>
+      {% for c in credentials %}
+      <tr>
+        <td><code>{{ c.api_key }}</code></td>
+        <td>{{ c.get_environnement_display }}</td>
+        <td>{% if c.statut == 'active' %}<span class="badge green">Active</span>{% else %}<span class="badge gray">Révoquée</span>{% endif %}</td>
+        <td style="color:var(--txt2);">{{ c.derniere_utilisation|date:"d/m/Y H:i"|default:"jamais" }}</td>
+        <td>
+          {% if c.statut == 'active' %}
+          <form method="post" onsubmit="return confirm('Révoquer cette clé ? Toute intégration qui l\'utilise cessera de fonctionner.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="revoquer">
+            <input type="hidden" name="credential_id" value="{{ c.pk }}">
+            <button type="submit" class="danger">Révoquer</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--txt2);">Aucun identifiant émis pour l'instant.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Émettre un nouvel identifiant</h3>
+  <form method="post" class="row">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="emettre">
+    <div class="field" style="flex:1;">
+      <label>Environnement</label>
+      <select name="environnement">
+        <option value="sandbox">Sandbox</option>
+        <option value="live">Live</option>
+      </select>
+    </div>
+    <button type="submit">Émettre</button>
+  </form>
+  <p style="font-size:.78rem;color:var(--txt2);margin-top:10px;">Le secret n'est affiché qu'une seule fois, juste après l'émission — notez-le immédiatement, il ne sera plus jamais visible.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'partenaire_portal/base.html' %}
+{% block title %}Tableau de bord{% endblock %}
+{% block content %}
+<h1>Bonjour, {{ partenaire.nom_commercial }}</h1>
+
+<div class="kpi-grid">
+  <div class="kpi"><div class="value">{{ plan_config.label }}</div><div class="label">Plan actuel</div></div>
+  <div class="kpi"><div class="value">{{ nb_commandes_mois }}</div><div class="label">Commandes ce mois</div></div>
+  {% if plan_config.commission_pourcentage %}
+  <div class="kpi"><div class="value">{{ commission_ce_mois }} F</div><div class="label">Commission due ({{ plan_config.commission_pourcentage }}%)</div></div>
+  {% else %}
+  <div class="kpi"><div class="value">{{ plan_config.prix_mensuel_fcfa|default:"Sur devis" }}{% if plan_config.prix_mensuel_fcfa %} F{% endif %}</div><div class="label">Abonnement mensuel</div></div>
+  {% endif %}
+  <div class="kpi"><div class="value">{% if plan_config.quota_requetes_mois %}{{ plan_config.quota_requetes_mois }}{% else %}Illimité{% endif %}</div><div class="label">Quota requêtes/mois</div></div>
+</div>
+
+<div class="card">
+  <h3>Votre plan « {{ plan_config.label }} »</h3>
+  <ul style="color:var(--txt2);font-size:.85rem;line-height:1.8;margin:0;padding-left:18px;">
+    <li>{% if plan_config.ecriture_commandes %}Lecture catalogue + création de commandes{% else %}Lecture catalogue seule{% endif %}</li>
+    <li>{% if plan_config.environnement_live %}Environnements sandbox et live{% else %}Sandbox uniquement{% endif %}</li>
+    <li>{% if plan_config.webhooks %}Webhooks inclus{% else %}Webhooks non inclus sur ce plan{% endif %}</li>
+  </ul>
+  <p style="font-size:.78rem;color:var(--txt2);margin-top:12px;">Besoin d'un autre plan ? Contactez votre référent EEUEZ.</p>
+</div>
+
+<div class="card">
+  <h3>Identifiants API actifs</h3>
+  {% if credentials %}
+  <table>
+    <thead><tr><th>Clé</th><th>Environnement</th><th>Statut</th></tr></thead>
+    <tbody>
+      {% for c in credentials %}
+      <tr><td><code>{{ c.api_key }}</code></td><td>{{ c.get_environnement_display }}</td>
+        <td>{% if c.statut == 'active' %}<span class="badge green">Active</span>{% else %}<span class="badge gray">Révoquée</span>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--txt2);">Aucun identifiant émis. <a href="{% url 'partner_portal:cles' %}">Émettez-en un →</a></p>
+  {% endif %}
+</div>
+{% endblock %}

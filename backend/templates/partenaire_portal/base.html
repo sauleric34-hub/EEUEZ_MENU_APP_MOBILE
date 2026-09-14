@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Portail Partenaire{% endblock %} · EEUEZ Menu</title>
+{% load static %}
+<link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08080E; --bg2: #12121C; --bg3: #0D0D16; --border: rgba(255,255,255,.1);
+    --txt1: #F9FAFB; --txt2: #9CA3AF; --accent: #E8591C; --accent-d: #C94A14;
+    --success: #38A169; --danger: #EF4444; --blue: #3B82F6; --amber: #F5A623;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--txt1); }
+  a { color: var(--accent); }
+  code { font-family: monospace; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: .85em; color: #F9A66C; }
+  .topbar {
+    background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 24px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .topbar .brand { font-weight: 800; margin-right: 10px; }
+  .topbar nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+  .topbar nav a { color: var(--txt2); text-decoration: none; font-size: .85rem; padding: 8px 12px; border-radius: 8px; }
+  .topbar nav a.active, .topbar nav a:hover { color: var(--txt1); background: rgba(255,255,255,.05); }
+  .topbar .logout { color: var(--txt2); text-decoration: none; font-size: .82rem; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 1.4rem; margin: 0 0 20px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+  .card h3 { margin: 0 0 10px; font-size: 1rem; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .kpi .value { font-size: 1.4rem; font-weight: 700; }
+  .kpi .label { font-size: .78rem; color: var(--txt2); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--txt2); font-weight: 600; font-size: .78rem; }
+  input, select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg3); color: var(--txt1); font-family: inherit; }
+  label { display: block; font-size: .82rem; color: var(--txt2); margin-bottom: 5px; }
+  .field { margin-bottom: 14px; }
+  button, .btn { background: var(--accent); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 600; font-size: .85rem; cursor: pointer; text-decoration: none; display: inline-block; }
+  button:hover, .btn:hover { background: var(--accent-d); }
+  button.secondary, .btn.secondary { background: var(--bg3); border: 1px solid var(--border); color: var(--txt1); }
+  button.danger { background: rgba(239,68,68,.15); color: #FCA5A5; border: 1px solid rgba(239,68,68,.3); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: .72rem; font-weight: 600; }
+  .badge.green { background: rgba(56,161,105,.15); color: #6EE7B7; }
+  .badge.gray { background: rgba(156,163,175,.15); color: #D1D5DB; }
+  .msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: .85rem; }
+  .msg.error { background: rgba(239,68,68,.12); color: #FCA5A5; border: 1px solid rgba(239,68,68,.3); }
+  .msg.success { background: rgba(56,161,105,.12); color: #6EE7B7; border: 1px solid rgba(56,161,105,.3); }
+  .msg.info, .msg.warning { background: rgba(245,166,35,.1); color: #FCD9A8; border: 1px solid rgba(245,166,35,.3); }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+</style>
+</head>
+<body>
+{% if partenaire %}
+<div class="topbar">
+  <span class="brand">EEUEZ · Portail Partenaire</span>
+  <nav>
+    <a href="{% url 'partner_portal:dashboard' %}" class="{% if active == 'dashboard' %}active{% endif %}">Tableau de bord</a>
+    <a href="{% url 'partner_portal:commandes' %}" class="{% if active == 'commandes' %}active{% endif %}">Commandes</a>
+    <a href="{% url 'partner_portal:cles' %}" class="{% if active == 'cles' %}active{% endif %}">Clés API</a>
+    <a href="{% url 'partner_portal:webhook' %}" class="{% if active == 'webhook' %}active{% endif %}">Webhook</a>
+    <a href="{% url 'partner_portal:changer_mot_de_passe' %}" class="{% if active == 'mdp' %}active{% endif %}">Mot de passe</a>
+    <a href="{% url 'partenaire-documentation' %}" target="_blank">Documentation ↗</a>
+  </nav>
+  <span style="color:var(--txt2);font-size:.82rem;">{{ partenaire.nom_commercial }}</span>
+  <a class="logout" href="{% url 'partner_portal:logout' %}">Déconnexion</a>
+</div>
+{% endif %}
+
+<div class="wrap">
+  {% if messages %}
+    {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  {% endif %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

@@ -6,6 +6,7 @@ from django.views.decorators.cache import cache_page
 from core.views.landing import landing_view
 from core.api_views import camerpay_return, camerpay_failed
 from core.views.publication_views import publication_rebond
+from core.views.partner_public import documentation as partenaire_documentation, partenaire_candidature
 
 urlpatterns = [
     # Page d'accueil publique, identique pour tous : mise en cache 60 s.
@@ -16,6 +17,14 @@ urlpatterns = [
     path('django-admin/', admin.site.urls),
     path('admin-panel/', include('core.urls')),
     path('api/', include('core.api_urls')),
+    # API Partenaires — surface publique séparée (voir core/partner_urls.py)
+    path('api/partners/v1/', include('core.partner_urls')),
+    # Formulaire web de candidature partenaire (grand public, sans clé API)
+    path('partenaires/candidature/', partenaire_candidature, name='partenaire-candidature'),
+    # Documentation développeur publique de l'API Partenaires
+    path('partenaires/documentation/', partenaire_documentation, name='partenaire-documentation'),
+    # Portail self-service partenaire (session, humain — voir core/partner_portal_auth.py)
+    path('partenaires/portail/', include('core.partner_portal_urls')),
     # Pages de retour CamerPay après paiement mobile money
     path('payment/success/', camerpay_return, name='camerpay-return'),
     path('payment/failed/', camerpay_failed, name='camerpay-failed'),

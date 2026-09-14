@@ -38,5 +38,12 @@ CACHES = {
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,  # noqa: F405
     'DEFAULT_THROTTLE_CLASSES': (),
-    'DEFAULT_THROTTLE_RATES': {},
+    # None = scope explicitement désactivé (idiome DRF), pas juste absent :
+    # les vues Partenaires déclarent leur throttle_classes EN DUR sur la vue
+    # (pas via le défaut global ci-dessus, seul neutralisé par un tuple vide),
+    # donc `get_rate()` serait appelée quand même et lèverait
+    # ImproperlyConfigured si le scope manquait purement et simplement.
+    'DEFAULT_THROTTLE_RATES': {
+        'partner_catalog': None, 'partner_orders': None, 'partner_apply': None,
+    },
 }

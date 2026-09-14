@@ -3,6 +3,7 @@ from core.views import auth, dashboard, restaurants, users, dishes, finances, de
 from core.views import publications_admin, bannieres
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
+from core.views import partenaires_admin
 
 app_name = 'core'
 
@@ -55,6 +56,7 @@ urlpatterns = [
     path('deliveries/<int:pk>/action/', deliveries.delivery_action, name='delivery_action'),
     path('livreurs/', livreurs_admin.livreurs_view, name='admin_livreurs'),
     path('livreurs/<int:pk>/toggle/', livreurs_admin.livreur_toggle, name='admin_livreur_toggle'),
+    path('livreurs/<int:pk>/verifier/', livreurs_admin.livreur_verifier, name='admin_livreur_verifier'),
     path('livreurs/paiements/', livreurs_admin.paiements_view, name='admin_livreur_paiements'),
     path('livreurs/paiements/<int:pk>/action/', livreurs_admin.paiement_action, name='admin_livreur_paiement_action'),
     path('livreurs/parametrage/', livreurs_admin.parametrage_view, name='admin_livreur_parametrage'),
@@ -62,6 +64,19 @@ urlpatterns = [
     # Reviews
     path('reviews/', reviews.reviews_view, name='reviews'),
     path('reviews/<int:pk>/toggle/', reviews.review_toggle, name='review_toggle'),
+
+    # Partenaires API (KYB)
+    path('partenaires/', partenaires_admin.partenaires_list, name='partenaires_list'),
+    path('partenaires/cles/', partenaires_admin.api_keys_list, name='partenaire_api_keys_list'),
+    path('partenaires/<int:pk>/', partenaires_admin.partenaire_detail, name='partenaire_detail'),
+    path('partenaires/<int:pk>/decider/', partenaires_admin.partenaire_decider, name='partenaire_decider'),
+    path('partenaires/<int:pk>/plan/', partenaires_admin.partenaire_plan_changer, name='partenaire_plan_changer'),
+    path('partenaires/<int:pk>/credential/', partenaires_admin.credential_emettre, name='partenaire_credential_emettre'),
+    path('partenaires/<int:pk>/webhook/', partenaires_admin.webhook_configurer, name='partenaire_webhook_configurer'),
+    path('partenaires/<int:pk>/mot-de-passe/', partenaires_admin.mot_de_passe_generer, name='partenaire_mot_de_passe_generer'),
+    path('partenaires/documents/<int:pk>/decider/', partenaires_admin.document_decider, name='partenaire_document_decider'),
+    path('partenaires/documents/<int:pk>/telecharger/', partenaires_admin.document_telecharger, name='partenaire_document_telecharger'),
+    path('partenaires/credentials/<int:pk>/revoquer/', partenaires_admin.credential_revoquer, name='partenaire_credential_revoquer'),
 
     # Logs
     path('logs/', logs.logs_view, name='logs'),

@@ -91,6 +91,16 @@ def executer_retrait(retrait):
     - Décaissement désactivé → marque « approuvé » (à verser manuellement).
     Retourne le PayoutResult.
     """
+    if not retrait.restaurant.is_verified:
+        # Aucun versement avant vérification KYC du restaurant, quel que soit
+        # le provider — un compte non vérifié peut avoir été créé avec un
+        # numéro mobile money arbitraire (voir permissions.py::EstRestaurant,
+        # aucun contrôle d'identité à l'inscription).
+        return PayoutResult(
+            success=False, status='echec',
+            message="Restaurant non vérifié — validez son identité avant tout versement.",
+        )
+
     provider = get_payout_provider()
     operator = OPERATEUR_CAMERPAY.get(retrait.mode_paiement, '')
     reference = retrait.payout_reference or f'PAYOUT-{retrait.pk}'

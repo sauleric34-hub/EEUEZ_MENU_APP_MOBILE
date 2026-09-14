@@ -72,9 +72,23 @@ class VersementAutoTest(BaseLivraison):
         finaliser_livraison(self._commande_livrable(), par='client')
         self.assertFalse(PaiementLivreur.objects.filter(livreur=self.livreur).exists())
 
+    def test_pas_de_versement_sans_identite_verifiee(self):
+        # Numéro mobile money présent mais identité jamais vérifiée par un
+        # admin (identite_verifiee reste False par défaut) : aucun versement,
+        # même au-dessus du seuil — voir payout_livreur.declencher_paiement_livreur.
+        self.livreur.paiement_numero = '650000000'
+        self.livreur.paiement_operateur = 'mtn_money'
+        self.livreur.save()
+        param = ParametrageLivraison.get_solo()
+        param.seuil_paiement_auto = 100
+        param.save()
+        finaliser_livraison(self._commande_livrable(), par='client')
+        self.assertFalse(PaiementLivreur.objects.filter(livreur=self.livreur).exists())
+
     def test_versement_declenche_au_seuil(self):
         self.livreur.paiement_numero = '650000000'
         self.livreur.paiement_operateur = 'mtn_money'
+        self.livreur.identite_verifiee = True
         self.livreur.save()
         param = ParametrageLivraison.get_solo()
         param.seuil_paiement_auto = 1000
@@ -108,6 +122,21 @@ class VersementAutoTest(BaseLivraison):
         self.assertEqual(liv.confirmee_par, 'admin')
         self.assertEqual(liv.commande.statut, 'livree')
         self.assertEqual(float(self.livreur.gain_total), 1050.0)
+
+    def test_admin_peut_verifier_l_identite_du_livreur(self):
+        admin = User.objects.create_user(username='adm2', password='x', role='admin')
+        nav = Client(); nav.force_login(admin)
+        self.assertFalse(self.livreur.identite_verifiee)
+
+        rep = nav.post(f'/admin-panel/livreurs/{self.livreur.pk}/verifier/')
+        self.assertEqual(rep.status_code, 302)
+        self.livreur.refresh_from_db()
+        self.assertTrue(self.livreur.identite_verifiee)
+
+        # Bascule : un second appel retire la vérification.
+        nav.post(f'/admin-panel/livreurs/{self.livreur.pk}/verifier/')
+        self.livreur.refresh_from_db()
+        self.assertFalse(self.livreur.identite_verifiee)
 
     def test_refus_de_paiement_reconstitue_le_solde(self):
         self.livreur.paiement_numero = '650000000'

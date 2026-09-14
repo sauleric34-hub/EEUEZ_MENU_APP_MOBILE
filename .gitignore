@@ -42,6 +42,10 @@ backend/media/
 backend/staticfiles/
 backend.zip
 
+# Pièces KYB des partenaires API (CNI, RCCM…) — jamais dans Git, stockage
+# volontairement hors de backend/media/ (voir core/storage.py:DocumentKYBStorage)
+backend/kyb_private/
+
 # ─── Node / Expo / React Native ──────────────────────────────
 node_modules/
 eeuez-expo-ui/node_modules/

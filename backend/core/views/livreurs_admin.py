@@ -88,7 +88,7 @@ def paiement_action(request, pk):
         if paiement:
             messages.success(request, f'Paiement #{paiement.pk} de {int(paiement.montant)} F initié.')
         else:
-            messages.error(request, 'Aucun versement possible (solde nul, numéro manquant ou paiement déjà en cours).')
+            messages.error(request, "Aucun versement possible (solde nul, numéro manquant, identité non vérifiée, ou paiement déjà en cours).")
         return redirect('core:admin_livreur_paiements')
 
     paiement = get_object_or_404(PaiementLivreur, pk=pk)
@@ -160,6 +160,29 @@ def livreur_toggle(request, pk):
         ip_address=request.META.get('REMOTE_ADDR'),
     )
     messages.success(request, f'Livreur « {livreur.username} » {etat}.')
+    return redirect('core:admin_livreurs')
+
+
+@admin_required
+def livreur_verifier(request, pk):
+    """Bascule la vérification d'identité d'un livreur indépendant — condition
+    requise, en plus du numéro mobile money, avant tout versement (voir
+    core/payout_livreur.py::declencher_paiement_livreur)."""
+    if request.method != 'POST':
+        return redirect('core:admin_livreurs')
+
+    livreur = get_object_or_404(User, pk=pk, role='livreur', restaurant_attache__isnull=True)
+    livreur.identite_verifiee = not livreur.identite_verifiee
+    livreur.save(update_fields=['identite_verifiee'])
+
+    AuditLog.objects.create(
+        user=request.user, action='LIVREUR_INDEP_VERIFIE',
+        model_name='User', object_id=str(livreur.pk),
+        description={'identite_verifiee': livreur.identite_verifiee},
+        ip_address=request.META.get('REMOTE_ADDR'),
+    )
+    etat = 'vérifiée' if livreur.identite_verifiee else 'retirée'
+    messages.success(request, f"Identité de « {livreur.username} » {etat}.")
     return redirect('core:admin_livreurs')
 
 

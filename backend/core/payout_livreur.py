@@ -37,6 +37,12 @@ def declencher_paiement_livreur(livreur, *, auto=True):
     if not livreur.paiement_numero:
         return None
 
+    if not livreur.identite_verifiee:
+        # Même garde KYC que RestaurantProfile.is_verified côté restaurant
+        # (core/payout.py::executer_retrait) : un numéro mobile money seul ne
+        # prouve pas l'identité de son détenteur.
+        return None
+
     with transaction.atomic():
         en_cours = PaiementLivreur.objects.select_for_update().filter(
             livreur=livreur, statut__in=['en_attente', 'approuve'],

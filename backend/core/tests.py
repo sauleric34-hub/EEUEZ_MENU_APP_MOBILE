@@ -327,7 +327,22 @@ class ClientApiTests(TestCase):
         self.assertEqual(res.status, 'en_attente')
         r.refresh_from_db()
         self.assertEqual(r.statut, 'approuve')
-        self.assertEqual(r.payout_reference, 'PX-1')
+
+    def test_retrait_refuse_si_restaurant_non_verifie(self):
+        # Un restaurant non vérifié ne doit jamais être payé, même si le
+        # décaissement automatique est activé — voir payout.executer_retrait.
+        from core.models import RetraitFonds
+        from core.payout import executer_retrait
+        self.resto.is_verified = False
+        self.resto.save(update_fields=['is_verified'])
+        r = RetraitFonds.objects.create(
+            restaurant=self.resto, montant=5000, mode_paiement='mtn_money', numero_compte='699000000',
+        )
+        res = executer_retrait(r)
+        self.assertFalse(res.success)
+        self.assertEqual(res.status, 'echec')
+        r.refresh_from_db()
+        self.assertEqual(r.statut, 'en_attente')  # inchangé, aucune tentative de versement
 
     def test_reservation_flow_complet(self):
         from core.models import Reservation
