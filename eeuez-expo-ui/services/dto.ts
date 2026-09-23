@@ -147,6 +147,7 @@ export interface RestoDTO {
    *  dans l'app que si le service est actif. */
   reservations_actives?: boolean;
   plats_a_emporter_actifs?: boolean;
+  livraison_active?: boolean;
   nombre_plats: number;
   nombre_abonnes: number;
   is_following?: boolean;

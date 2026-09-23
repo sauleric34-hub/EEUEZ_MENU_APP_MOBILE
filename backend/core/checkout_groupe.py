@@ -70,6 +70,11 @@ def construire_commande(*, user, restaurant, items, adresse_livraison, latitude,
             'emporter_indisponible', f"{restaurant.nom} ne propose pas la vente à emporter.",
         )
 
+    if not emporter and not restaurant.livraison_active:
+        raise RestaurantExclu(
+            'livraison_indisponible', f"{restaurant.nom} ne propose pas la livraison.",
+        )
+
     with transaction.atomic():
         commande = Commande.objects.create(
             client=user,

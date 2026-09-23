@@ -287,6 +287,14 @@ EMAIL_BACKEND = (
     else 'django.core.mail.backends.console.EmailBackend'
 )
 
+# Destinataires des alertes internes (livraison bloquée depuis plus d'une
+# heure). Liste vide par défaut : aucun envoi tant que la variable d'env n'a
+# pas été renseignée (voir .env.example). Plusieurs adresses séparées par une
+# virgule.
+ADMIN_ALERT_EMAILS = [
+    e.strip() for e in os.environ.get('ADMIN_ALERT_EMAILS', '').split(',') if e.strip()
+]
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),

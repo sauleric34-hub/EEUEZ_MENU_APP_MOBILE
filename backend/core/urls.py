@@ -4,6 +4,7 @@ from core.views import publications_admin, bannieres
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
 from core.views import partenaires_admin
+from core.views import qualite
 
 app_name = 'core'
 
@@ -54,6 +55,9 @@ urlpatterns = [
     # Deliveries
     path('deliveries/', deliveries.deliveries_view, name='deliveries'),
     path('deliveries/<int:pk>/action/', deliveries.delivery_action, name='delivery_action'),
+
+    # Qualité restaurants (livraisons en retard, annulations)
+    path('qualite/', qualite.qualite_view, name='admin_qualite'),
     path('livreurs/', livreurs_admin.livreurs_view, name='admin_livreurs'),
     path('livreurs/<int:pk>/toggle/', livreurs_admin.livreur_toggle, name='admin_livreur_toggle'),
     path('livreurs/<int:pk>/verifier/', livreurs_admin.livreur_verifier, name='admin_livreur_verifier'),

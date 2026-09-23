@@ -92,10 +92,18 @@ export function DishCardGrid({ dish }: { dish: Dish }) {
 
 // ─── Bouton « + » ajouter au panier (pop + coche éphémère) ───
 export function AddButton({ dishId }: { dishId: number }) {
-  const { addToCart, dishById } = useApp();
+  const { addToCart, dishById, restoById } = useApp();
   const router = useRouter();
   const pop = useRef(new Animated.Value(1)).current;
   const [justAdded, setJustAdded] = React.useState(false);
+
+  // Ni livraison ni retrait sur place actifs pour ce restaurant → rien à
+  // proposer depuis le panier (seule la réservation de table, si active,
+  // reste accessible depuis la fiche restaurant).
+  const dishResto = restoById(dishById(dishId)?.restoId ?? -1);
+  if (dishResto && !dishResto.livraisonActive && !dishResto.platsAEmporterActifs) {
+    return null;
+  }
 
   const onAdd = () => {
     // Un plat qui exige un choix (accompagnement, boisson…) ne peut pas être

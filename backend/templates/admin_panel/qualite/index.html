@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Qualité restaurants — Menu Admin{% endblock %}
+{% block topbar_title %}Qualité restaurants{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Qualité restaurants</h1>
+    <p class="page-subtitle">Livraisons non confirmées depuis plus d'1h et commandes annulées, par restaurant — pour repérer ceux à surveiller ou suspendre</p>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid" style="margin-bottom:24px;">
+  <div class="kpi-card" style="--kpi-color:var(--accent-red);">
+    <div class="kpi-value" data-count="{{ stats.total_en_retard }}">0</div>
+    <div class="kpi-label">Livraisons en retard (&gt;1h)</div>
+    <div class="kpi-sub">Cumulé, toutes périodes</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-amber);">
+    <div class="kpi-value" data-count="{{ stats.total_annulees }}">0</div>
+    <div class="kpi-label">Commandes annulées</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:var(--accent-red);">
+    <div class="kpi-value" data-count="{{ stats.a_surveiller }}">0</div>
+    <div class="kpi-label">Restaurants à surveiller</div>
+    <div class="kpi-sub">{{ seuil }} annulations d'affilée ou plus</div>
+  </div>
+</div>
+
+<div class="table-wrapper">
+  <div class="table-header">
+    <div>
+      <div class="chart-title">Restaurants</div>
+      <div class="chart-subtitle">{{ lignes|length }} restaurant(s) avec au moins une commande</div>
+    </div>
+  </div>
+  {% if lignes %}
+  <table>
+    <thead>
+      <tr>
+        <th>Restaurant</th>
+        <th>Livraisons en retard</th>
+        <th>Commandes annulées</th>
+        <th>Série en cours</th>
+        <th style="min-width:180px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ligne in lignes %}
+      <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
+        <td class="td-primary">{{ ligne.restaurant.nom }}</td>
+        <td>
+          {% if ligne.livraisons_en_retard > 0 %}
+            <span class="badge badge-red">{{ ligne.livraisons_en_retard }}</span>
+          {% else %}
+            <span style="color:var(--text-muted);">0</span>
+          {% endif %}
+        </td>
+        <td>{{ ligne.commandes_annulees }}</td>
+        <td>
+          {% if ligne.serie_annulations >= seuil %}
+            <span class="badge badge-red"><span class="badge-dot"></span>{{ ligne.serie_annulations }} d'affilée — à surveiller</span>
+          {% elif ligne.serie_annulations > 0 %}
+            <span class="badge badge-gray">{{ ligne.serie_annulations }} d'affilée</span>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
+            <a href="{% url 'core:restaurant_detail' ligne.restaurant.pk %}" class="btn btn-secondary btn-sm">Voir</a>
+            {% if ligne.serie_annulations >= seuil %}
+            <form method="post" action="{% url 'core:restaurant_toggle' ligne.restaurant.pk %}" style="display:inline;" onsubmit="return confirm('Suspendre {{ ligne.restaurant.nom }} ?');">{% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Suspendre</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state"><p>Aucune commande enregistrée pour le moment</p></div>
+  {% endif %}
+</div>
+{% endblock %}

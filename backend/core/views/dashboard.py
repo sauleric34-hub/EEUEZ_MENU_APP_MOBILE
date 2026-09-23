@@ -1,9 +1,12 @@
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.db.models import Sum, Count, Avg
 from django.utils import timezone
 from datetime import timedelta
 import json
+
 from core.models import User, RestaurantProfile, Commande, Livraison, Avis, Transaction, AuditLog
+from core.management.commands.alerter_livraisons_en_retard import ACTIVES as LIVRAISONS_ACTIVES
 
 
 def admin_required(view_func):
@@ -104,6 +107,31 @@ def dashboard_view(request):
     avis_negatifs = Avis.objects.filter(note__lte=2, is_visible=True).count()
     if avis_negatifs:
         alertes.append({'type': 'danger', 'msg': f"{avis_negatifs} avis négatifs non traités"})
+
+    # Livraisons non confirmées depuis plus d'1h et restaurants qui enchaînent
+    # les annulations : import différé, core.views.qualite important
+    # admin_required depuis ce module (import circulaire sinon).
+    from core.views.qualite import restaurants_a_surveiller, SEUIL_ANNULATIONS_CONSECUTIVES
+    from core.management.commands.alerter_livraisons_en_retard import DELAI_ALERTE_MINUTES
+
+    livraisons_bloquees = Livraison.objects.filter(
+        statut__in=LIVRAISONS_ACTIVES, created_at__lt=now - timedelta(minutes=DELAI_ALERTE_MINUTES),
+    ).count()
+    if livraisons_bloquees:
+        alertes.append({
+            'type': 'danger',
+            'msg': f"{livraisons_bloquees} livraison(s) non confirmée(s) depuis plus d'1h — appeler le restaurant",
+            'lien': reverse('core:admin_qualite'),
+        })
+
+    a_surveiller = restaurants_a_surveiller()
+    if a_surveiller:
+        noms = ', '.join(r.nom for r in a_surveiller[:3])
+        alertes.append({
+            'type': 'danger',
+            'msg': f"{len(a_surveiller)} restaurant(s) avec {SEUIL_ANNULATIONS_CONSECUTIVES}+ annulations d'affilée : {noms}",
+            'lien': reverse('core:admin_qualite'),
+        })
 
     context = {
         'total_restaurants': total_restaurants,

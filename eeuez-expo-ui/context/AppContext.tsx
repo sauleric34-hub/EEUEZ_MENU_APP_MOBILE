@@ -560,15 +560,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // par plat : le même Poulet DG avec des frites et avec du riz sont deux
   // lignes distinctes, à quantités et prix distincts.
   const addToCart = (
-    platId: number, qty = 1, complements: ComplementChoisi[] = [], emporter = false,
+    platId: number, qty = 1, complements: ComplementChoisi[] = [], emporter?: boolean,
   ) => {
-    const cle = cleLigne(platId, complements.map(c => c.optionId), emporter);
+    // Si l'appelant ne précise pas le mode, on force « à emporter » pour un
+    // restaurant qui ne fait pas de livraison (le bouton panier n'est même
+    // proposé dans ce cas que si la vente à emporter est active — voir
+    // components/cards.tsx et app/dish/[id].tsx).
+    const dish = dishMap.get(platId);
+    const resto = dish ? restoMap.get(dish.restoId) : undefined;
+    const emporterEffectif = emporter ?? (resto ? !resto.livraisonActive : false);
+    const cle = cleLigne(platId, complements.map(c => c.optionId), emporterEffectif);
     setCart(s => ({
       ...s,
       [cle]: {
         platId,
         complements,
-        emporter,
+        emporter: emporterEffectif,
         qty: (s[cle]?.qty || 0) + qty,
       },
     }));
@@ -580,6 +587,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const cartSetEmporter = (cle: string, emporter: boolean) => setCart(s => {
     const ligne = s[cle];
     if (!ligne || ligne.emporter === emporter) return s;
+    // Restaurant sans livraison : impossible de repasser une ligne en « livré ».
+    const dish = dishMap.get(ligne.platId);
+    const resto = dish ? restoMap.get(dish.restoId) : undefined;
+    if (!emporter && resto && !resto.livraisonActive) return s;
     const nouvelleCle = cleLigne(ligne.platId, ligne.complements.map(c => c.optionId), emporter);
     const next = { ...s };
     delete next[cle];

@@ -92,6 +92,14 @@ class RestaurantProfile(models.Model):
     # affiché dans l'app que si le service est actif ici.
     reservations_actives = models.BooleanField(default=False)
     plats_a_emporter_actifs = models.BooleanField(default=False)
+    # Livraison : ON par défaut (mode historique, déjà utilisé par tous les
+    # restaurants existants avant l'ajout de ce champ). Certains restaurants ne
+    # font pas de livraison — ou ne veulent plus en faire — mais acceptent
+    # quand même les réservations et/ou la vente à emporter. Si désactivé, le
+    # bouton « ajouter au panier » n'est proposé dans l'app que si la vente à
+    # emporter est active (voir RestaurantExclu('livraison_indisponible', ...)
+    # dans checkout_groupe.py).
+    livraison_active = models.BooleanField(default=True)
     # Note moyenne DÉNORMALISÉE : recalculée à chaque nouvelle note (signal) et
     # par la commande recalculer_notes. Sert à servir une liste de restaurants
     # sans requête par restaurant — indispensable sous charge (voir plus bas).
@@ -395,6 +403,11 @@ class Livraison(models.Model):
     # Motif saisi par le livreur quand il clôt une course « sans confirmation »
     # (client injoignable / refuse de scanner). La course reste à valider.
     motif_sans_code = models.CharField(max_length=250, blank=True)
+    # Posé par la commande alerter_livraisons_en_retard quand cette livraison a
+    # dépassé 1h sans confirmation et qu'un e-mail a été envoyé aux admins.
+    # Empêche de ré-alerter en boucle, et sert de compteur cumulatif (page
+    # admin « Qualité restaurants ») même si la livraison a fini par aboutir.
+    alerte_retard_envoyee = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

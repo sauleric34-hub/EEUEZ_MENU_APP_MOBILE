@@ -155,6 +155,14 @@ mais jamais démarrées (sinon la commande reste bloquée) :
 */5 * * * * cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py relancer_livraisons
 ```
 
+Et, toutes les 10-15 minutes, l'alerte des livraisons non confirmées depuis
+plus d'1h (e-mail à `ADMIN_ALERT_EMAILS`, à renseigner dans `.env` — vide par
+défaut, aucun envoi tant que non configuré) :
+
+```
+*/10 * * * * cd /home/UTILISATEUR/CHEMIN/backend && /home/UTILISATEUR/virtualenv/.../bin/python manage.py alerter_livraisons_en_retard
+```
+
 *(adapte les chemins à ton hébergement — le chemin du `python` de l'app est
 visible dans « Setup Python App ».)*
 
@@ -405,6 +413,9 @@ Détails complets dans [`load_test/README.md`](../load_test/README.md).
 - [ ] `recalculer_notes` (+ cron quotidien)
 - [ ] `relancer_livraisons` en cron (toutes les 5 min) — remet au pool les
       missions de livraison libre prises mais jamais démarrées
+- [ ] `alerter_livraisons_en_retard` en cron (toutes les 10-15 min) — alerte
+      l'équipe admin par e-mail passé 1h sans confirmation de livraison ;
+      renseigner `ADMIN_ALERT_EMAILS` dans `.env` pour l'activer
 - [ ] App mobile : `npx expo install` (nouvelles dépendances : `expo-notifications`,
       `expo-keep-awake`, `react-native-qrcode-svg`) puis build EAS avec les
       identifiants push (clé FCM Android + clé APNs iOS) pour les notifications

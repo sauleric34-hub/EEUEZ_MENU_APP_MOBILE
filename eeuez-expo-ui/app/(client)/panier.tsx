@@ -41,7 +41,11 @@ const GAP = 13;
 function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
   const { colors, cartInc, cartDec, cartRemove, cartSetEmporter, restoById } = useApp();
   const { cle, dish, qty, complements, prixUnitaire } = line;
-  const emporterDispo = !!restoById(dish.restoId)?.platsAEmporterActifs;
+  const resto = restoById(dish.restoId);
+  const emporterDispo = !!resto?.platsAEmporterActifs;
+  // Restaurant sans livraison : la ligne est forcée « à emporter », le choix
+  // « Livrer » n'a pas de sens et n'est pas proposé.
+  const livraisonDispo = resto?.livraisonActive ?? true;
 
   const translateX = useRef(new Animated.Value(0)).current;
   const collapse = useRef(new Animated.Value(1)).current; // 1 = taille normale, 0 = effondrée
@@ -146,8 +150,10 @@ function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
             </View>
 
             {/* Mode de retrait par plat — visible seulement si le restaurant
-                propose la vente à emporter. Par défaut : livré. */}
-            {emporterDispo && (
+                propose la vente à emporter. Par défaut : livré, sauf si le
+                restaurant ne fait pas de livraison (forcé à emporter, aucun
+                choix à proposer). */}
+            {emporterDispo && livraisonDispo && (
               <View style={[styles.modeSwitch, { backgroundColor: colors.surface2 }]}>
                 <PressableScale onPress={() => cartSetEmporter(cle, false)} style={{ flex: 1 }}>
                   <View style={[styles.modeChip, !line.emporter && { backgroundColor: Brand.accent }]}>
@@ -161,6 +167,14 @@ function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
                     <Text style={[bodyFont(10.5, '800'), { color: line.emporter ? '#fff' : colors.muted }]}>À emporter</Text>
                   </View>
                 </PressableScale>
+              </View>
+            )}
+            {emporterDispo && !livraisonDispo && (
+              <View style={[styles.modeSwitch, { backgroundColor: colors.surface2 }]}>
+                <View style={[styles.modeChip, { flex: 1, backgroundColor: Brand.green }]}>
+                  <ShoppingBag size={13} color="#fff" strokeWidth={2.4} />
+                  <Text style={[bodyFont(10.5, '800'), { color: '#fff' }]}>À emporter (pas de livraison)</Text>
+                </View>
               </View>
             )}
           </View>

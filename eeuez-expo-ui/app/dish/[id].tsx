@@ -100,6 +100,10 @@ export default function DishDetail() {
   const RestoIcon = resto?.icon ?? dish.icon;
   const restoGrad = resto?.grad ?? dish.grad;
   const restoRating = resto?.rating ?? dish.rating;
+  // Ni livraison ni retrait sur place actifs pour ce restaurant → rien à
+  // commander depuis cette fiche (seule la réservation de table reste
+  // possible, depuis la fiche restaurant).
+  const commandable = !resto || resto.livraisonActive || resto.platsAEmporterActifs;
   const shownRating = rating?.note ?? dish.rating;
   const myRating = rating?.mine ?? dish.myRating;
   const gallery = dish.images.length ? dish.images : [];
@@ -323,6 +327,7 @@ export default function DishDetail() {
       </PressableScale>
 
       {/* Barre de commande — juste au-dessus de la navigation système */}
+      {commandable && (
       <View style={[styles.orderBar, { backgroundColor: colors.nav, borderColor: colors.border, bottom: Math.max(insets.bottom, 10) + 8 }, glow(colors.shadow, 30)]}>
         <View style={[styles.stepper, { backgroundColor: colors.surface2 }]}>
           <PressableScale onPress={() => setQty(q => Math.max(1, q - 1))}>
@@ -348,6 +353,7 @@ export default function DishDetail() {
           </View>
         </Animated.View>
       </View>
+      )}
 
       {/* Icône qui s'envole du bouton Ajouter, confirmation ludique */}
       {flight && (

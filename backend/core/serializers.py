@@ -83,7 +83,7 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
             'logo', 'cover_image', 'is_open', 'note_moyenne', 'temps_livraison_moyen',
             'frais_livraison', 'paliers_livraison', 'prix_reservation', 'nombre_plats',
             'nombre_abonnes', 'is_following', 'plat_du_jour',
-            'reservations_actives', 'plats_a_emporter_actifs',
+            'reservations_actives', 'plats_a_emporter_actifs', 'livraison_active',
         ]
 
     def get_nombre_plats(self, obj):

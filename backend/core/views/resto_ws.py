@@ -613,11 +613,13 @@ def profil(request):
             resto.save(update_fields=['is_open'])
             messages.success(request, 'Restaurant ' + ('ouvert' if resto.is_open else 'fermé') + '.')
         elif form == 'services':
-            # Services optionnels : réservation de table et vente à emporter.
-            # Le bouton correspondant n'apparaît dans l'app que s'il est actif ici.
+            # Services optionnels : réservation de table, vente à emporter et
+            # livraison. Le bouton correspondant n'apparaît dans l'app que s'il
+            # est actif ici.
             resto.reservations_actives = request.POST.get('reservations_actives') == 'on'
             resto.plats_a_emporter_actifs = request.POST.get('plats_a_emporter_actifs') == 'on'
-            resto.save(update_fields=['reservations_actives', 'plats_a_emporter_actifs'])
+            resto.livraison_active = request.POST.get('livraison_active') == 'on'
+            resto.save(update_fields=['reservations_actives', 'plats_a_emporter_actifs', 'livraison_active'])
             messages.success(request, 'Services mis à jour.')
         return redirect('core:resto_profil')
 

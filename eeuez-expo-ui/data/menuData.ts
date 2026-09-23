@@ -45,6 +45,11 @@ export interface Resto {
   reservationsActives: boolean;
   /** Le restaurant propose la vente à emporter (choix « à emporter » au panier). */
   platsAEmporterActifs: boolean;
+  /** Le restaurant propose la livraison. Si false, le bouton « ajouter au
+   *  panier » n'est affiché que si platsAEmporterActifs est actif (retrait
+   *  sur place) ; les lignes panier de ce restaurant sont alors forcées en
+   *  mode « à emporter ». */
+  livraisonActive: boolean;
   tempsLivraison: number;
   isOpen: boolean;
   isFollowing?: boolean;
@@ -212,6 +217,7 @@ export function mapResto(d: RestoDTO): Resto {
     prixReservation: Number(d.prix_reservation ?? 0),
     reservationsActives: d.reservations_actives ?? false,
     platsAEmporterActifs: d.plats_a_emporter_actifs ?? false,
+    livraisonActive: d.livraison_active ?? true,
     tempsLivraison: d.temps_livraison_moyen ?? 30,
     isOpen: d.is_open,
     isFollowing: d.is_following,

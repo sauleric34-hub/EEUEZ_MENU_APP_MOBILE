@@ -63,7 +63,7 @@
   {% for alerte in alertes %}
   <div class="alert alert-{{ alerte.type }}" style="margin-bottom:8px;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    {{ alerte.msg }}
+    {% if alerte.lien %}<a href="{{ alerte.lien }}" style="color:inherit;text-decoration:underline;">{{ alerte.msg }}</a>{% else %}{{ alerte.msg }}{% endif %}
   </div>
   {% endfor %}
 </div>
