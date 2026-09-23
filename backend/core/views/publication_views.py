@@ -18,6 +18,7 @@ from ..models import (
     RestaurantProfile,
 )
 from .. import fidelite
+from ..utils.json_script import json_pour_script
 from ..publications_utils import creer_medias, valider_medias
 from ..recommendation_publications import classer_publications
 from ..serializers_publications import PublicationSerializer, CommentaireSerializer
@@ -159,7 +160,7 @@ def publication_rebond(request, id):
             'description': "Cette publication n'existe plus ou a été retirée.",
             'image': None,
             'lien_app': lien_app,
-            'lien_app_json': json.dumps(lien_app),
+            'lien_app_json': json_pour_script(lien_app),
         }
         return render(request, 'publication_rebond.html', contexte, status=404)
 
@@ -178,7 +179,7 @@ def publication_rebond(request, id):
         'description': description,
         'image': image,
         'lien_app': lien_app,
-        'lien_app_json': json.dumps(lien_app),
+        'lien_app_json': json_pour_script(lien_app),
     })
 
 

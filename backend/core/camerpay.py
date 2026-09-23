@@ -11,6 +11,7 @@
 
 import hashlib
 import hmac
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 import requests as http_requests
@@ -115,7 +116,10 @@ def initier_paiement(*, amount, merchant_invoice_id, callback_url, return_url,
     if not resp.ok:
         return None, None, _extract_error_message(resp)
 
-    data = resp.json()
+    try:
+        data = resp.json()
+    except ValueError:
+        return None, None, 'Réponse CamerPay illisible.'
     if not data.get('success'):
         return None, None, _extract_error_message(resp)
     return data.get('transaction_uuid'), data.get('pay_url'), None
@@ -140,8 +144,41 @@ def verifier_statut(transaction_uuid):
 
     if not resp.ok:
         return None, _extract_error_message(resp)
-    data = resp.json()
-    return data.get('transaction', {}).get('status'), None
+    try:
+        data = resp.json()
+    except ValueError:
+        return None, 'Réponse CamerPay illisible.'
+    transaction = data.get('transaction') if isinstance(data, dict) else None
+    return (transaction.get('status') if isinstance(transaction, dict) else None), None
+
+
+# Statuts CamerPay pour lesquels on est CERTAIN qu'aucun débit n'aura lieu.
+STATUTS_SANS_DEBIT = {'failed', 'cancelled'}
+
+
+def paiement_annulable(transaction_uuid):
+    """(annulable, message) — peut-on supprimer une commande dont le paiement
+    CamerPay a été lancé ?
+
+    Mobile Money est asynchrone : le client valide son PIN sur son téléphone
+    parfois bien après la fermeture du WebView. Supprimer la commande à ce
+    moment-là fait disparaître la référence attendue par le webhook — le client
+    est débité sans commande. On n'autorise donc l'annulation que si CamerPay
+    confirme EXPLICITEMENT l'échec ; tout autre cas (en cours, payé, statut
+    inconnu, CamerPay injoignable) la refuse.
+    """
+    if not transaction_uuid:
+        return True, ''  # paiement jamais initié chez CamerPay
+    statut, error = verifier_statut(transaction_uuid)
+    if statut in STATUTS_SANS_DEBIT:
+        return True, ''
+    if statut in ('completed', 'refunded'):
+        return False, 'Paiement déjà reçu — votre commande va être confirmée.'
+    return False, (
+        "Paiement en cours de validation par l'opérateur. Si vous l'avez validé "
+        "sur votre téléphone, la commande sera confirmée automatiquement ; sinon "
+        "réessayez d'annuler dans quelques minutes."
+    )
 
 
 def verifier_signature_webhook(*, uuid, invoice_id, status, amount, signature):
@@ -155,9 +192,29 @@ def verifier_signature_webhook(*, uuid, invoice_id, status, amount, signature):
     secret = settings.CAMERPAY_CALLBACK_SECRET
     if not secret or not signature:
         return False
-    data = f'{uuid}|{invoice_id}|{status}|{amount}'
-    expected = hmac.new(secret.encode('utf-8'), data.encode('utf-8'), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    # CamerPay signe le montant à 2 décimales (« 10000.00 »), mais un body
+    # JSON le transporte souvent en nombre (10000 ou 10000.0) : str() ne
+    # redonne alors PAS la chaîne signée et TOUS les paiements seraient
+    # rejetés. On essaie donc la forme reçue ET sa forme canonique — sans
+    # affaiblir la sécurité : les deux décrivent le même montant, et la
+    # signature exige toujours le secret.
+    for montant in _formes_montant(amount):
+        data = f'{uuid}|{invoice_id}|{status}|{montant}'
+        expected = hmac.new(secret.encode('utf-8'), data.encode('utf-8'), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, str(signature)):
+            return True
+    return False
+
+
+def _formes_montant(amount):
+    formes = [str(amount)]
+    try:
+        canonique = f'{Decimal(str(amount)):.2f}'
+    except (InvalidOperation, ValueError):
+        return formes
+    if canonique not in formes:
+        formes.append(canonique)
+    return formes
 
 
 def initier_payout_batch(*, reference, beneficiaries):

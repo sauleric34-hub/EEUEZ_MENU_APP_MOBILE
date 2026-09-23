@@ -64,6 +64,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const clientSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>';
   const makeIcon = (cls, svg) => L.divIcon({ className: '', html: `<div class="pin ${cls}">${svg}</div>`, iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -34] });
 
+  // Adresse, nom… sont saisis par les clients / restaurants : échappés avant
+  // toute insertion dans le HTML des popups.
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
   const bounds = [];
   missions.forEach(m => {
     // Point de collecte (restaurant)
@@ -71,9 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const ll = [m.restaurant.lat, m.restaurant.lon];
       bounds.push(ll);
       L.marker(ll, { icon: makeIcon('pin-resto', restoSvg) }).addTo(map).bindPopup(
-        `<b>Collecte — Commande #${m.id}</b><br>${m.restaurant.nom}<br>` +
-        `<span style="color:#9CA3AF;font-size:0.8rem;">${m.restaurant.adresse || ''}</span><br>` +
-        `<span style="color:#38A169;font-weight:700;">${m.statut_label}</span>`
+        `<b>Collecte — Commande #${esc(m.id)}</b><br>${esc(m.restaurant.nom)}<br>` +
+        `<span style="color:#9CA3AF;font-size:0.8rem;">${esc(m.restaurant.adresse)}</span><br>` +
+        `<span style="color:#38A169;font-weight:700;">${esc(m.statut_label)}</span>`
       );
     }
     // Destination (client)
@@ -81,11 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const ll = [m.client.lat, m.client.lon];
       bounds.push(ll);
       const call = m.client.telephone
-        ? `<a class="call-btn" href="tel:${m.client.telephone}">📞 Appeler ${m.client.nom}</a>` : '';
+        ? `<a class="call-btn" href="tel:${esc(m.client.telephone)}">📞 Appeler ${esc(m.client.nom)}</a>` : '';
+      const paiement = m.a_encaisser
+        ? `${esc(m.montant)} F à encaisser` : 'Déjà payé — ne rien encaisser';
       L.marker(ll, { icon: makeIcon('pin-client', clientSvg) }).addTo(map).bindPopup(
-        `<b>Livrer — Commande #${m.id}</b><br>${m.client.nom}<br>` +
-        `<span style="color:#9CA3AF;font-size:0.8rem;">${m.client.adresse || ''}</span><br>` +
-        `<span style="color:#E8591C;font-weight:700;">${m.montant} F à encaisser</span><br>${call}`
+        `<b>Livrer — Commande #${esc(m.id)}</b><br>${esc(m.client.nom)}<br>` +
+        `<span style="color:#9CA3AF;font-size:0.8rem;">${esc(m.client.adresse)}</span><br>` +
+        `<span style="color:#E8591C;font-weight:700;">${paiement}</span><br>${call}`
       );
     }
   });

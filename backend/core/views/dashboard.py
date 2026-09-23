@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 import json
 
+from core.utils.json_script import json_pour_script
 from core.models import User, RestaurantProfile, Commande, Livraison, Avis, Transaction, AuditLog
 from core.management.commands.alerter_livraisons_en_retard import ACTIVES as LIVRAISONS_ACTIVES
 
@@ -151,14 +152,14 @@ def dashboard_view(request):
         'commission_data': json.dumps(commission_data),
         'days_labels': json.dumps(days_labels),
         'commandes_data': json.dumps(commandes_data),
-        'statuts_labels': json.dumps(list(statuts_data.keys())),
+        'statuts_labels': json_pour_script(list(statuts_data.keys())),
         'statuts_values': json.dumps(list(statuts_data.values())),
         'paiement_labels': json.dumps(paiement_labels),
         'paiement_mtn': json.dumps(paiement_mtn),
         'paiement_orange': json.dumps(paiement_orange),
         'paiement_carte': json.dumps(paiement_carte),
         'paiement_especes': json.dumps(paiement_especes),
-        'radar_labels': json.dumps(radar_labels),
+        'radar_labels': json_pour_script(radar_labels),
         'radar_notes': json.dumps(radar_notes),
         'radar_volumes_norm': json.dumps(radar_volumes_norm),
         'top_restaurants': top_restaurants,

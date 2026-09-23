@@ -47,3 +47,11 @@ REST_FRAMEWORK = {
         'partner_catalog': None, 'partner_orders': None, 'partner_apply': None,
     },
 }
+
+# Hachage des mots de passe volontairement rapide en test : PBKDF2 (≈1M
+# itérations) rendait la suite ~10× plus lente sans rien tester de plus.
+PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# Les tests historiques créent des commandes sans mode (→ espèces) pour tester
+# le checkout lui-même ; le refus en prod est couvert par tests_audit_paiement.
+PAIEMENT_ESPECES_APP = True

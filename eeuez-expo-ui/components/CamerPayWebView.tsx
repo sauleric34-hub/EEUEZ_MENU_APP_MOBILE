@@ -25,8 +25,11 @@ import { CAMERPAY_SUCCESS_URL } from '../constants/api';
 import { fetchOrder, fetchOrderGroup } from '../services/menu';
 import { bodyFont, displayFont } from './ui';
 
-const POLL_INTERVAL_MS = 1500;
-const POLL_MAX_ATTEMPTS = 8; // ~12 s au maximum avant de céder à la redirection
+const POLL_INTERVAL_MS = 2000;
+// ~90 s : Mobile Money est asynchrone, le client doit encore valider son PIN
+// sur son téléphone (USSD) après la redirection — 12 s déclaraient « échec »
+// des paiements qui aboutissaient ensuite.
+const POLL_MAX_ATTEMPTS = 45;
 
 interface Props {
   /** pay_url CamerPay reçue du backend. */
@@ -78,7 +81,7 @@ export function CamerPayWebView({ paymentUrl, orderId, groupeId, onSuccess, onCa
 
   /** Vérifie réellement le paiement (paiement_confirme) au lieu d'un délai
    *  fixe : on interroge la commande jusqu'à confirmation ou jusqu'à un
-   *  plafond de tentatives, borné dans le temps (~12 s) même sur réseau lent. */
+   *  plafond de tentatives, borné dans le temps (~90 s) même sur réseau lent. */
   const verifyPayment = async () => {
     setVerifying(true);
     if (groupeId != null || orderId != null) {
@@ -183,10 +186,10 @@ export function CamerPayWebView({ paymentUrl, orderId, groupeId, onSuccess, onCa
                 <TriangleAlert size={28} color={Brand.danger} strokeWidth={2.2} />
               </View>
               <Text style={[displayFont(16, '700'), { color: '#fff', textAlign: 'center', marginTop: 14 }]}>
-                Le paiement a échoué
+                Paiement non confirmé
               </Text>
               <Text style={[bodyFont(13, '500'), { color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 8 }]}>
-                La transaction n'a pas abouti. Vous pouvez réessayer.
+                Si vous avez déjà validé sur votre téléphone, ne payez pas une 2e fois : la commande sera confirmée automatiquement. Sinon, vous pouvez réessayer.
               </Text>
               <View style={styles.failActions}>
                 {onRetry && (
@@ -230,6 +233,9 @@ export function CamerPayWebView({ paymentUrl, orderId, groupeId, onSuccess, onCa
               <ActivityIndicator size="large" color={Brand.accentLight} />
               <Text style={[bodyFont(13, '600'), { color: 'rgba(255,255,255,0.7)', marginTop: 12 }]}>
                 Vérification du paiement…
+              </Text>
+              <Text style={[bodyFont(12, '500'), { color: 'rgba(255,255,255,0.5)', marginTop: 6, textAlign: 'center', paddingHorizontal: 32 }]}>
+                Validez le paiement sur votre téléphone (code PIN) si ce n'est pas encore fait.
               </Text>
             </View>
           )}

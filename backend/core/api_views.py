@@ -1,9 +1,11 @@
-from core.permissions import EstLivreur
+from core.permissions import EstLivreur, EstRestaurant
 from rest_framework import status, views, viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse
@@ -12,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
+import logging
 import uuid
 import requests as http_requests
 
@@ -33,10 +36,15 @@ from .delivery import (
 )
 from .checkout_groupe import (
     construire_commande, enregistrer_transaction_paiement, creer_commandes_groupees,
-    RestaurantExclu, mode_paiement_valide,
+    RestaurantExclu, mode_paiement_app,
 )
-from .camerpay import initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE
+from .camerpay import (
+    initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, paiement_annulable,
+    STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE,
+)
 from . import fidelite
+
+logger = logging.getLogger(__name__)
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -54,9 +62,12 @@ class LoginView(views.APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         user = authenticate(username=email, password=password)
+        if not user and isinstance(email, str) and email.strip().lower() != email:
+            # Les nouveaux comptes sont enregistrés en minuscules (RegisterView).
+            user = authenticate(username=email.strip().lower(), password=password)
         if not user:
             user = authenticate(email=email, password=password)
-            
+
         if user:
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
@@ -68,18 +79,34 @@ class RegisterView(views.APIView):
     throttle_scope = 'auth'
 
     def post(self, request, role):
-        if role not in ['client', 'restaurant', 'livreur']:
+        # Inscription publique réservée aux CLIENTS. Livreurs et restaurants
+        # sont créés/validés par l'admin (livreurs_admin, KYC) : un compte
+        # livreur auto-créé pouvait prendre des missions libres (repas,
+        # adresse et téléphone du client) sans aucune vérification.
+        if role != 'client':
             return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
         data = request.data
-        username = data.get('email', data.get('username'))
-        if User.objects.filter(username=username).exists():
+        email = str(data.get('email') or '').strip().lower()
+        password = str(data.get('password') or '')
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            return Response({'error': 'Adresse e-mail invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Même règle que l'app (register.tsx) : 6 caractères minimum.
+        if len(password) < 6:
+            return Response(
+                {'error': 'Le mot de passe doit faire au moins 6 caractères.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = email
+        if User.objects.filter(username__iexact=username).exists() or User.objects.filter(email__iexact=email).exists():
             return Response({'error': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
         user = User.objects.create_user(
             username=username,
-            email=data.get('email'),
-            password=data.get('password'),
+            email=email,
+            password=password,
             first_name=data.get('first_name', ''),
             last_name=data.get('last_name', ''),
             telephone=data.get('telephone', ''),
@@ -87,13 +114,6 @@ class RegisterView(views.APIView):
             role=role
         )
         
-        if role == 'restaurant':
-            RestaurantProfile.objects.create(
-                user=user,
-                nom=data.get('nom_restaurant', 'Nouveau Restaurant'),
-                adresse=data.get('adresse', '')
-            )
-            
         tokens = get_tokens_for_user(user)
         return Response(
             {'token': tokens['access'], 'refresh': tokens['refresh'], 'user': UserSerializer(user).data},
@@ -220,6 +240,11 @@ def estimer_frais_livraison(request):
 class ClientCommandeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CommandeSerializer
+    # Lecture + création + actions POST uniquement. PUT/PATCH/DELETE restaient
+    # ouverts par défaut (ModelViewSet) : un client pouvait se déclarer payé
+    # (`paiement_confirme`) ou réécrire `montant_total`. L'annulation passe par
+    # l'action `annuler`, qui vérifie l'état du paiement.
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
         return Commande.objects.filter(client=self.request.user).order_by('-created_at')
@@ -248,7 +273,9 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         if not items:
             return Response({"error": "Le panier est vide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        mode_paiement = mode_paiement_valide(data.get('mode_paiement', 'especes'))
+        mode_paiement = mode_paiement_app(data.get('mode_paiement', 'especes'))
+        if mode_paiement is None:
+            return Response({"error": "Mode de paiement non accepté."}, status=status.HTTP_400_BAD_REQUEST)
 
         def _coord(v):
             try:
@@ -302,6 +329,12 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
                 {'error': 'Commande déjà payée — annulation impossible.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Paiement lancé chez CamerPay : on ne supprime (et on ne perd donc la
+        # référence attendue par le webhook) que si l'échec est certain.
+        for txn in commande.transactions.filter(type='paiement_client').exclude(provider_reference=''):
+            annulable, message = paiement_annulable(txn.provider_reference)
+            if not annulable:
+                return Response({'error': message}, status=status.HTTP_409_CONFLICT)
         # Les points engagés sont rendus avant la destruction de la commande.
         fidelite.rembourser_points(commande)
         commande.delete()
@@ -320,10 +353,12 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         Le token API ne quitte jamais le backend.
         """
         commande = self.get_object()  # vérifie que la commande appartient au client
+        # « echouee » inclus : après un échec notifié, le client peut relancer
+        # le paiement de la même commande au lieu de devoir tout recommencer.
         transaction = Transaction.objects.filter(
             commande=commande,
             mode_paiement__in=['mtn_money', 'orange_money'],
-            statut='en_attente',
+            statut__in=['en_attente', 'echouee'],
         ).first()
         if not transaction:
             return Response(
@@ -352,7 +387,8 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             return Response({'error': error}, status=code)
 
         transaction.provider_reference = transaction_uuid
-        transaction.save(update_fields=['provider_reference'])
+        transaction.statut = 'en_attente'
+        transaction.save(update_fields=['provider_reference', 'statut'])
         return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
 
     @action(detail=True, methods=['post'])
@@ -405,6 +441,10 @@ def commandes_groupees(request):
     if not items:
         return Response({"error": "Le panier est vide"}, status=status.HTTP_400_BAD_REQUEST)
 
+    mode_paiement = mode_paiement_app(data.get('mode_paiement', 'especes'))
+    if mode_paiement is None:
+        return Response({"error": "Mode de paiement non accepté."}, status=status.HTTP_400_BAD_REQUEST)
+
     def _coord(v):
         try:
             return round(float(v), 6)
@@ -417,7 +457,7 @@ def commandes_groupees(request):
             adresse_livraison=data.get('adresse_livraison', ''),
             latitude=_coord(data.get('latitude')), longitude=_coord(data.get('longitude')),
             notes=data.get('notes', ''),
-            mode_paiement=mode_paiement_valide(data.get('mode_paiement', 'especes')),
+            mode_paiement=mode_paiement,
             utiliser_points=bool(data.get('utiliser_points')),
         )
         if erreur:
@@ -442,7 +482,7 @@ def initier_paiement_groupe(request, groupe_id):
     """
     groupe = get_object_or_404(CommandeGroupe, pk=groupe_id, client=request.user)
     paiement = getattr(groupe, 'paiement', None)
-    if not paiement or paiement.statut != 'en_attente':
+    if not paiement or paiement.statut not in ('en_attente', 'echouee'):
         return Response(
             {'error': 'Aucun paiement mobile money en attente pour ce groupe.'},
             status=status.HTTP_400_BAD_REQUEST,
@@ -468,7 +508,12 @@ def initier_paiement_groupe(request, groupe_id):
         return Response({'error': error}, status=code)
 
     paiement.provider_reference = transaction_uuid
-    paiement.save(update_fields=['provider_reference'])
+    paiement.statut = 'en_attente'
+    paiement.save(update_fields=['provider_reference', 'statut'])
+    # Un échec notifié avait aussi basculé les Transaction du groupe.
+    Transaction.objects.filter(
+        commande__groupe=groupe, type='paiement_client', statut='echouee',
+    ).update(statut='en_attente')
     return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
 
 
@@ -491,6 +536,16 @@ def annuler_groupe(request, groupe_id):
     """Annule un groupe non encore payé (paiement mobile money abandonné) :
     supprime toutes ses commandes, rend les points éventuellement engagés."""
     groupe = get_object_or_404(CommandeGroupe, pk=groupe_id, client=request.user)
+    paiement = getattr(groupe, 'paiement', None)
+    if paiement and paiement.statut == 'complete':
+        return Response(
+            {'error': 'Groupe déjà payé — annulation impossible.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if paiement and paiement.provider_reference:
+        annulable, message = paiement_annulable(paiement.provider_reference)
+        if not annulable:
+            return Response({'error': message}, status=status.HTTP_409_CONFLICT)
     with transaction.atomic():
         commandes = list(groupe.commandes.all())
         if any(c.paiement_confirme for c in commandes):
@@ -521,8 +576,11 @@ class RestaurantPlatViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(restaurant=self.request.user.restaurant_profile)
 
-class RestaurantCommandeViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+class RestaurantCommandeViewSet(viewsets.ReadOnlyModelViewSet):
+    # Lecture seule + actions accept/refuse : un ModelViewSet laissait n'importe
+    # quel compte créer (POST) une commande « payée » arbitraire, ou un
+    # restaurant réécrire montants et statut de paiement.
+    permission_classes = [EstRestaurant]
     serializer_class = CommandeSerializer
 
     def get_queryset(self):
@@ -810,36 +868,77 @@ def _confirmer_paiement_commande(commande):
             pass
 
 
+def _echec_d_une_ancienne_tentative(statut_interne, uuid_courant, uuid_recu):
+    """Après « Réessayer », la même référence porte plusieurs tentatives
+    CamerPay. L'échec d'une tentative ABANDONNÉE ne doit pas marquer en échec
+    un paiement dont la tentative courante est peut-être en train d'aboutir."""
+    return (
+        statut_interne in ('echouee', 'remboursee')
+        and bool(uuid_recu) and bool(uuid_courant) and uuid_recu != uuid_courant
+    )
+
+
+def _signaler_double_paiement(reference, uuid_connu, uuid_recu, statut_interne):
+    """Un « completed » arrive pour une référence déjà payée via une AUTRE
+    transaction CamerPay (ex. « Réessayer » alors que la 1re tentative finit
+    par aboutir) : le client a payé deux fois — à rembourser à la main."""
+    if statut_interne == 'complete' and uuid_recu and uuid_connu and uuid_recu != uuid_connu:
+        logger.error(
+            'CamerPay : DOUBLE PAIEMENT probable sur %s (déjà payé via %s, nouveau paiement %s) '
+            '— remboursement manuel à prévoir.', reference, uuid_connu, uuid_recu,
+        )
+    elif statut_interne == 'remboursee':
+        logger.warning('CamerPay : remboursement notifié pour %s, déjà marqué payé — à vérifier.', reference)
+
+
 def _camerpay_notify_groupe(payment_ref, statut_interne, amount_recu, txn_uuid):
     """Traite la notification CamerPay d'un panier multi-restaurant
     (ref « EEUEZG-<groupe_id>-... ») : un seul paiement confirme d'un coup
     TOUTES les commandes du groupe."""
+    with transaction.atomic():
+        return _camerpay_notify_groupe_verrouille(payment_ref, statut_interne, amount_recu, txn_uuid)
+
+
+def _camerpay_notify_groupe_verrouille(payment_ref, statut_interne, amount_recu, txn_uuid):
     try:
-        paiement = PaiementGroupe.objects.select_related('groupe').get(reference=payment_ref)
+        # Verrou de ligne : deux webhooks simultanés (retentative CamerPay) ne
+        # doivent pas traiter le même paiement en parallèle.
+        paiement = PaiementGroupe.objects.select_for_update().select_related('groupe').get(reference=payment_ref)
     except PaiementGroupe.DoesNotExist:
+        if statut_interne == 'complete':
+            logger.error(
+                'CamerPay : paiement RÉUSSI pour une référence de groupe inconnue %s (uuid %s, montant %s) '
+                '— client débité sans commande, remboursement manuel à prévoir.',
+                payment_ref, txn_uuid, amount_recu,
+            )
         return HttpResponse('OK')  # référence inconnue → 200, pas de retentative
 
     if paiement.statut == 'complete':
+        _signaler_double_paiement(payment_ref, paiement.provider_reference, txn_uuid, statut_interne)
         return HttpResponse('OK')  # idempotence
 
     try:
         if amount_recu and int(float(amount_recu)) != int(paiement.montant):
+            logger.error('CamerPay : montant incohérent pour %s (reçu %s, attendu %s).',
+                         payment_ref, amount_recu, paiement.montant)
             return HttpResponse('Montant incohérent', status=400)
     except (TypeError, ValueError):
         pass
 
-    if not paiement.provider_reference and txn_uuid:
+    if _echec_d_une_ancienne_tentative(statut_interne, paiement.provider_reference, txn_uuid):
+        return HttpResponse('OK')
+
+    if txn_uuid and (statut_interne == 'complete' or not paiement.provider_reference):
         paiement.provider_reference = txn_uuid
 
     if statut_interne == 'complete':
         paiement.statut = 'complete'
         paiement.save(update_fields=['statut', 'provider_reference'])
-        with transaction.atomic():
-            for commande in paiement.groupe.commandes.select_for_update():
-                _confirmer_paiement_commande(commande)
-                Transaction.objects.filter(
-                    commande=commande, type='paiement_client',
-                ).exclude(statut='complete').update(statut='complete')
+        for commande in paiement.groupe.commandes.select_for_update():
+            _confirmer_paiement_commande(commande)
+            Transaction.objects.filter(
+                commande=commande, type='paiement_client',
+            ).exclude(statut='complete').update(statut='complete')
     elif statut_interne in ('echouee', 'remboursee'):
         paiement.statut = statut_interne
         paiement.save(update_fields=['statut', 'provider_reference'])
@@ -915,41 +1014,66 @@ def camerpay_notify(request):
         if invoice_id.startswith('EEUEZG-'):
             return _camerpay_notify_groupe(invoice_id, statut_interne, amount_recu, txn_uuid)
 
-        try:
-            txn = Transaction.objects.get(reference=invoice_id)
-        except Transaction.DoesNotExist:
-            # Référence inconnue — on répond 200 pour éviter les retentatives CamerPay
-            return HttpResponse('OK')
-
-        # Idempotence : ne pas retraiter une transaction déjà finalisée
-        if txn.statut == 'complete':
-            return HttpResponse('OK')
-
-        # Vérifie que le montant payé correspond bien à celui attendu
-        try:
-            if amount_recu and int(float(amount_recu)) != int(txn.montant):
-                return HttpResponse('Montant incohérent', status=400)
-        except (TypeError, ValueError):
-            pass
-
-        if not txn.provider_reference and txn_uuid:
-            txn.provider_reference = txn_uuid
-
-        if statut_interne == 'complete':
-            txn.statut = 'complete'
-            txn.save(update_fields=['statut', 'provider_reference'])
-            # Paiement confirmé → la commande devient visible du restaurant.
-            if txn.commande:
-                _confirmer_paiement_commande(txn.commande)
-        elif statut_interne in ('echouee', 'remboursee'):
-            txn.statut = statut_interne
-            txn.save(update_fields=['statut', 'provider_reference'])
-        else:
-            txn.save(update_fields=['provider_reference'])
-
-        return HttpResponse('OK')
+        with transaction.atomic():
+            return _camerpay_notify_commande(invoice_id, statut_interne, amount_recu, txn_uuid)
     except Exception:
+        # 500 → CamerPay retentera ; la trace est indispensable pour comprendre
+        # un paiement bloqué (auparavant avalée sans aucun log).
+        logger.exception('CamerPay : erreur inattendue dans le webhook.')
         return HttpResponse('Erreur interne', status=500)
+
+
+def _camerpay_notify_commande(invoice_id, statut_interne, amount_recu, txn_uuid):
+    """Traite la notification CamerPay d'une commande unique (ref « EEUEZ-… »).
+    À appeler dans une transaction : la ligne est verrouillée (webhooks
+    concurrents)."""
+    try:
+        txn = Transaction.objects.select_for_update().get(reference=invoice_id)
+    except Transaction.DoesNotExist:
+        if statut_interne == 'complete':
+            logger.error(
+                'CamerPay : paiement RÉUSSI pour une référence inconnue %s (uuid %s, montant %s) '
+                '— client débité sans commande, remboursement manuel à prévoir.',
+                invoice_id, txn_uuid, amount_recu,
+            )
+        # Référence inconnue — on répond 200 pour éviter les retentatives CamerPay
+        return HttpResponse('OK')
+
+    # Idempotence : ne pas retraiter une transaction déjà finalisée
+    if txn.statut == 'complete':
+        _signaler_double_paiement(invoice_id, txn.provider_reference, txn_uuid, statut_interne)
+        return HttpResponse('OK')
+
+    # Vérifie que le montant payé correspond bien à celui attendu
+    try:
+        if amount_recu and int(float(amount_recu)) != int(txn.montant):
+            logger.error('CamerPay : montant incohérent pour %s (reçu %s, attendu %s).',
+                         invoice_id, amount_recu, txn.montant)
+            return HttpResponse('Montant incohérent', status=400)
+    except (TypeError, ValueError):
+        pass
+
+    if _echec_d_une_ancienne_tentative(statut_interne, txn.provider_reference, txn_uuid):
+        return HttpResponse('OK')
+
+    if txn_uuid and (statut_interne == 'complete' or not txn.provider_reference):
+        # Sur succès, on retient la tentative qui a RÉELLEMENT payé : c'est
+        # elle qui permet de repérer un éventuel double paiement ensuite.
+        txn.provider_reference = txn_uuid
+
+    if statut_interne == 'complete':
+        txn.statut = 'complete'
+        txn.save(update_fields=['statut', 'provider_reference'])
+        # Paiement confirmé → la commande devient visible du restaurant.
+        if txn.commande:
+            _confirmer_paiement_commande(txn.commande)
+    elif statut_interne in ('echouee', 'remboursee'):
+        txn.statut = statut_interne
+        txn.save(update_fields=['statut', 'provider_reference'])
+    else:
+        txn.save(update_fields=['provider_reference'])
+
+    return HttpResponse('OK')
 
 
 def camerpay_return(request):

@@ -133,6 +133,7 @@ class Command(BaseCommand):
             cmd = Commande(
                 client=client, restaurant=restaurant, statut=statut,
                 montant_total=montant, adresse_livraison=f"{client.first_name} — {restaurant.ville}",
+                paiement_confirme=True,
             )
             cmd.save()
             cmd.created_at = created

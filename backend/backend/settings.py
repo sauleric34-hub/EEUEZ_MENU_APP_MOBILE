@@ -346,3 +346,9 @@ if REDIS_URL:
         'default': {'URL': REDIS_URL, 'DEFAULT_TIMEOUT': 30},
     }
 
+
+# ─── Paiement en espèces depuis l'app mobile ─────────────────────────────────
+# Désactivé : l'app ne propose que MTN/Orange Money. Une commande en espèces
+# est confirmée sans encaissement préalable — ne l'activer qu'avec un vrai
+# processus de collecte du cash (voir checkout_groupe.mode_paiement_app).
+PAIEMENT_ESPECES_APP = _env_bool('PAIEMENT_ESPECES_APP', False)

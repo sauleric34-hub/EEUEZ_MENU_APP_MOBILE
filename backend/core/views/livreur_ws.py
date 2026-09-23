@@ -4,6 +4,8 @@
 # ═══════════════════════════════════════════════════════════
 
 import json
+
+from core.utils.json_script import json_pour_script
 from functools import wraps
 
 from django.conf import settings
@@ -149,11 +151,12 @@ def carte(request):
                 'lon': float(c.longitude_livraison) if c.longitude_livraison is not None else None,
             },
             'montant': int(c.montant_total),
+            'a_encaisser': c.paiement_en_especes,
         })
 
     return render(request, 'livreur/carte.html', {
         'livreur': livreur,
-        'missions_json': json.dumps(missions),
+        'missions_json': json_pour_script(missions),
         'nb_missions': len(missions),
         'resto_attache': livreur.restaurant_attache,
         'active_page': 'carte',

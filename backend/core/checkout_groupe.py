@@ -20,9 +20,31 @@ from .delivery import calculer_frais_livraison
 
 VALID_MODES = {'especes', 'mtn_money', 'orange_money', 'carte'}
 
+# Plafond par ligne : borne les montants (et les débordements d'entier en base)
+# face à une quantité aberrante envoyée directement à l'API.
+QUANTITE_MAX = 50
+
 
 def mode_paiement_valide(mode):
     return mode if mode in VALID_MODES else 'especes'
+
+
+def mode_paiement_app(mode):
+    """Mode de paiement accepté depuis l'app mobile, ou None s'il est refusé.
+
+    Contrairement à `mode_paiement_valide`, AUCUN repli silencieux sur les
+    espèces : une commande en espèces est confirmée immédiatement (visible du
+    restaurant, crédits débloqués à la livraison) sans qu'aucun argent n'ait
+    transité par la plateforme. L'app ne propose plus ce mode depuis la v1.1 ;
+    il ne se réactive que via settings.PAIEMENT_ESPECES_APP. « carte » n'a pas
+    de parcours de paiement : une telle commande resterait impayée à jamais.
+    """
+    from django.conf import settings
+
+    autorises = {'mtn_money', 'orange_money'}
+    if getattr(settings, 'PAIEMENT_ESPECES_APP', False):
+        autorises.add('especes')
+    return mode if mode in autorises else None
 
 
 class RestaurantExclu(Exception):
@@ -93,10 +115,17 @@ def construire_commande(*, user, restaurant, items, adresse_livraison, latitude,
         frais_plats = []
         for item in items:
             try:
-                plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
-            except (Plat.DoesNotExist, KeyError):
+                # Un plat retiré (indisponible / masqué) par le restaurant ne
+                # doit pas pouvoir être commandé via l'API.
+                plat = Plat.objects.get(
+                    id=item['plat_id'], restaurant=restaurant, is_available=True, is_visible=True,
+                )
+            except (Plat.DoesNotExist, KeyError, TypeError, ValueError):
                 continue
-            qte = max(1, int(item.get('quantite', 1)))
+            try:
+                qte = min(QUANTITE_MAX, max(1, int(item.get('quantite', 1))))
+            except (TypeError, ValueError):
+                qte = 1
 
             try:
                 descriptions, supplement = resoudre_choix(plat, item.get('complements'))

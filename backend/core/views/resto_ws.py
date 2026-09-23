@@ -10,6 +10,7 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Sum, Count, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
@@ -516,22 +517,27 @@ def finances(request):
     resto = request.resto
 
     if request.method == 'POST':
-        solde = _solde_disponible(resto)
         try:
             montant = int(request.POST.get('montant', '0'))
         except ValueError:
             montant = 0
-        if montant < 1000:
-            messages.error(request, 'Montant minimum de retrait : 1 000 F.')
-        elif montant > solde:
-            messages.error(request, f'Solde insuffisant ({int(solde)} F disponibles).')
-        else:
-            RetraitFonds.objects.create(
-                restaurant=resto, montant=montant,
-                mode_paiement=request.POST.get('mode_paiement', 'mtn_money'),
-                numero_compte=request.POST.get('numero_compte', ''),
-            )
-            messages.success(request, f'Demande de retrait de {montant} F enregistrée — traitement sous 48 h.')
+        # Verrou sur le restaurant le temps de contrôler le solde ET de créer
+        # le retrait : deux demandes simultanées (double clic, deux onglets)
+        # passaient sinon toutes deux le contrôle et dépassaient le solde.
+        with transaction.atomic():
+            RestaurantProfile.objects.select_for_update().get(pk=resto.pk)
+            solde = _solde_disponible(resto)
+            if montant < 1000:
+                messages.error(request, 'Montant minimum de retrait : 1 000 F.')
+            elif montant > solde:
+                messages.error(request, f'Solde insuffisant ({int(solde)} F disponibles).')
+            else:
+                RetraitFonds.objects.create(
+                    restaurant=resto, montant=montant,
+                    mode_paiement=request.POST.get('mode_paiement', 'mtn_money'),
+                    numero_compte=request.POST.get('numero_compte', ''),
+                )
+                messages.success(request, f'Demande de retrait de {montant} F enregistrée — traitement sous 48 h.')
         return redirect('core:resto_finances')
 
     # « Livrées » au sens comptable = livrées par un livreur OU récupérées sur

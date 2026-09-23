@@ -7,6 +7,8 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 import json
+
+from core.utils.json_script import json_pour_script
 from core.models import Commande, Transaction, RestaurantProfile, RetraitFonds
 from core.payout import executer_retrait
 from .dashboard import admin_required
@@ -47,7 +49,7 @@ def finances_view(request):
         'restaurants': restaurants,
         'months_labels': json.dumps(months_labels),
         'comm_data': json.dumps(comm_data),
-        'restaurant_labels': json.dumps([r.nom[:20] for r in restaurants]),
+        'restaurant_labels': json_pour_script([r.nom[:20] for r in restaurants]),
         'restaurant_ca': json.dumps([float(r.ca or 0) for r in restaurants]),
         'active_page': 'finances',
     })
@@ -61,6 +63,18 @@ def retraits_view(request):
     if request.method == 'POST':
         retrait = get_object_or_404(RetraitFonds, pk=request.POST.get('retrait_id'))
         action = request.POST.get('action')
+        # Transitions autorisées : sans ce garde-fou, un double clic sur
+        # « approuver » relançait un décaissement CamerPay déjà soumis, et un
+        # retrait payé pouvait repasser « refusé » (le montant redevenant
+        # disponible au retrait).
+        etats_permis = {
+            'refuser': ('en_attente',),
+            'approuver': ('en_attente',),
+            'payer': ('en_attente', 'approuve'),
+        }
+        if retrait.statut not in etats_permis.get(action, ()):
+            messages.error(request, f'Action impossible : le retrait #{retrait.pk} est « {retrait.get_statut_display()} ».')
+            return redirect('core:admin_retraits')
         if action == 'refuser':
             retrait.statut = 'refuse'
             retrait.processed_at = timezone.now()

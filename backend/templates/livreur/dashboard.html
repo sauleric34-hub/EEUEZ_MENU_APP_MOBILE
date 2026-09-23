@@ -105,8 +105,13 @@
         <span style="color:var(--text-muted);">📍 Adresse de livraison</span>
         <span style="font-weight:600;">{{ c.adresse_livraison|default:'—' }}</span>
 
+        {% if c.paiement_en_especes %}
         <span style="color:var(--text-muted);">💰 À encaisser (espèces)</span>
         <span style="font-weight:800;color:var(--accent-green);">{{ c.montant_total }} F</span>
+        {% else %}
+        <span style="color:var(--text-muted);">✅ Déjà payé (Mobile Money)</span>
+        <span style="font-weight:800;color:var(--accent-green);">Ne rien encaisser</span>
+        {% endif %}
       </div>
 
       <div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:12px;">

@@ -34,6 +34,7 @@ class LivraisonLibreBaseTest(TestCase):
         return Commande.objects.create(
             client=self.client_final, restaurant=self.resto,
             montant_total=5000, statut=statut, livraison_libre=libre,
+            paiement_confirme=True,
         )
 
 

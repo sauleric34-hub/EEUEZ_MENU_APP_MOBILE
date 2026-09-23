@@ -265,6 +265,10 @@ class CommandeSerializer(serializers.ModelSerializer):
             'notes', 'delai_estime', 'created_at', 'lignes', 'paiement_confirme',
             'suivi', 'points_utilises', 'reduction_points',
         ]
+        # Sortie uniquement : une commande n'est jamais écrite via ce
+        # serializer (création dans checkout_groupe, paiement via webhook).
+        # Sans ça, `paiement_confirme` / `montant_total` étaient modifiables.
+        read_only_fields = fields
 
     def get_code_retrait(self, obj):
         """Code de retrait d'une commande à emporter — visible du seul client

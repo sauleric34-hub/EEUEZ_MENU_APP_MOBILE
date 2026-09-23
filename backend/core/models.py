@@ -282,7 +282,10 @@ class Commande(models.Model):
     # Paiement confirmé : False pour une commande mobile money tant que CamerPay
     # n'a pas notifié le succès. Une commande non confirmée n'est PAS visible du
     # restaurant (elle n'existe réellement qu'une fois payée).
-    paiement_confirme = models.BooleanField(default=True)
+    # Défaut False (fermé) : tout chemin de création doit poser la valeur
+    # explicitement (checkout_groupe.construire_commande) — un oubli ne doit
+    # jamais produire une commande « payée ».
+    paiement_confirme = models.BooleanField(default=False)
     montant_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     # La commission peut devenir négative : c'est la plateforme qui finance la
     # réduction fidélité, jamais le restaurant ni le livreur.
@@ -349,6 +352,12 @@ class Commande(models.Model):
 
     def __str__(self):
         return f"Commande #{self.pk} — {self.restaurant}"
+
+    @property
+    def paiement_en_especes(self):
+        """Le livreur doit-il encaisser le client ? Seulement si la commande
+        est réglée en espèces — une commande Mobile Money est déjà payée."""
+        return self.transactions.filter(type='paiement_client', mode_paiement='especes').exists()
 
     def save(self, *args, **kwargs):
         # Modèle « majoration » : le client paie prix_base + pourcentage.

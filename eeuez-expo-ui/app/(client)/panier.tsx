@@ -354,8 +354,12 @@ export default function PanierScreen() {
     if (!groupe) return;
     try {
       await cancelOrderGroup(groupe.id);
-    } catch {
-      // Le groupe non confirmé n'est de toute façon pas visible des restaurants.
+      setError("Commande annulée : le paiement n'a pas abouti.");
+    } catch (e) {
+      // Refus du serveur (409) : le paiement Mobile Money est peut-être
+      // encore en cours de validation sur le téléphone du client. La
+      // commande est conservée et sera confirmée si le débit aboutit.
+      setError(e instanceof Error ? e.message : "Annulation impossible pour le moment.");
     } finally {
       // Rafraîchit la liste (le groupe non payé disparaît) ; le panier est conservé.
       reloadOrders();
@@ -681,10 +685,7 @@ export default function PanierScreen() {
               {
                 text: 'Abandonner',
                 style: 'destructive',
-                onPress: () => {
-                  abandonOrder();
-                  setError("Commande annulée : le paiement n'a pas abouti.");
-                },
+                onPress: () => { abandonOrder(); },
               },
               {
                 text: 'Réessayer',
