@@ -22,7 +22,7 @@ import { deleteAccount } from '../services/auth';
 import { WEB_BASE_URL } from '../constants/api';
 
 const APP_VERSION = '1.0.0';
-const SUPPORT_EMAIL = 'support@menu.cm';
+const SUPPORT_EMAIL = 'menu@cambus.cm';
 // Pages publiques déclarées dans la Play Console (voir backend/templates/legal).
 const URL_CONFIDENTIALITE = `${WEB_BASE_URL}/confidentialite/`;
 
