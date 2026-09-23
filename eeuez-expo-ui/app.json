@@ -14,20 +14,22 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.app.menu"
+      "bundleIdentifier": "cm.cambus.menu"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "package": "com.app.menu",
+      "package": "cm.cambus.menu",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -44,13 +46,16 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Menu accède à vos photos pour joindre une image à vos messages avec les restaurants."
+          "photosPermission": "Menu accède à vos photos pour joindre une image à vos messages avec les restaurants.",
+          "microphonePermission": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Menu utilise la caméra pour scanner le QR code du livreur et confirmer la réception de votre commande."
+          "cameraPermission": "Menu utilise la caméra pour scanner le QR code du livreur et confirmer la réception de votre commande.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false
         }
       ],
       [

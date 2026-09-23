@@ -2,22 +2,29 @@
 //  Paramètres — préférences réelles (thème, notifications…)
 // ═══════════════════════════════════════════════════════════
 
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Linking, Alert } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Switch, Linking, Alert, Modal, TextInput, ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft, ChevronRight, Moon, Bell, Tag, User, Mail, Phone,
-  TriangleAlert, ShieldCheck, CircleHelp, Info, LogOut, Pencil, MapPin, type LucideIcon,
+  TriangleAlert, ShieldCheck, CircleHelp, Info, LogOut, Pencil, MapPin, Trash2, type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, displayFont, bodyFont } from '../components/ui';
 import { useToast } from '../context/ToastContext';
+import { useGardeDemo } from '../hooks/useGardeDemo';
+import { deleteAccount } from '../services/auth';
+import { WEB_BASE_URL } from '../constants/api';
 
 const APP_VERSION = '1.0.0';
 const SUPPORT_EMAIL = 'support@menu.cm';
+// Pages publiques déclarées dans la Play Console (voir backend/templates/legal).
+const URL_CONFIDENTIALITE = `${WEB_BASE_URL}/confidentialite/`;
 
 function Section({ title, children, colors }: { title: string; children: React.ReactNode; colors: any }) {
   return (
@@ -58,6 +65,38 @@ export default function SettingsScreen() {
   } = useApp();
   const toast = useToast();
   const router = useRouter();
+  const { bloquer } = useGardeDemo();
+
+  // ─── Suppression de compte (exigence Google Play) ─────────
+  const [suppressionOuverte, setSuppressionOuverte] = useState(false);
+  const [motDePasse, setMotDePasse] = useState('');
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+  const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
+
+  const fermerSuppression = () => {
+    if (suppressionEnCours) return;
+    setSuppressionOuverte(false);
+    setMotDePasse('');
+    setErreurSuppression(null);
+  };
+
+  const confirmerSuppression = async () => {
+    if (!motDePasse) { setErreurSuppression('Saisissez votre mot de passe.'); return; }
+    setSuppressionEnCours(true);
+    setErreurSuppression(null);
+    try {
+      await deleteAccount(motDePasse);
+      setSuppressionOuverte(false);
+      await signOut();
+      toast.success('Votre compte a été supprimé.');
+      router.replace('/');
+    } catch (e) {
+      setErreurSuppression(e instanceof Error ? e.message : 'La suppression a échoué.');
+    } finally {
+      setSuppressionEnCours(false);
+      setMotDePasse('');
+    }
+  };
 
   const switchColors = {
     trackColor: { false: colors.surface2, true: Brand.accent + '88' },
@@ -123,7 +162,10 @@ export default function SettingsScreen() {
               value={SUPPORT_EMAIL} colors={colors}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => toast.error(`Aucune messagerie configurée. Écrivez-nous à ${SUPPORT_EMAIL}.`))}
             />
-            <Row Icon={ShieldCheck} iconColor={Brand.green} label="Confidentialité" value="Vos données restent au Cameroun" colors={colors} />
+            <Row
+              Icon={ShieldCheck} iconColor={Brand.green} label="Politique de confidentialité" colors={colors}
+              onPress={() => Linking.openURL(URL_CONFIDENTIALITE).catch(() => toast.error(URL_CONFIDENTIALITE))}
+            />
             <Row Icon={Info} iconColor={Brand.green} label="Version de l'application" value={APP_VERSION} colors={colors} last />
           </Section>
 
@@ -133,8 +175,54 @@ export default function SettingsScreen() {
               <Text style={[bodyFont(14.5, '800'), { color: '#ff6b70' }]}>Se déconnecter</Text>
             </View>
           </PressableScale>
+
+          <PressableScale onPress={() => bloquer(() => setSuppressionOuverte(true))} style={{ marginTop: 14 }}>
+            <View style={styles.supprimer}>
+              <Trash2 size={16} color={colors.muted} strokeWidth={2.2} />
+              <Text style={[bodyFont(13, '700'), { color: colors.muted }]}>Supprimer mon compte</Text>
+            </View>
+          </PressableScale>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal visible={suppressionOuverte} transparent animationType="fade" onRequestClose={fermerSuppression}>
+        <View style={styles.modalFond}>
+          <View style={[styles.modalCarte, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[displayFont(18, '800'), { color: colors.text }]}>Supprimer mon compte ?</Text>
+            <Text style={[bodyFont(13, '500'), { color: colors.muted, marginTop: 8, lineHeight: 19 }]}>
+              Cette action est définitive. Vos informations personnelles, adresses, messages, publications et
+              points de fidélité seront effacés. L'historique de vos paiements est conservé de façon anonyme.
+            </Text>
+            <TextInput
+              value={motDePasse}
+              onChangeText={setMotDePasse}
+              placeholder="Mot de passe"
+              placeholderTextColor={colors.faint}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!suppressionEnCours}
+              style={[styles.champ, bodyFont(14, '600'), { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
+            />
+            {erreurSuppression && (
+              <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', marginTop: 8 }]}>{erreurSuppression}</Text>
+            )}
+            <View style={styles.modalActions}>
+              <PressableScale onPress={fermerSuppression} style={{ flex: 1 }}>
+                <View style={[styles.modalBtn, { backgroundColor: colors.surface2 }]}>
+                  <Text style={[bodyFont(14, '700'), { color: colors.text }]}>Annuler</Text>
+                </View>
+              </PressableScale>
+              <PressableScale onPress={confirmerSuppression} style={{ flex: 1 }}>
+                <View style={[styles.modalBtn, { backgroundColor: Brand.danger }]}>
+                  {suppressionEnCours
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Supprimer</Text>}
+                </View>
+              </PressableScale>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenBg>
   );
 }
@@ -146,6 +234,12 @@ const styles = StyleSheet.create({
   section: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14 },
   rowItem: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14 },
   rowIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  supprimer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12 },
+  modalFond: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
+  modalCarte: { borderRadius: 22, borderWidth: 1, padding: 20 },
+  champ: { marginTop: 16, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  modalBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: Radius.pill, minHeight: 46 },
   logout: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: Radius.pill, borderWidth: 1,

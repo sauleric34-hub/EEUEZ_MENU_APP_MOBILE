@@ -3,6 +3,7 @@ from django.urls import path, re_path, include
 from django.conf import settings
 from django.views.static import serve as media_serve
 from django.views.decorators.cache import cache_page
+from django.views.generic import TemplateView
 from core.views.landing import landing_view
 from core.api_views import camerpay_return, camerpay_failed
 from core.views.publication_views import publication_rebond
@@ -25,6 +26,9 @@ urlpatterns = [
     path('partenaires/documentation/', partenaire_documentation, name='partenaire-documentation'),
     # Portail self-service partenaire (session, humain — voir core/partner_portal_auth.py)
     path('partenaires/portail/', include('core.partner_portal_urls')),
+    # Pages légales publiques (URL à déclarer dans la Play Console)
+    path('confidentialite/', TemplateView.as_view(template_name='legal/confidentialite.html'), name='confidentialite'),
+    path('compte/suppression/', TemplateView.as_view(template_name='legal/suppression_compte.html'), name='suppression-compte'),
     # Pages de retour CamerPay après paiement mobile money
     path('payment/success/', camerpay_return, name='camerpay-return'),
     path('payment/failed/', camerpay_failed, name='camerpay-failed'),

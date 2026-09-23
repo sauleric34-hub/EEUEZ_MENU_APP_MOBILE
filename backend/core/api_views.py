@@ -43,6 +43,7 @@ from .camerpay import (
     STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE,
 )
 from . import fidelite
+from .compte import supprimer_compte_client, SuppressionImpossible
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,29 @@ class ClientProfileView(views.APIView):
             user.avatar = request.FILES['avatar']
         user.save()
         return Response(UserSerializer(user).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def supprimer_compte(request):
+    """
+    POST /api/client/compte/supprimer   Body : { "password": "..." }
+    Suppression définitive du compte client (exigence Google Play) : données
+    personnelles effacées, historique financier conservé anonymisé — voir
+    core/compte.py. Le mot de passe est redemandé : un téléphone laissé
+    déverrouillé ne doit pas suffire.
+    """
+    if not request.user.check_password(str(request.data.get('password') or '')):
+        return Response({'error': 'Mot de passe incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        supprimer_compte_client(request.user)
+    except SuppressionImpossible as e:
+        return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# Même quota anti-brute-force que le login (le mot de passe est vérifié ici).
+supprimer_compte.cls.throttle_scope = 'auth'
 
 
 class LivreurProfileView(views.APIView):

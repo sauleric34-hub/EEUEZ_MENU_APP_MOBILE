@@ -34,6 +34,12 @@ export async function registerClient(params: RegisterParams): Promise<UserDTO> {
   return auth.user;
 }
 
+/** Suppression définitive du compte (mot de passe redemandé côté serveur). */
+export async function deleteAccount(password: string): Promise<void> {
+  await apiPost<void>('/client/compte/supprimer', { password }, { auth: true });
+  await logout();
+}
+
 export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
 }

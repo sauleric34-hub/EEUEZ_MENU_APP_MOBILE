@@ -320,3 +320,68 @@ class PaiementConfirmeParDefautTests(BaseAudit):
         commande = Commande.objects.create(client=self.client_user, restaurant=self.resto, montant_total=1)
         self.assertFalse(commande.paiement_confirme)
 
+
+class SuppressionCompteTests(BaseAudit):
+    def setUp(self):
+        super().setUp()
+        from core.models import AdresseLivraison
+        self.client_user.email = 'c@x.cm'
+        self.client_user.telephone = '690000000'
+        self.client_user.first_name = 'Jean'
+        self.client_user.save()
+        AdresseLivraison.objects.create(client=self.client_user, adresse='Akwa', latitude=4, longitude=9)
+        self.commande.adresse_livraison = 'Rue 12, Akwa'
+        self.commande.statut = 'livree'
+        self.commande.paiement_confirme = True
+        self.commande.save()
+        self.txn = Transaction.objects.create(commande=self.commande, type='paiement_client', montant=5000,
+                                              mode_paiement='mtn_money', statut='complete')
+
+    def test_mauvais_mot_de_passe_refuse(self):
+        rep = self.api.post('/api/client/compte/supprimer', {'password': 'faux'}, format='json')
+        self.assertEqual(rep.status_code, 400)
+        self.client_user.refresh_from_db()
+        self.assertTrue(self.client_user.is_active)
+
+    def test_suppression_anonymise_et_garde_l_historique(self):
+        from core.models import AdresseLivraison
+        rep = self.api.post('/api/client/compte/supprimer', {'password': 'x'}, format='json')
+        self.assertEqual(rep.status_code, 204)
+        self.client_user.refresh_from_db()
+        self.assertFalse(self.client_user.is_active)
+        self.assertEqual((self.client_user.email, self.client_user.telephone, self.client_user.first_name), ('', '', ''))
+        self.assertFalse(AdresseLivraison.objects.filter(client=self.client_user).exists())
+        self.commande.refresh_from_db()
+        self.assertEqual(self.commande.adresse_livraison, '')
+        self.assertTrue(Transaction.objects.filter(pk=self.txn.pk).exists())
+        # Le jeton déjà émis ne fonctionne plus et on ne peut plus se connecter.
+        api = APIClient()
+        self.assertEqual(api.post('/api/auth/login', {'email': 'c@x.cm', 'password': 'x'}, format='json').status_code, 401)
+
+    def test_jwt_existant_refuse_apres_suppression(self):
+        tok = APIClient().post('/api/auth/login', {'email': 'c', 'password': 'x'}, format='json').json()['token']
+        self.api.post('/api/client/compte/supprimer', {'password': 'x'}, format='json')
+        api = APIClient()
+        api.credentials(HTTP_AUTHORIZATION=f'Bearer {tok}')
+        self.assertEqual(api.get('/api/client/profile').status_code, 401)
+
+    def test_commande_en_cours_bloque_la_suppression(self):
+        self.commande.statut = 'en_livraison'
+        self.commande.save()
+        rep = self.api.post('/api/client/compte/supprimer', {'password': 'x'}, format='json')
+        self.assertEqual(rep.status_code, 409)
+
+    def test_pages_legales_publiques(self):
+        web = Client()
+        self.assertContains(web.get('/confidentialite/'), 'Politique de confidentialité')
+        self.assertContains(web.get('/compte/suppression/'), 'Supprimer mon compte')
+
+
+class SuppressionCompteDemoTests(TestCase):
+    def test_compte_demo_non_supprimable(self):
+        demo = User.objects.create_user(username='client@menu.cm', email='client@menu.cm', password='client123', role='client')
+        api = APIClient()
+        api.force_authenticate(demo)
+        self.assertEqual(api.post('/api/client/compte/supprimer', {'password': 'client123'}, format='json').status_code, 409)
+        demo.refresh_from_db()
+        self.assertTrue(demo.is_active)
