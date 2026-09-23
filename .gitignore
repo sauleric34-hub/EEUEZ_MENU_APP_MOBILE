@@ -96,3 +96,6 @@ node_modules/
 
 # ─── Réglages Django de prévisualisation locale (non versionnés) ─
 backend/backend/preview_settings.py
+
+# Base SQLite de dev (contient des comptes et hash de mots de passe)
+backend/db.sqlite3
