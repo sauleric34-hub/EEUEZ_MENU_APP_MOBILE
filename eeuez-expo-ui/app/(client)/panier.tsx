@@ -4,12 +4,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated, PanResponder,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated, PanResponder, Image,
+  type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, Banknote, Smartphone, ChevronRight, Star, Phone, Sparkles, Check, Bike, ShoppingBag } from 'lucide-react-native';
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, ChevronRight, Star, Phone, Sparkles, Check, Bike, ShoppingBag } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp, type CartLine, type CartGroup } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
@@ -23,9 +24,9 @@ import { useGardeDemo } from '../../hooks/useGardeDemo';
 import { useToast } from '../../context/ToastContext';
 import { animateListChange } from '../../lib/layoutAnimation';
 
-const PAYMENTS: { mode: PaymentMode; label: string; Icon: typeof Banknote }[] = [
-  { mode: 'mtn_money', label: 'MTN Money', Icon: Smartphone },
-  { mode: 'orange_money', label: 'Orange Money', Icon: Smartphone },
+const PAYMENTS: { mode: PaymentMode; label: string; logo: ImageSourcePropType }[] = [
+  { mode: 'mtn_money', label: 'MTN Money', logo: require('../../assets/mtn-money.png') },
+  { mode: 'orange_money', label: 'Orange Money', logo: require('../../assets/orange-money.png') },
 ];
 
 /** Modes qui nécessitent le widget CamerPay (tous les modes actuels) */
@@ -479,8 +480,13 @@ export default function PanierScreen() {
                           ? { backgroundColor: Brand.accent + '1f', borderColor: Brand.accent }
                           : { backgroundColor: colors.surface, borderColor: colors.border },
                       ]}>
-                        <p.Icon size={18} color={on ? Brand.accentLight : colors.muted} strokeWidth={2.2} />
-                        <Text numberOfLines={1} style={[bodyFont(11, '700'), { color: on ? Brand.accentLight : colors.muted }]}>{p.label}</Text>
+                        {on && (
+                          <View style={[styles.payCheck, { backgroundColor: Brand.accent }]}>
+                            <Check size={11} color="#fff" strokeWidth={3} />
+                          </View>
+                        )}
+                        <Image source={p.logo} style={[styles.payLogo, !on && { opacity: 0.55 }]} resizeMode="cover" />
+                        <Text numberOfLines={1} style={[bodyFont(12, '700'), { color: on ? colors.text : colors.muted }]}>{p.label}</Text>
                       </View>
                     </PressableScale>
                   );
@@ -729,8 +735,13 @@ const styles = StyleSheet.create({
   addrPin: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   payRow: { flexDirection: 'row', gap: 8 },
   payChip: {
-    alignItems: 'center', justifyContent: 'center', gap: 5,
-    paddingVertical: 12, borderRadius: Radius.md, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: Radius.md, borderWidth: 1.5,
+  },
+  payLogo: { width: 44, height: 44, borderRadius: 10 },
+  payCheck: {
+    position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
   },
   phoneRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
