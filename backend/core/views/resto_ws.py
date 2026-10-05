@@ -287,8 +287,11 @@ def plat_form(request, pk=None):
     if request.method == 'POST':
         nom = request.POST.get('nom', '').strip()
         prix = request.POST.get('prix', '0')
+        type_plat = request.POST.get('type_plat', '')
         if not nom or not prix.isdigit() or int(prix) <= 0:
             messages.error(request, 'Nom et prix (nombre positif) sont obligatoires.')
+        elif type_plat not in dict(Plat.TYPE_PLAT_CHOICES):
+            messages.error(request, 'Veuillez choisir le type de plat.')
         else:
             if plat is None:
                 plat = Plat(restaurant=resto)
@@ -306,6 +309,7 @@ def plat_form(request, pk=None):
             plat.allergies = request.POST.get('allergies', '')
             cat = request.POST.get('categorie')
             plat.categorie = Categorie.objects.filter(pk=cat).first() if cat else None
+            plat.type_plat = type_plat
             plat.is_available = request.POST.get('is_available') == 'on'
             plat.is_popular = request.POST.get('is_popular') == 'on'
             plat.is_visible = True
@@ -324,7 +328,8 @@ def plat_form(request, pk=None):
 
     return render(request, 'resto/plat_form.html', {
         'resto': resto, 'plat': plat,
-        'categories': Categorie.objects.all(),
+        'categories': Categorie.objects.order_by('nom'),
+        'types_plat': Plat.TYPE_PLAT_CHOICES,
         'groupes': (
             plat.groupes_complements.prefetch_related('options') if plat else []
         ),

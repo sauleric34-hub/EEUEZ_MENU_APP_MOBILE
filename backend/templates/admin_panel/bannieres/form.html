@@ -1,6 +1,22 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}{% if banniere %}Modifier{% else %}Nouvelle{% endif %} bannière — Menu Admin{% endblock %}
 {% block topbar_title %}{% if banniere %}Modifier la bannière{% else %}Nouvelle bannière{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  .cible-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:22px; }
+  .pays-list { max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; padding:6px; }
+  .pays-item { display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:8px; cursor:pointer; font-size:0.85rem; }
+  .pays-item:hover { background:rgba(255,255,255,0.05); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; min-height:8px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:0.78rem;
+          background:rgba(242,106,27,0.15); color:var(--text-primary); border:1px solid rgba(242,106,27,0.35); }
+  .chip button { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.9rem; padding:0; line-height:1; }
+  .hint { color:var(--text-muted); font-size:0.78rem; margin:-4px 0 12px; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="breadcrumb anim-fade-up">
@@ -129,6 +145,81 @@
 
   </div>
 
+  <div class="glass-card" style="padding:28px;margin-top:20px;">
+    <div class="section-title">5 · Ciblage</div>
+    <p class="hint" style="margin-top:-6px;">
+      Aucun critère = bannière visible <strong>partout</strong>. Sinon, elle s'affiche dès que le client
+      correspond à <strong>au moins un</strong> critère : son pays, sa ville, une zone ou le cercle ci-dessous.
+    </p>
+
+    <div class="cible-grid">
+      <div>
+        <label class="form-label">Pays</label>
+        <input type="search" id="pays-filtre" class="input-field" placeholder="Rechercher un pays…" style="margin-bottom:8px;">
+        <div class="pays-list" id="pays-list">
+          {% for p in pays %}
+          <label class="pays-item" data-nom="{{ p.nom|lower }}">
+            <input type="checkbox" name="cible_pays" value="{{ p.code }}" {% if p.coche %}checked{% endif %}>
+            <span>{{ p.drapeau }}</span><span>{{ p.nom }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="chips" id="pays-chips"></div>
+      </div>
+
+      <div>
+        <label class="form-label">Villes</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="ville-saisie" class="input-field" list="villes-connues" placeholder="Ex : Douala" autocomplete="off">
+          <button type="button" class="btn btn-secondary" id="ville-ajout">Ajouter</button>
+        </div>
+        <datalist id="villes-connues">
+          {% for v in villes_connues %}<option value="{{ v }}">{% endfor %}
+        </datalist>
+        <p class="hint" style="margin:8px 0 0;">Entrée pour ajouter. Comparaison sans tenir compte des accents ni des majuscules.</p>
+        <div class="chips" id="villes-chips">
+          {% for v in banniere.cible_villes %}
+          <span class="chip"><input type="hidden" name="cible_villes" value="{{ v }}">📍 {{ v }}<button type="button" title="Retirer">×</button></span>
+          {% endfor %}
+        </div>
+
+        <label class="form-label" style="margin-top:22px;display:flex;justify-content:space-between;">
+          <span>Zones réutilisables</span>
+          <a href="{% url 'core:zone_list' %}" style="font-size:0.78rem;">Gérer les zones →</a>
+        </label>
+        {% if zones %}
+        <div class="pays-list" style="max-height:160px;">
+          {% for z in zones %}
+          <label class="pays-item">
+            <input type="checkbox" name="cible_zones" value="{{ z.zone.pk }}" {% if z.cochee %}checked{% endif %}
+                   data-lat="{{ z.zone.latitude|stringformat:'f' }}" data-lon="{{ z.zone.longitude|stringformat:'f' }}"
+                   data-rayon="{{ z.zone.rayon_km|stringformat:'f' }}" data-nom="{{ z.zone.nom }}">
+            <span>◎ {{ z.zone.nom }}</span>
+            <span style="color:var(--text-muted);margin-left:auto;">{{ z.zone.rayon_km|floatformat:"-1" }} km</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="hint" style="margin:0;">Aucune zone pour l'instant.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <label class="form-label">Cercle propre à cette bannière (optionnel)</label>
+      <p class="hint">Cliquez sur la carte pour placer le centre, réglez le rayon. Les zones cochées s'affichent en pointillés bleus.</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="number" id="cercle_rayon_km" name="cercle_rayon_km" class="input-field" style="max-width:160px;"
+               min="0.1" max="500" step="0.1" placeholder="Rayon (km)" value="{{ banniere.cercle_rayon_km|stringformat:'g'|default:'' }}">
+        <button type="button" class="btn btn-secondary btn-sm" id="cercle-effacer">Effacer le cercle</button>
+        <span id="cercle-info" style="color:var(--text-muted);font-size:0.8rem;"></span>
+      </div>
+      <input type="hidden" id="cercle_lat" name="cercle_lat" value="{{ banniere.cercle_lat|stringformat:'f'|default:'' }}">
+      <input type="hidden" id="cercle_lon" name="cercle_lon" value="{{ banniere.cercle_lon|stringformat:'f'|default:'' }}">
+      <div id="cercle-map" style="height:380px;border-radius:14px;overflow:hidden;border:1px solid var(--border);"></div>
+    </div>
+  </div>
+
   <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;">
     <a href="{% url 'core:banniere_list' %}" class="btn btn-secondary">Annuler</a>
     <button type="submit" class="btn btn-primary">Enregistrer la bannière</button>
@@ -143,5 +234,96 @@ function toggleFond() {
   document.getElementById('fond-degrade-group').style.display = type === 'degrade' ? '' : 'none';
 }
 toggleFond();
+</script>
+{% endblock %}
+
+{% block extra_scripts_head %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>window.CARTO_API_KEY = '{{ carto_api_key|escapejs }}';</script>
+<script src="{% static 'js/cercle_map.js' %}"></script>
+<script>
+(function () {
+  // ── Pays : filtre + pastilles des pays cochés ──
+  var liste = document.getElementById('pays-list');
+  var chipsPays = document.getElementById('pays-chips');
+  function norm(t) { return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  document.getElementById('pays-filtre').addEventListener('input', function () {
+    var q = norm(this.value.trim());
+    liste.querySelectorAll('.pays-item').forEach(function (el) {
+      el.style.display = !q || norm(el.dataset.nom).indexOf(q) !== -1 ? '' : 'none';
+    });
+  });
+  function majPays() {
+    chipsPays.innerHTML = '';
+    liste.querySelectorAll('input:checked').forEach(function (cb) {
+      var chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = cb.parentElement.innerText.trim() + ' ';
+      var x = document.createElement('button');
+      x.type = 'button'; x.textContent = '×'; x.title = 'Retirer';
+      x.onclick = function () { cb.checked = false; majPays(); };
+      chip.appendChild(x);
+      chipsPays.appendChild(chip);
+    });
+  }
+  liste.addEventListener('change', majPays);
+  majPays();
+
+  // ── Villes : saisie libre en pastilles ──
+  var saisie = document.getElementById('ville-saisie');
+  var chipsVilles = document.getElementById('villes-chips');
+  function brancherRetrait(chip) {
+    chip.querySelector('button').onclick = function () { chip.remove(); };
+  }
+  chipsVilles.querySelectorAll('.chip').forEach(brancherRetrait);
+  function ajouterVille() {
+    var v = saisie.value.trim().replace(/\s+/g, ' ');
+    if (!v) return;
+    var deja = Array.prototype.some.call(chipsVilles.querySelectorAll('input'), function (i) {
+      return norm(i.value) === norm(v);
+    });
+    if (!deja) {
+      var chip = document.createElement('span');
+      chip.className = 'chip';
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden'; hidden.name = 'cible_villes'; hidden.value = v;
+      chip.appendChild(hidden);
+      chip.appendChild(document.createTextNode('📍 ' + v));
+      var x = document.createElement('button');
+      x.type = 'button'; x.textContent = '×'; x.title = 'Retirer';
+      chip.appendChild(x);
+      chipsVilles.appendChild(chip);
+      brancherRetrait(chip);
+    }
+    saisie.value = '';
+    saisie.focus();
+  }
+  document.getElementById('ville-ajout').addEventListener('click', ajouterVille);
+  saisie.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); ajouterVille(); }
+  });
+
+  // ── Cercle propre + zones cochées en référence ──
+  var carte = initCercleMap({
+    mapId: 'cercle-map', latId: 'cercle_lat', lonId: 'cercle_lon', rayonId: 'cercle_rayon_km',
+    clearId: 'cercle-effacer', infoId: 'cercle-info',
+  });
+  var refs = {};
+  function majZones() {
+    document.querySelectorAll('input[name="cible_zones"]').forEach(function (cb) {
+      if (cb.checked && !refs[cb.value]) {
+        refs[cb.value] = carte.addReference(+cb.dataset.lat, +cb.dataset.lon, +cb.dataset.rayon, cb.dataset.nom);
+      } else if (!cb.checked && refs[cb.value]) {
+        carte.map.removeLayer(refs[cb.value]);
+        delete refs[cb.value];
+      }
+    });
+  }
+  document.querySelectorAll('input[name="cible_zones"]').forEach(function (cb) { cb.addEventListener('change', majZones); });
+  majZones();
+})();
 </script>
 {% endblock %}

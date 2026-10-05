@@ -14,6 +14,7 @@ import {
 } from '../data/menuData';
 import * as authService from '../services/auth';
 import * as menu from '../services/menu';
+import { deviceCountry } from '../lib/geo';
 import { setAuthExpiredHandler } from '../services/http';
 import { registerForPush, resetPushRegistration } from '../services/push';
 import { useToast } from './ToastContext';
@@ -242,6 +243,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // auth
   const [user, setUser] = useState<UserDTO | null>(null);
+  const userRef = useRef<UserDTO | null>(null);
+  userRef.current = user;
   const [authReady, setAuthReady] = useState(false);
   // Dérivé de l'e-mail : reste juste après un redémarrage de l'app.
   const estDemo = estCompteDemo(user?.email);
@@ -273,6 +276,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [recommended, setRecommended] = useState<Dish[]>([]);
   const [recoRestos, setRecoRestos] = useState<Resto[]>([]);
   const [positionUsed, setPositionUsed] = useState(false);
+  const userLocRef = useRef<{ lat: number; lon: number } | null>(null);
+  userLocRef.current = userLoc;
 
   /** Position de l'utilisateur (permission demandée une fois, échec silencieux). */
   const getLocation = useCallback(async (): Promise<{ lat: number; lon: number } | null> => {
@@ -283,6 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const pos = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (!pos) return null;
       const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      userLocRef.current = loc;
       setUserLoc(loc);
       return loc;
     } catch {
@@ -331,9 +337,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    *  (images incluses) — appelée à chaque arrivée sur l'accueil. */
   const checkBannieres = useCallback(async () => {
     try {
-      const { version } = await menu.fetchBannieresVersion();
+      // Ciblage par pays / ville / position — lus via des refs pour toujours
+      // envoyer les valeurs à jour (compte connecté, dernière position connue).
+      const u = userRef.current;
+      const loc = userLocRef.current;
+      const cible: menu.CibleBannieres = {
+        pays: u?.pays_code || deviceCountry() || undefined,
+        ville: u?.ville || undefined,
+        lat: loc?.lat, lon: loc?.lon,
+      };
+      const { version } = await menu.fetchBannieresVersion(cible);
       if (version === bannieresVersionRef.current) return;
-      const list = await menu.fetchBannieres();
+      const list = await menu.fetchBannieres(cible);
       bannieresVersionRef.current = version;
       setBannieres(list);
     } catch {

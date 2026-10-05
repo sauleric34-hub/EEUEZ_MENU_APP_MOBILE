@@ -15,10 +15,16 @@ import type {
 export const fetchCategories = () => apiGet<CategorieDTO[]>('/client/categories');
 
 // ─── Bannières (carrousel promo accueil) ─────────────────────
-export const fetchBannieres = () => apiGet<BanniereDTO[]>('/client/bannieres');
+/** Ciblage : le serveur ne renvoie que les bannières visibles pour ce
+ *  pays / cette ville / cette position (tous facultatifs). */
+export interface CibleBannieres { pays?: string; ville?: string; lat?: number; lon?: number }
+
+export const fetchBannieres = (cible: CibleBannieres = {}) =>
+  apiGet<BanniereDTO[]>('/client/bannieres', { query: { ...cible } });
 /** Requête légère : ne renvoie qu'un identifiant de version, pour éviter de
  *  re-télécharger la liste complète (images) à chaque arrivée sur l'accueil. */
-export const fetchBannieresVersion = () => apiGet<{ version: string }>('/client/bannieres/version');
+export const fetchBannieresVersion = (cible: CibleBannieres = {}) =>
+  apiGet<{ version: string }>('/client/bannieres/version', { query: { ...cible } });
 
 export const fetchRestaurants = (q?: string) =>
   apiGet<RestoDTO[]>('/client/restaurants', { query: { q } });

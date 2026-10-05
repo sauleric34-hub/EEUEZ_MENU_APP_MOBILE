@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if zone %}Modifier{% else %}Nouvelle{% endif %} zone — Menu Admin{% endblock %}
+{% block topbar_title %}{% if zone %}Modifier la zone{% else %}Nouvelle zone{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:banniere_list' %}">Bannières</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{% url 'core:zone_list' %}">Zones de ciblage</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">{% if zone %}Modifier{% else %}Nouvelle{% endif %}</span>
+</div>
+<div class="page-header anim-fade-up">
+  <h1 class="page-title">{% if zone %}Modifier « {{ zone.nom }} »{% else %}Nouvelle zone{% endif %}</h1>
+</div>
+
+<form method="post" class="glass-card anim-fade-up" style="padding:28px;max-width:900px;">
+  {% csrf_token %}
+  <div class="coords-grid">
+    <div class="form-group">
+      <label class="form-label">Nom de la zone *</label>
+      <input type="text" name="nom" class="input-field" required maxlength="100" value="{{ zone.nom|default:'' }}" placeholder="Ex : Douala — Akwa">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rayon (km) *</label>
+      <input type="number" id="rayon_km" name="rayon_km" class="input-field" min="0.1" max="500" step="0.1" required value="{{ zone.rayon_km|stringformat:'g'|default:'' }}" placeholder="Ex : 3">
+    </div>
+  </div>
+  <input type="hidden" id="latitude" name="latitude" value="{{ zone.latitude|stringformat:'f'|default:'' }}">
+  <input type="hidden" id="longitude" name="longitude" value="{{ zone.longitude|stringformat:'f'|default:'' }}">
+
+  <div id="zone-map" style="height:420px;border-radius:14px;overflow:hidden;border:1px solid var(--border);"></div>
+  <p id="zone-info" style="color:var(--text-muted);font-size:0.8rem;margin-top:10px;"></p>
+
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:18px;">
+    <a href="{% url 'core:zone_list' %}" class="btn btn-secondary">Annuler</a>
+    <button type="submit" class="btn btn-primary">Enregistrer la zone</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts_head %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>window.CARTO_API_KEY = '{{ carto_api_key|escapejs }}';</script>
+<script src="{% static 'js/cercle_map.js' %}"></script>
+<script>
+initCercleMap({ mapId: 'zone-map', latId: 'latitude', lonId: 'longitude', rayonId: 'rayon_km', infoId: 'zone-info' });
+</script>
+{% endblock %}

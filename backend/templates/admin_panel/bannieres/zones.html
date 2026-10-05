@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Zones de ciblage — Menu Admin{% endblock %}
+{% block topbar_title %}Zones de ciblage{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:banniere_list' %}">Bannières</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Zones de ciblage</span>
+</div>
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Zones de ciblage</h1>
+    <p class="page-subtitle">Zones réutilisables (centre + rayon) pour afficher une bannière dans un secteur précis</p>
+  </div>
+  <a href="{% url 'core:zone_create' %}" class="btn btn-primary" style="margin-left:auto;">+ Nouvelle zone</a>
+</div>
+
+{% if zones %}
+<div class="glass-card anim-fade-up" style="padding:0;overflow:hidden;margin-bottom:20px;">
+  <div id="zones-map" style="height:340px;"></div>
+</div>
+
+<div class="table-wrapper">
+  <table>
+    <thead><tr><th>Zone</th><th>Centre</th><th>Rayon</th><th>Bannières</th><th></th></tr></thead>
+    <tbody>
+      {% for z in zones %}
+      <tr>
+        <td style="color:var(--text-primary);font-weight:500;">{{ z.nom }}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem;">{{ z.latitude|floatformat:4 }}, {{ z.longitude|floatformat:4 }}</td>
+        <td>{{ z.rayon_km|floatformat:"-1" }} km</td>
+        <td>{% if z.nb_bannieres %}<span class="badge badge-blue">{{ z.nb_bannieres }}</span>{% else %}<span class="badge badge-gray">0</span>{% endif %}</td>
+        <td style="display:flex;gap:6px;">
+          <a href="{% url 'core:zone_edit' z.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
+          <form method="post" action="{% url 'core:zone_delete' z.pk %}" onsubmit="return confirm('Supprimer cette zone ? Les bannières qui l\'utilisent ne seront plus ciblées sur elle.');">{% csrf_token %}
+            <button class="btn btn-danger btn-sm">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="table-wrapper">
+  <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/></svg><p>Aucune zone — créez-en une pour cibler vos bannières par secteur</p></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts_head %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if zones %}
+<script>window.CARTO_API_KEY = '{{ carto_api_key|escapejs }}';</script>
+<script src="{% static 'js/cercle_map.js' %}"></script>
+<script>
+(function () {
+  var map = L.map('zones-map');
+  L.tileLayer(cartoTileUrlCercle(), { attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+  var groupe = L.featureGroup().addTo(map);
+  {% for z in zones %}
+  L.circle([{{ z.latitude|stringformat:"f" }}, {{ z.longitude|stringformat:"f" }}], {
+    radius: {{ z.rayon_km|stringformat:"f" }} * 1000, color: '#f26a1b', weight: 2, fillOpacity: 0.15,
+  }).bindTooltip('{{ z.nom|escapejs }}', { permanent: true, direction: 'center' }).addTo(groupe);
+  {% endfor %}
+  map.fitBounds(groupe.getBounds(), { padding: [30, 30] });
+})();
+</script>
+{% endif %}
+{% endblock %}

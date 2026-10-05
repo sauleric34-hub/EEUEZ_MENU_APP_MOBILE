@@ -6,15 +6,18 @@
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title">Bannières</h1>
-    <p class="page-subtitle">Carrousel promo affiché en haut de l'accueil client — {{ bannieres.count }} bannière{{ bannieres.count|pluralize }}</p>
+    <p class="page-subtitle">Carrousel promo affiché en haut de l'accueil client — {{ bannieres|length }} bannière{{ bannieres|length|pluralize }}</p>
   </div>
-  <a href="{% url 'core:banniere_create' %}" class="btn btn-primary" style="margin-left:auto;">+ Nouvelle bannière</a>
+  <div style="margin-left:auto;display:flex;gap:10px;">
+    <a href="{% url 'core:zone_list' %}" class="btn btn-secondary">◎ Zones de ciblage ({{ nb_zones }})</a>
+    <a href="{% url 'core:banniere_create' %}" class="btn btn-primary">+ Nouvelle bannière</a>
+  </div>
 </div>
 
 <div class="table-wrapper">
   {% if bannieres %}
   <table>
-    <thead><tr><th>Aperçu</th><th>Nom interne</th><th>Fond</th><th>Bouton « Commander »</th><th>Ordre</th><th>Statut</th><th></th></tr></thead>
+    <thead><tr><th>Aperçu</th><th>Nom interne</th><th>Fond</th><th>Ciblage</th><th>Bouton « Commander »</th><th>Ordre</th><th>Statut</th><th></th></tr></thead>
     <tbody>
       {% for b in bannieres %}
       <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
@@ -35,6 +38,9 @@
           <div style="color:var(--text-muted);font-size:0.75rem;max-width:220px;white-space:pre-line;">{{ b.titre|truncatechars:50 }}</div>
         </td>
         <td>{{ b.get_fond_type_display }}</td>
+        <td style="max-width:240px;">
+          {% for c in b.resume_ciblage %}<span class="badge badge-blue" style="margin:0 4px 4px 0;display:inline-block;">{{ c }}</span>{% empty %}<span class="badge badge-gray">Partout</span>{% endfor %}
+        </td>
         <td>{% if b.plat %}<span class="badge badge-blue">→ {{ b.plat.nom }}</span>{% else %}<span class="badge badge-gray">Masqué (aucun plat)</span>{% endif %}</td>
         <td>
           <div style="display:flex;gap:4px;">

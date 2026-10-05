@@ -26,6 +26,9 @@ export interface RegisterParams {
   last_name?: string;
   telephone?: string;
   allergies?: string;
+  pays?: string;
+  pays_code?: string;
+  ville?: string;
 }
 
 export async function registerClient(params: RegisterParams): Promise<UserDTO> {

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Max, Sum
+from django.db.models import Avg, Count, Sum
 from django.utils import timezone
 
 from .models import (
@@ -102,16 +102,46 @@ def categories_list(request):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def bannieres_list(request):
-    qs = Banniere.objects.filter(is_active=True).select_related('plat').order_by('ordre', 'id')
-    return Response(BanniereSerializer(qs, many=True, context={'request': request}).data)
+    bannieres = _bannieres_ciblees(request)
+    return Response(BanniereSerializer(bannieres, many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def bannieres_version(request):
-    agg = Banniere.objects.filter(is_active=True).aggregate(dernier=Max('updated_at'), total=Count('id'))
-    dernier = agg['dernier'].isoformat() if agg['dernier'] else '0'
-    return Response({'version': f"{agg['total']}:{dernier}"})
+    # Calculée sur la liste ciblée : si le client change de ville ou de zone,
+    # la version change aussi et l'app recharge la bonne liste.
+    bannieres = _bannieres_ciblees(request)
+    dates = [b.updated_at for b in bannieres] + [z.updated_at for b in bannieres for z in b._zones]
+    dernier = max(dates).isoformat() if dates else '0'
+    ids = ','.join(str(b.id) for b in bannieres)
+    return Response({'version': f"{len(bannieres)}:{dernier}:{ids}"})
+
+
+def _float_ou_none(valeur):
+    try:
+        return float(valeur)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bannieres_ciblees(request):
+    """Bannières actives visibles pour ce client. Paramètres (tous facultatifs) :
+    pays (code ISO), ville, lat, lon. À défaut, pays/ville du compte connecté."""
+    params = request.query_params
+    user = request.user if request.user.is_authenticated else None
+    pays = (params.get('pays') or getattr(user, 'pays_code', '') or '').strip().upper()
+    ville = (params.get('ville') or getattr(user, 'ville', '') or '').strip()
+    lat, lon = _float_ou_none(params.get('lat')), _float_ou_none(params.get('lon'))
+
+    qs = (Banniere.objects.filter(is_active=True)
+          .select_related('plat').prefetch_related('cible_zones').order_by('ordre', 'id'))
+    resultat = []
+    for b in qs:
+        b._zones = list(b.cible_zones.all())
+        if b.correspond(pays, ville, lat, lon, zones=b._zones):
+            resultat.append(b)
+    return resultat
 
 
 # ─── FAVORIS ─────────────────────────────────────────────────

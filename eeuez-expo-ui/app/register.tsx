@@ -1,13 +1,13 @@
 // ═══════════════════════════════════════════════════════════
 //  Inscription — 2 étapes
-//  1. Identité (prénom, nom, email, téléphone)
+//  1. Identité (prénom, nom, email, téléphone, pays, ville)
 //  2. Sécurité & santé (mot de passe ×2, allergies)
 // ═══════════════════════════════════════════════════════════
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, Animated, Image,
-  ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions,
+  View, Text, StyleSheet, ScrollView, TextInput, Animated, Easing, Image,
+  ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions, LayoutAnimation,
   type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,10 +23,17 @@ import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { LogoMark } from '../components/Logo';
 import { PressableScale, displayFont, bodyFont } from '../components/ui';
+import { CountryField, CityField } from '../components/GeoFields';
+import { NgAfricaCredit } from '../components/NgAfricaCredit';
+import { countryName, deviceCountry } from '../lib/geo';
+import '../lib/layoutAnimation'; // active LayoutAnimation sur Android
 
 const ALLERGY_CHOICES = ['Arachides', 'Gluten', 'Lactose', 'Fruits de mer', 'Œufs', 'Soja'];
 
-type FieldKey = 'firstName' | 'lastName' | 'email' | 'phone' | 'password' | 'confirm';
+type FieldKey = 'firstName' | 'lastName' | 'email' | 'phone' | 'country' | 'city' | 'password' | 'confirm';
+
+// Champs de l'étape 1 qui entrent depuis la gauche, en cascade
+const ENTER_FIELDS = 5; // prénom, nom, email, téléphone, pays
 
 function Field({ Icon, colors, invalid, ...inputProps }: {
   Icon: LucideIcon; colors: any; invalid?: boolean;
@@ -61,6 +68,9 @@ export default function RegisterScreen() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // Pré-rempli avec le pays des réglages de l'appareil (modifiable)
+  const [countryCode, setCountryCode] = useState<string | null>(() => deviceCountry());
+  const [city, setCity] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [allergies, setAllergies] = useState<string[]>([]);
@@ -76,6 +86,24 @@ export default function RegisterScreen() {
   const slide = useRef(new Animated.Value(0)).current;
   const checkPop = useRef(new Animated.Value(0)).current;
   const succesFade = useRef(new Animated.Value(0)).current;
+  const enter = useRef(Array.from({ length: ENTER_FIELDS }, () => new Animated.Value(0))).current;
+
+  // Entrée de l'écran : les champs glissent depuis la gauche, l'un après l'autre
+  useEffect(() => {
+    Animated.stagger(80, enter.map(v => Animated.timing(v, {
+      toValue: 1, duration: 520, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }))).start();
+  }, [enter]);
+  const enterStyle = (i: number) => ({
+    opacity: enter[i],
+    transform: [{ translateX: enter[i].interpolate({ inputRange: [0, 1], outputRange: [-panelWidth * 0.7, 0] }) }],
+  });
+
+  const chooseCountry = (code: string) => {
+    if (code !== countryCode) setCity(null); // la ville dépend du pays
+    setCountryCode(code);
+    if (fieldError === 'country') setFieldError(null);
+  };
 
   const goToStep = (next: 1 | 2) => {
     setError(null);
@@ -89,6 +117,8 @@ export default function RegisterScreen() {
     if (!lastName.trim()) return { field: 'lastName', message: 'Veuillez saisir votre nom.' };
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return { field: 'email', message: 'Adresse email invalide.' };
     if (!/^[0-9+\s-]{8,15}$/.test(phone.trim())) return { field: 'phone', message: 'Numéro de téléphone invalide (ex : 699 00 00 00).' };
+    if (!countryCode) return { field: 'country', message: 'Veuillez choisir votre pays.' };
+    if (!city) return { field: 'city', message: 'Veuillez choisir votre ville.' };
     return null;
   };
   const validateStep2 = (): { field: FieldKey; message: string } | null => {
@@ -131,6 +161,9 @@ export default function RegisterScreen() {
         last_name: lastName.trim(),
         telephone: phone.trim(),
         allergies: allAllergies,
+        pays: countryCode ? countryName(countryCode) : '',
+        pays_code: countryCode ?? '',
+        ville: city ?? '',
       });
       // Photo de profil (facultative) — envoyée une fois le compte créé & authentifié
       if (avatarUri) {
@@ -163,6 +196,10 @@ export default function RegisterScreen() {
 
   const onLayoutStep1 = (e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
+    // Apparition du champ Ville : le conteneur s'agrandit en douceur
+    if (panelHeights.step1 != null && panelHeights.step1 !== h) {
+      LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'));
+    }
     setPanelHeights(prev => (prev.step1 === h ? prev : { ...prev, step1: h }));
   };
   const onLayoutStep2 = (e: LayoutChangeEvent) => {
@@ -231,26 +268,47 @@ export default function RegisterScreen() {
                       {avatarUri ? 'Modifier la photo' : 'Ajouter une photo (facultatif)'}
                     </Text>
                   </View>
-                  <Field
-                    Icon={User} colors={colors} value={firstName} placeholder="Prénom"
-                    invalid={fieldError === 'firstName'}
-                    onChangeText={t => { setFirstName(t); if (fieldError === 'firstName') setFieldError(null); }}
-                  />
-                  <Field
-                    Icon={User} colors={colors} value={lastName} placeholder="Nom"
-                    invalid={fieldError === 'lastName'}
-                    onChangeText={t => { setLastName(t); if (fieldError === 'lastName') setFieldError(null); }}
-                  />
-                  <Field
-                    Icon={Mail} colors={colors} value={email} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
-                    invalid={fieldError === 'email'}
-                    onChangeText={t => { setEmail(t); if (fieldError === 'email') setFieldError(null); }}
-                  />
-                  <Field
-                    Icon={Phone} colors={colors} value={phone} placeholder="Téléphone (ex : 699 00 00 00)" keyboardType="phone-pad"
-                    invalid={fieldError === 'phone'}
-                    onChangeText={t => { setPhone(t); if (fieldError === 'phone') setFieldError(null); }}
-                  />
+                  <Animated.View style={enterStyle(0)}>
+                    <Field
+                      Icon={User} colors={colors} value={firstName} placeholder="Prénom"
+                      invalid={fieldError === 'firstName'}
+                      onChangeText={t => { setFirstName(t); if (fieldError === 'firstName') setFieldError(null); }}
+                    />
+                  </Animated.View>
+                  <Animated.View style={enterStyle(1)}>
+                    <Field
+                      Icon={User} colors={colors} value={lastName} placeholder="Nom"
+                      invalid={fieldError === 'lastName'}
+                      onChangeText={t => { setLastName(t); if (fieldError === 'lastName') setFieldError(null); }}
+                    />
+                  </Animated.View>
+                  <Animated.View style={enterStyle(2)}>
+                    <Field
+                      Icon={Mail} colors={colors} value={email} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
+                      invalid={fieldError === 'email'}
+                      onChangeText={t => { setEmail(t); if (fieldError === 'email') setFieldError(null); }}
+                    />
+                  </Animated.View>
+                  <Animated.View style={enterStyle(3)}>
+                    <Field
+                      Icon={Phone} colors={colors} value={phone} placeholder="Téléphone (ex : 699 00 00 00)" keyboardType="phone-pad"
+                      invalid={fieldError === 'phone'}
+                      onChangeText={t => { setPhone(t); if (fieldError === 'phone') setFieldError(null); }}
+                    />
+                  </Animated.View>
+                  <Animated.View style={enterStyle(4)}>
+                    <CountryField
+                      code={countryCode} onChange={chooseCountry} colors={colors}
+                      invalid={fieldError === 'country'}
+                    />
+                  </Animated.View>
+                  {countryCode && (
+                    <CityField
+                      key={countryCode} countryCode={countryCode} city={city} colors={colors}
+                      invalid={fieldError === 'city'}
+                      onChange={c => { setCity(c); if (fieldError === 'city') setFieldError(null); }}
+                    />
+                  )}
                 </View>
 
                 <View
@@ -333,6 +391,8 @@ export default function RegisterScreen() {
                 Déjà inscrit ? Se connecter
               </Text>
             </PressableScale>
+
+            <NgAfricaCredit style={styles.credit} />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -381,6 +441,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 11, fontSize: 13.5, fontWeight: '600',
   },
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingHorizontal: 4 },
+  // Poussé en bas de l'écran (content a flexGrow: 1)
+  credit: { marginTop: 'auto', paddingTop: 28 },
   mainBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 16, borderRadius: Radius.pill,

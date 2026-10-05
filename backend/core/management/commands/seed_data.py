@@ -32,7 +32,7 @@ NOMS = [
     ("Emmanuel", "Biya"), ("Grace", "Ndongo"), ("Victor", "Mvogo"), ("Sandra", "Tekam"),
 ]
 
-CATEGORIES = ["Plats de résistance", "Grillades", "Soupes & Bouillons", "Boissons", "Desserts", "Entrées"]
+CATEGORIES = ["Plats traditionnels", "Grillades", "Soupes & Bouillons", "Poulet & Volailles", "Poissons & Fruits de mer"]
 
 
 class Command(BaseCommand):
@@ -109,6 +109,7 @@ class Command(BaseCommand):
                     Plat.objects.create(
                         restaurant=profile, nom=nom_plat, prix=prix,
                         categorie=random.choice(cats),
+                        type_plat='resistance',
                         is_available=True, is_popular=random.random() > 0.6,
                     )
         self.stdout.write(f"  OK{len(profiles)} restaurants")

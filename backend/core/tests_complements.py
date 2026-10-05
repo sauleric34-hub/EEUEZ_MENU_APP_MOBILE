@@ -181,7 +181,7 @@ class SaisieRestaurantTests(TestCase):
     def _poster(self, **extra):
         donnees = {
             'nom': 'Poulet DG', 'prix': '4000', 'frais_livraison': '500',
-            'is_available': 'on',
+            'is_available': 'on', 'type_plat': 'resistance',
         }
         donnees.update(extra)
         return self.navigateur.post('/admin-panel/resto/plats/nouveau/', donnees)
@@ -206,6 +206,12 @@ class SaisieRestaurantTests(TestCase):
         self.assertEqual(int(options[1].supplement), 500)
         self.assertEqual([e.nom for e in plat.elements_inclus.all()], ['Servi avec du pain'])
 
+    def test_type_de_plat_obligatoire(self):
+        self._poster(type_plat='')
+        self.assertFalse(Plat.objects.filter(nom='Poulet DG').exists())
+        self._poster(type_plat='dessert')
+        self.assertEqual(Plat.objects.get(nom='Poulet DG').type_plat, 'dessert')
+
     def test_groupe_sans_option_est_ecarte(self):
         """Un groupe obligatoire sans option bloquerait toute commande."""
         self._poster(**{'groupe_nom[0]': 'Vide', 'groupe_obligatoire[0]': 'on'})
@@ -220,7 +226,7 @@ class SaisieRestaurantTests(TestCase):
 
         self.navigateur.post(f'/admin-panel/resto/plats/{plat.pk}/', {
             'nom': 'Poulet DG', 'prix': '4000', 'frais_livraison': '500',
-            'is_available': 'on',
+            'is_available': 'on', 'type_plat': 'resistance',
             'groupe_nom[0]': 'Nouveau', 'option_nom[0][]': ['B'], 'option_prix[0][]': ['200'],
         })
         self.assertEqual(

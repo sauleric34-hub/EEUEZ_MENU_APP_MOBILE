@@ -1,10 +1,44 @@
+import unicodedata
+
 from django.core.validators import RegexValidator
 from django.db import models
+
+from core.utils.geo import est_dans_le_rayon
 
 hex_color = RegexValidator(
     regex=r'^#[0-9a-fA-F]{6}$',
     message="Couleur invalide — format attendu : #RRGGBB",
 )
+
+
+def normaliser_ville(nom):
+    """Comparaison de villes insensible à la casse et aux accents."""
+    sans_accents = unicodedata.normalize('NFD', nom or '')
+    sans_accents = ''.join(c for c in sans_accents if unicodedata.category(c) != 'Mn')
+    return ' '.join(sans_accents.lower().split())
+
+
+class ZoneCiblage(models.Model):
+    """Zone géographique réutilisable (cercle : centre + rayon) pour cibler
+    des bannières — ex. « Douala Akwa », « Campus de Ngoa-Ekelle »."""
+
+    nom = models.CharField(max_length=100)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    rayon_km = models.FloatField(default=5)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Zone de ciblage'
+        verbose_name_plural = 'Zones de ciblage'
+        ordering = ['nom']
+
+    def __str__(self):
+        return self.nom
+
+    def contient(self, lat, lon):
+        return est_dans_le_rayon(self.latitude, self.longitude, lat, lon, self.rayon_km)
 
 
 class Banniere(models.Model):
@@ -50,6 +84,17 @@ class Banniere(models.Model):
     # ── 4. Image de droite ───────────────────────────────────
     image_droite = models.ImageField(upload_to='bannieres/droite/', blank=True, null=True)
 
+    # ── 5. Ciblage (tous les critères se combinent) ─────────
+    # Aucun critère = visible partout. Sinon, la bannière s'affiche dès que le
+    # client correspond à AU MOINS UN critère : son pays, sa ville, une zone
+    # réutilisable ou le cercle propre à la bannière.
+    cible_pays = models.JSONField(default=list, blank=True)    # codes ISO : ['CM', 'CI']
+    cible_villes = models.JSONField(default=list, blank=True)  # noms : ['Douala', 'Yaoundé']
+    cible_zones = models.ManyToManyField(ZoneCiblage, blank=True, related_name='bannieres')
+    cercle_lat = models.FloatField(null=True, blank=True)
+    cercle_lon = models.FloatField(null=True, blank=True)
+    cercle_rayon_km = models.FloatField(null=True, blank=True)
+
     # ── Gestion (liste illimitée, réordonnable, activable) ───
     ordre = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -63,3 +108,26 @@ class Banniere(models.Model):
 
     def __str__(self):
         return self.nom_interne
+
+    @property
+    def a_un_cercle(self):
+        return None not in (self.cercle_lat, self.cercle_lon, self.cercle_rayon_km)
+
+    def correspond(self, pays='', ville='', lat=None, lon=None, zones=None):
+        """La bannière doit-elle être montrée à ce client ?
+        `zones` : zones déjà préchargées (évite une requête par bannière)."""
+        zones = list(self.cible_zones.all()) if zones is None else zones
+        if not (self.cible_pays or self.cible_villes or zones or self.a_un_cercle):
+            return True  # aucun ciblage : partout
+        if pays and pays.upper() in self.cible_pays:
+            return True
+        if ville:
+            v = normaliser_ville(ville)
+            if any(normaliser_ville(c) == v for c in self.cible_villes):
+                return True
+        if lat is not None and lon is not None:
+            if self.a_un_cercle and est_dans_le_rayon(self.cercle_lat, self.cercle_lon, lat, lon, self.cercle_rayon_km):
+                return True
+            if any(z.contient(lat, lon) for z in zones):
+                return True
+        return False

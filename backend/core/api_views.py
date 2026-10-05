@@ -112,6 +112,10 @@ class RegisterView(views.APIView):
             last_name=data.get('last_name', ''),
             telephone=data.get('telephone', ''),
             allergies=data.get('allergies', ''),
+            # Facultatifs côté API : les anciennes versions de l'app ne les envoient pas
+            pays=str(data.get('pays') or '').strip()[:100],
+            pays_code=str(data.get('pays_code') or '').strip().upper()[:2],
+            ville=str(data.get('ville') or '').strip()[:100],
             role=role
         )
         
@@ -135,7 +139,7 @@ class ClientProfileView(views.APIView):
 
     def patch(self, request):
         user = request.user
-        for field in ('first_name', 'last_name', 'telephone', 'allergies'):
+        for field in ('first_name', 'last_name', 'telephone', 'allergies', 'pays', 'pays_code', 'ville'):
             if field in request.data:
                 setattr(user, field, request.data.get(field) or '')
         if 'avatar' in request.FILES:

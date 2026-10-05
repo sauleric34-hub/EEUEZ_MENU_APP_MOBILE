@@ -16,6 +16,10 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client')
     telephone = models.CharField(max_length=20, blank=True)
     allergies = models.CharField(max_length=300, blank=True)
+    # Localisation déclarée à l'inscription (pays_code = ISO 3166-1 alpha-2)
+    pays = models.CharField(max_length=100, blank=True)
+    pays_code = models.CharField(max_length=2, blank=True)
+    ville = models.CharField(max_length=100, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     gain_total = models.DecimalField(max_digits=12, decimal_places=0, default=0)
     nombre_livraisons = models.PositiveIntegerField(default=0)
@@ -218,8 +222,17 @@ class Categorie(models.Model):
 
 
 class Plat(ApercuMixin, models.Model):
+    # Moment du repas — distinct de la catégorie (style de cuisine : Grillades, Pizzas…)
+    TYPE_PLAT_CHOICES = [
+        ('entree', 'Entrée'),
+        ('resistance', 'Plat de résistance'),
+        ('diner', 'Dîner'),
+        ('dessert', 'Dessert'),
+        ('boisson', 'Boisson'),
+    ]
     restaurant = models.ForeignKey(RestaurantProfile, on_delete=models.CASCADE, related_name='plats')
     categorie = models.ForeignKey(Categorie, on_delete=models.SET_NULL, null=True, blank=True)
+    type_plat = models.CharField(max_length=20, choices=TYPE_PLAT_CHOICES, blank=True)
     nom = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     prix = models.DecimalField(max_digits=10, decimal_places=0)
@@ -730,7 +743,7 @@ from .models_complements import (  # noqa: E402,F401
 )
 
 # ─── Bannières promo (accueil client) ────────────────────────
-from .models_bannieres import Banniere  # noqa: E402,F401
+from .models_bannieres import Banniere, ZoneCiblage  # noqa: E402,F401
 
 # ─── Livraison libre (paramétrage, paiements livreurs, push) ──
 from .models_livraison import (  # noqa: E402,F401

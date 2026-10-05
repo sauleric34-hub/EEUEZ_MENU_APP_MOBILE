@@ -9,6 +9,10 @@ export interface UserDTO {
   role: string;
   telephone?: string;
   allergies?: string;
+  /** Localisation déclarée à l'inscription (pays_code = ISO alpha-2). */
+  pays?: string;
+  pays_code?: string;
+  ville?: string;
   avatar?: string | null;
   /** Fidélité : solde de points et niveau déduit (bronze/argent/or). */
   points_solde?: number;

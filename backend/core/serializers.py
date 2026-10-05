@@ -19,7 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'role',
-            'telephone', 'allergies', 'avatar', 'points_solde', 'niveau',
+            'telephone', 'allergies', 'pays', 'pays_code', 'ville', 'avatar', 'points_solde', 'niveau',
             'paiement_numero', 'paiement_operateur',
             'gain_total', 'nombre_livraisons', 'solde_livreur',
         ]
@@ -107,6 +107,7 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
 
 class PlatSerializer(serializers.ModelSerializer):
     categorie_nom = serializers.SerializerMethodField()
+    type_plat_label = serializers.CharField(source='get_type_plat_display', read_only=True)
     restaurant_nom = serializers.SerializerMethodField()
     note = serializers.SerializerMethodField()
     nombre_notes = serializers.SerializerMethodField()
@@ -125,6 +126,7 @@ class PlatSerializer(serializers.ModelSerializer):
         model = Plat
         fields = [
             'id', 'restaurant', 'restaurant_nom', 'categorie', 'categorie_nom',
+            'type_plat', 'type_plat_label',
             'nom', 'description', 'prix', 'prix_client', 'frais_livraison', 'image', 'images', 'flou',
             'groupes_complements', 'elements_inclus', 'is_available', 'is_popular',
             'allergies', 'ingredients', 'composition', 'note', 'nombre_notes', 'ma_note',

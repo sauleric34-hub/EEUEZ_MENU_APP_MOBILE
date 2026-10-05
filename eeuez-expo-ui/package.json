@@ -17,6 +17,7 @@
     "expo-keep-awake": "~15.0.7",
     "expo-linear-gradient": "~15.0.7",
     "expo-linking": "~8.0.12",
+    "expo-localization": "~17.0.9",
     "expo-location": "~19.0.8",
     "expo-notifications": "^0.32.17",
     "expo-router": "~6.0.24",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "country-state-city": "^3.2.1",
     "typescript": "~5.9.2"
   },
   "scripts": {

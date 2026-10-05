@@ -3,13 +3,32 @@
 //  Modifiez API_BASE_URL selon votre environnement
 // ═══════════════════════════════════════════════════════
 
-// ─── CHOISIR L'URL SELON VOTRE CONTEXTE ──────────────────
-// Émulateur Android : 'http://10.0.2.2:8000/api'
-// Appareil physique : 'http://VOTRE_IP_LOCAL:8000/api'
-// Expo Go (LAN)     : 'http://192.168.x.x:8000/api'
-// Production        : 'https://menu.cambus.cm/api'
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-export const API_BASE_URL = 'https://menu.cambus.cm/api';
+// ─── CHOISIR L'URL SELON VOTRE CONTEXTE ──────────────────
+// En dev (__DEV__), l'app vise le backend Django LOCAL : l'IP de la machine
+// est déduite de l'adresse du serveur Metro (même machine, même réseau), ce
+// qui marche en Expo Go sur appareil physique comme sur émulateur.
+// Forcer une URL précise : EXPO_PUBLIC_API_URL=http://192.168.x.x:8001/api
+// Production : 'https://menu.cambus.cm/api'
+
+const PROD_API_URL = 'https://menu.cambus.cm/api';
+
+// Port du backend local (`python manage.py runserver 0.0.0.0:8001`)
+const DEV_API_PORT = 8001;
+
+function devApiUrl(): string {
+  const hostUri = Constants.expoConfig?.hostUri; // ex. « 192.168.1.173:8081 »
+  let host = hostUri ? hostUri.split(':')[0] : '';
+  // Émulateur Android : « localhost » désigne l'émulateur lui-même
+  if (!host || host === 'localhost' || host === '127.0.0.1') {
+    host = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+  }
+  return `http://${host}:${DEV_API_PORT}/api`;
+}
+
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? devApiUrl() : PROD_API_URL);
 
 // Timeout des requêtes en ms
 export const API_TIMEOUT = 10000;

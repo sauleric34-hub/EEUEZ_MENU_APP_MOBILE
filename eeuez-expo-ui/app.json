@@ -64,7 +64,8 @@
         {
           "color": "#f26a1b"
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "extra": {
       "router": {},

@@ -3,9 +3,10 @@
 //  Contenu entièrement piloté par l'admin (Banniere, back-office) :
 //  texte, bouton « Commander » (visible seulement si relié à un plat),
 //  fond (image/couleur/dégradé) et image de droite.
-//  Animation d'entrée rejouée à chaque arrivée sur l'accueil : l'image
-//  de droite glisse vers la droite, le texte monte, le bouton descend —
-//  le fond et le voile sombre restent statiques.
+//  Animation d'entrée rejouée à chaque arrivée sur l'accueil : les
+//  éléments apparaissent l'un après l'autre, chacun depuis un côté
+//  différent — image (droite), badge (haut), titre (gauche),
+//  sous-titre (droite), bouton (bas). Le fond et le voile restent statiques.
 // ═══════════════════════════════════════════════════════════
 
 import React, { useCallback, useRef, useState } from 'react';
@@ -23,22 +24,46 @@ import type { BanniereDTO } from '../services/dto';
 const SIDE_PADDING = 20;
 const CARD_W = Screen.W - SIDE_PADDING * 2;
 
-/** Une carte : fond statique, image de droite + texte + bouton animés à l'entrée. */
+// Décalage entre l'arrivée de deux éléments successifs
+const STAGGER = 150;
+
+/** Glissement depuis un côté + fondu, piloté par une valeur 0 → 1. */
+function slideFrom(anim: Animated.Value, side: 'left' | 'right' | 'top' | 'bottom', distance: number) {
+  const offset = side === 'left' || side === 'top' ? -distance : distance;
+  const translate = anim.interpolate({ inputRange: [0, 1], outputRange: [offset, 0] });
+  return {
+    opacity: anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.85, 1], extrapolate: 'clamp' }),
+    transform: [side === 'left' || side === 'right' ? { translateX: translate } : { translateY: translate }],
+  };
+}
+
+/** Une carte : fond statique, éléments animés l'un après l'autre à l'entrée. */
 function BannerCard({ banniere, active }: { banniere: BanniereDTO; active: boolean }) {
   const router = useRouter();
   const imgAnim = useRef(new Animated.Value(0)).current;
-  const textAnim = useRef(new Animated.Value(0)).current;
+  const badgeAnim = useRef(new Animated.Value(0)).current;
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const subAnim = useRef(new Animated.Value(0)).current;
   const btnAnim = useRef(new Animated.Value(0)).current;
 
+  const hasImage = !!banniere.image_droite;
+  const hasBadge = !!banniere.badge;
+  const hasSub = !!banniere.sous_titre;
+  const hasBtn = banniere.plat != null;
+
   const replay = useCallback(() => {
-    imgAnim.setValue(0);
-    textAnim.setValue(0);
-    btnAnim.setValue(0);
-    const spring = (anim: Animated.Value, delay: number) => Animated.timing(anim, {
-      toValue: 1, duration: 480, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    });
-    Animated.parallel([spring(imgAnim, 0), spring(textAnim, 80), spring(btnAnim, 160)]).start();
-  }, [imgAnim, textAnim, btnAnim]);
+    const all = [imgAnim, badgeAnim, titleAnim, subAnim, btnAnim];
+    all.forEach(a => a.setValue(0));
+    // Seuls les éléments présents prennent un créneau : pas de temps mort
+    const steps = [
+      hasImage && Animated.timing(imgAnim, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      hasBadge && Animated.timing(badgeAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.back(1.6)), useNativeDriver: true }),
+      Animated.timing(titleAnim, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      hasSub && Animated.timing(subAnim, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      hasBtn && Animated.spring(btnAnim, { toValue: 1, speed: 12, bounciness: 9, useNativeDriver: true }),
+    ].filter(Boolean) as Animated.CompositeAnimation[];
+    Animated.stagger(STAGGER, steps).start();
+  }, [imgAnim, badgeAnim, titleAnim, subAnim, btnAnim, hasImage, hasBadge, hasSub, hasBtn]);
 
   // Rejoue à chaque fois que cette carte devient la carte active (swipe),
   // et à chaque fois que l'accueil reprend le focus.
@@ -70,17 +95,9 @@ function BannerCard({ banniere, active }: { banniere: BanniereDTO; active: boole
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1a1a' }]} />
       )}
 
-      {/* Image de droite — animée : glisse vers la droite */}
+      {/* Image de droite — arrive depuis la droite */}
       {banniere.image_droite && (
-        <Animated.View
-          style={[
-            styles.rightImage,
-            {
-              opacity: imgAnim,
-              transform: [{ translateX: imgAnim.interpolate({ inputRange: [0, 1], outputRange: [-28, 0] }) }],
-            },
-          ]}
-        >
+        <Animated.View style={[styles.rightImage, slideFrom(imgAnim, 'right', CARD_W * 0.5)]}>
           <ExpoImage
             source={{ uri: banniere.image_droite }}
             style={StyleSheet.absoluteFill}
@@ -98,37 +115,32 @@ function BannerCard({ banniere, active }: { banniere: BanniereDTO; active: boole
         style={StyleSheet.absoluteFill}
       />
 
+      {/* Badge — tombe depuis le haut */}
       {banniere.badge ? (
-        <View style={styles.badge}>
+        <Animated.View style={[styles.badge, slideFrom(badgeAnim, 'top', 40)]}>
           <Text style={[bodyFont(10.5, '800'), { color: '#fff', letterSpacing: 0.5 }]}>{banniere.badge}</Text>
-        </View>
+        </Animated.View>
       ) : null}
 
       <View style={styles.content}>
-        {/* Texte — animé : monte vers le haut */}
-        <Animated.View
-          style={{
-            opacity: textAnim,
-            transform: [{ translateY: textAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-          }}
-        >
+        {/* Titre — arrive depuis la gauche */}
+        <Animated.View style={slideFrom(titleAnim, 'left', CARD_W * 0.6)}>
           <Text style={[displayFont(23, '800'), { color: texteCouleur, lineHeight: 26 }]}>{banniere.titre}</Text>
-          {banniere.sous_titre ? (
+        </Animated.View>
+
+        {/* Sous-titre — arrive depuis la droite */}
+        {banniere.sous_titre ? (
+          <Animated.View style={slideFrom(subAnim, 'right', CARD_W * 0.6)}>
             <Text style={[bodyFont(12, '600'), { color: hexToRgba(texteCouleur, 0.75), marginTop: 6 }]}>
               {banniere.sous_titre}
             </Text>
-          ) : null}
-        </Animated.View>
+          </Animated.View>
+        ) : null}
 
-        {/* Bouton « Commander » — animé : descend vers le bas — visible seulement si un plat est relié */}
+        {/* Bouton « Commander » — monte depuis le bas avec un léger rebond —
+            visible seulement si un plat est relié */}
         {banniere.plat != null && (
-          <Animated.View
-            style={{
-              marginTop: 12,
-              opacity: btnAnim,
-              transform: [{ translateY: btnAnim.interpolate({ inputRange: [0, 1], outputRange: [-18, 0] }) }],
-            }}
-          >
+          <Animated.View style={[{ marginTop: 12 }, slideFrom(btnAnim, 'bottom', 70)]}>
             <PressableScale onPress={() => router.push(`/dish/${banniere.plat}`)}>
               <View style={[styles.cta, { backgroundColor: banniere.bouton_fond_couleur }]}>
                 <Text style={[bodyFont(13, '800'), { color: banniere.bouton_texte_couleur }]}>Commander</Text>

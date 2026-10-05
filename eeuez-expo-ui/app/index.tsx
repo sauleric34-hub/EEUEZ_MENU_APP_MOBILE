@@ -13,7 +13,8 @@ import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { LogoMark } from '../components/Logo';
-import { AccentButton, PressableScale, displayFont, bodyFont } from '../components/ui';
+import { NgAfricaCredit } from '../components/NgAfricaCredit';
+import { AccentButton, PressableScale, bodyFont } from '../components/ui';
 
 import { DEMO } from '../constants/demo';
 
@@ -121,8 +122,7 @@ export default function SplashScreen() {
             <View style={[styles.logoGlow, glow(Brand.accent, 30)]}>
               <LogoMark size={128} radius={34} />
             </View>
-            <Text style={[displayFont(30, '800'), { color: colors.text, marginTop: 22 }]}>Menu</Text>
-            <Text style={[bodyFont(13.5, '500'), styles.subtitle, { color: colors.muted }]}>
+            <Text style={[bodyFont(13.5, '500'), styles.subtitle, { color: colors.muted, marginTop: 22 }]}>
               Les meilleurs plats africains, livrés chez vous.
             </Text>
           </Animated.View>
@@ -180,6 +180,7 @@ export default function SplashScreen() {
             </PressableScale>
           </View>
         </KeyboardAvoidingView>
+        <NgAfricaCredit style={styles.credit} />
       </SafeAreaView>
     </ScreenBg>
   );
@@ -212,6 +213,7 @@ function ErrorBanner({ message }: { message: string }) {
 const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
   logoGlow: { borderRadius: 34 },
+  credit: { paddingBottom: 12 },
   subtitle: { textAlign: 'center', maxWidth: 260, marginTop: 10 },
   form: { marginTop: 32 },
   input: {

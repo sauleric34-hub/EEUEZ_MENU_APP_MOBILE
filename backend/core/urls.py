@@ -45,6 +45,10 @@ urlpatterns = [
     path('bannieres/<int:pk>/toggle/', bannieres.banniere_toggle, name='banniere_toggle'),
     path('bannieres/<int:pk>/monter/', bannieres.banniere_move, {'direction': 'up'}, name='banniere_up'),
     path('bannieres/<int:pk>/descendre/', bannieres.banniere_move, {'direction': 'down'}, name='banniere_down'),
+    path('bannieres/zones/', bannieres.zone_list, name='zone_list'),
+    path('bannieres/zones/nouvelle/', bannieres.zone_form, name='zone_create'),
+    path('bannieres/zones/<int:pk>/', bannieres.zone_form, name='zone_edit'),
+    path('bannieres/zones/<int:pk>/supprimer/', bannieres.zone_delete, name='zone_delete'),
 
     # Finances
     path('finances/', finances.finances_view, name='finances'),
