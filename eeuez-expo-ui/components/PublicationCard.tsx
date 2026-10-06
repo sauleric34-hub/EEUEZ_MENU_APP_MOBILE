@@ -10,8 +10,14 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Image, FlatList, useWindowDimensions, Share, Animated, Pressable,
+  LayoutAnimation, Platform, UIManager,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
+
+// Active LayoutAnimation sur Android (désactivé par défaut)
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -84,6 +90,46 @@ function VideoCell({ url, largeur, actif }: { url: string; largeur: number; acti
       <VideoView player={player} style={{ width: largeur, height: largeur }} contentFit="cover" nativeControls={false} />
       {!actif && (
         <View style={styles.playBadge}><Play size={16} color="#fff" fill="#fff" strokeWidth={0} /></View>
+      )}
+    </View>
+  );
+}
+
+function ExpandableText({ texte, auteurLabel, colors }: { texte: string, auteurLabel: string | null, colors: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showMoreButton, setShowMoreButton] = useState(false);
+
+  const toggleExpand = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(prev => !prev);
+  }, []);
+
+  const onTextLayout = useCallback((e: any) => {
+    if (e.nativeEvent.lines.length > 3 && !showMoreButton) {
+      setShowMoreButton(true);
+    }
+  }, [showMoreButton]);
+
+  return (
+    <View style={styles.texteWrap}>
+      <Text
+        style={[bodyFont(13.5, '500'), styles.texte, { color: colors.text }]}
+        numberOfLines={expanded ? undefined : 3}
+        onTextLayout={onTextLayout}
+      >
+        {auteurLabel && (
+          <Text style={[bodyFont(13.5, '800'), { color: Brand.accentLight }]}>
+            {auteurLabel}{'  '}
+          </Text>
+        )}
+        {texte}
+      </Text>
+      {showMoreButton && (
+        <PressableScale onPress={toggleExpand} style={{ paddingHorizontal: 14, paddingTop: 4 }}>
+          <Text style={[bodyFont(13, '700'), { color: colors.muted }]}>
+            {expanded ? 'Voir moins' : 'Voir plus'}
+          </Text>
+        </PressableScale>
       )}
     </View>
   );
@@ -380,16 +426,12 @@ export function PublicationCard({ publication: pub, onOpenComments, actif = true
         )}
       </View>
 
-      {/* ── Texte ── */}
       {!!pub.texte && (
-        <Text style={[bodyFont(13.5, '500'), styles.texte, { color: colors.text }]}>
-          {pub.auteur_details && (
-            <Text style={[bodyFont(13.5, '800'), { color: Brand.accentLight }]}>
-              {estMoi ? 'Vous' : pub.auteur_details.pseudo}{'  '}
-            </Text>
-          )}
-          {pub.texte}
-        </Text>
+        <ExpandableText
+          texte={pub.texte}
+          auteurLabel={pub.auteur_details ? (estMoi ? 'Vous' : pub.auteur_details.pseudo) : null}
+          colors={colors}
+        />
       )}
 
       {pub.nombre_commentaires > 0 && (
@@ -438,6 +480,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 13, paddingVertical: 8, borderRadius: Radius.pill,
   },
+  texteWrap: { paddingBottom: 6 },
   texte: { paddingHorizontal: 14, paddingTop: 10, lineHeight: 19 },
   voirComs: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 14 },
 });
