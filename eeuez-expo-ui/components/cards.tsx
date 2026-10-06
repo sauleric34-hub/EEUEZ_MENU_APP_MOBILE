@@ -142,12 +142,13 @@ export function AddButton({ dishId }: { dishId: number }) {
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: pop }], width: widthAnim, height: 32 }}>
-      <LinearGradient
-        colors={[Brand.accentTop, Brand.accentBot]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} 
-        style={s.addWrapper}
-      >
+    <Animated.View style={{ transform: [{ scale: pop }] }}>
+      <Animated.View style={{ width: widthAnim, height: 32 }}>
+        <LinearGradient
+          colors={[Brand.accentTop, Brand.accentBot]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} 
+          style={s.addWrapper}
+        >
         {!exigeUnChoix && inCartQty > 0 ? (
           <View style={s.addExpandedContent}>
             <PressableScale onPress={onDec} style={s.qtyBtn}>
@@ -166,6 +167,7 @@ export function AddButton({ dishId }: { dishId: number }) {
           </PressableScale>
         )}
       </LinearGradient>
+      </Animated.View>
     </Animated.View>
   );
 }
