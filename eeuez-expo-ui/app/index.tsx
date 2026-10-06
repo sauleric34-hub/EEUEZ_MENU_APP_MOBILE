@@ -18,10 +18,11 @@ import { AccentButton, PressableScale, displayFont, bodyFont } from '../componen
 import { DEMO } from '../constants/demo';
 
 /** Écran d'accueil après connexion selon le rôle du compte. */
-function homeFor(role?: string): '/(client)' | '/(livreur)' | null {
+function homeFor(role?: string): '/(client)' | '/(livreur)' | '/(restaurant)' | null {
   if (role === 'livreur') return '/(livreur)';
+  if (role === 'restaurant') return '/(restaurant)';
   if (role === 'client' || role === undefined) return '/(client)';
-  return null; // restaurant / admin : pas d'app mobile dédiée
+  return null; // admin : pas d'app mobile dédiée
 }
 
 export default function SplashScreen() {

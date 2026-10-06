@@ -27,6 +27,9 @@ function NotificationRouter() {
         if (user?.role === 'livreur') {
           if (type === 'mission') router.push('/(livreur)');
           else if (type === 'course' || type === 'paiement') router.push('/(livreur)/gains');
+        } else if (user?.role === 'restaurant') {
+          // Nouvelle commande → KDS cuisine
+          if (type === 'commande') router.push('/(restaurant)/cuisine');
         } else if (type === 'commande') {
           router.push('/tracking');
         }
@@ -64,6 +67,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ animation: 'fade' }} />
           <Stack.Screen name="(client)" options={{ animation: 'fade' }} />
           <Stack.Screen name="(livreur)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(restaurant)" options={{ animation: 'fade' }} />
           <Stack.Screen name="mission/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="dish/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="resto/[id]" options={{ animation: 'slide_from_right' }} />
