@@ -71,17 +71,19 @@ function NavItem({ route, label, Icon, active, onPress, cartCount }: NavItemProp
   const showBadge = route === 'panier' && cartCount > 0;
 
   return (
-    <PressableScale onPress={onPress} style={styles.item} scaleTo={0.88}>
-      <View style={styles.pill}>
-        <Animated.View style={{ transform: [{ scale: bounce }] }}>
-          <Icon size={21} color={active ? Brand.accentLight : colors.faint} strokeWidth={active ? 2.5 : 2} />
-        </Animated.View>
-        {showBadge && <CartBadge count={cartCount} borderColor={colors.nav} />}
-      </View>
-      <Text style={[bodyFont(10, active ? '800' : '600'), { color: active ? Brand.accentLight : colors.faint }]}>
-        {label}
-      </Text>
-    </PressableScale>
+    <View style={styles.item}>
+      <PressableScale onPress={onPress} scaleTo={0.88} style={{ alignItems: 'center', gap: 3 }}>
+        <View style={styles.pill}>
+          <Animated.View style={{ transform: [{ scale: bounce }] }}>
+            <Icon size={21} color={active ? Brand.accentLight : colors.faint} strokeWidth={active ? 2.5 : 2} />
+          </Animated.View>
+          {showBadge && <CartBadge count={cartCount} borderColor={colors.nav} />}
+        </View>
+        <Text style={[bodyFont(10, active ? '800' : '600'), { color: active ? Brand.accentLight : colors.faint, textAlign: 'center' }]}>
+          {label}
+        </Text>
+      </PressableScale>
+    </View>
   );
 }
 
@@ -175,7 +177,6 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-around',
     paddingTop: 9,
     borderTopWidth: 1,
   },
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 9, left: 0, width: PILL_WIDTH, height: PILL_HEIGHT,
     borderRadius: Radius.pill, backgroundColor: Brand.accent + '22',
   },
-  item: { alignItems: 'center', gap: 3, flex: 1 },
+  item: { flex: 1, alignItems: 'center' },
   pill: {
     width: PILL_WIDTH, height: PILL_HEIGHT, borderRadius: Radius.pill,
     alignItems: 'center', justifyContent: 'center',

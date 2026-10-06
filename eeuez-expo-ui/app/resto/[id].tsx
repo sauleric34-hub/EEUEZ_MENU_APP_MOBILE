@@ -3,10 +3,10 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Animated, Image, Alert, Linking, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, Images, CalendarCheck, Camera } from 'lucide-react-native';
+import { ChevronLeft, Star, Check, Plus, MessageCircle, BellRing, Bike, Clock, Images, CalendarCheck, Camera, Navigation } from 'lucide-react-native';
 import { Brand, Radius, cardShadow, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { mapResto, mapPlat, formatPrice, type Resto, type Dish } from '../../data/menuData';
@@ -130,66 +130,109 @@ export default function RestoProfile() {
             </View>
           </View>
 
-          <LocalisationResto
-            nom={resto.name}
-            latitude={resto.latitude}
-            longitude={resto.longitude}
-            adresse={resto.adresse}
-          />
-
-          <View style={styles.followRow}>
+          {/* ─── Bouton Suivre + Réserver (actions primaires) ───── */}
+          <View style={styles.primaryRow}>
             <Animated.View style={{ flex: 1, transform: [{ scale: followPop }] }}>
               <PressableScale onPress={onFollow}>
                 {following ? (
-                  <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.followBtn, glow(Brand.green, 14)]}>
-                    <View style={styles.followIcon}>
+                  <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.primaryBtn, glow(Brand.green, 14)]}>
+                    <View style={styles.primaryIconRound}>
                       <BellRing size={14} color={Brand.green} strokeWidth={2.6} />
                     </View>
                     <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Abonné</Text>
                     <Check size={17} color="#fff" strokeWidth={3} />
                   </LinearGradient>
                 ) : (
-                  <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.followBtn, glow(Brand.accent, 18)]}>
-                    <View style={styles.followIcon}>
+                  <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.primaryBtn, glow(Brand.accent, 18)]}>
+                    <View style={styles.primaryIconRound}>
                       <Plus size={15} color={Brand.accent} strokeWidth={3} />
                     </View>
-                    <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Suivre ce restaurant</Text>
+                    <Text style={[bodyFont(14.5, '800'), { color: '#fff' }]}>Suivre</Text>
                   </LinearGradient>
                 )}
               </PressableScale>
             </Animated.View>
-            <PressableScale onPress={discuss}>
-              <View style={[styles.chatBtn, { backgroundColor: Brand.accent + '14', borderColor: Brand.accent + '55' }]}>
-                <MessageCircle size={20} color={Brand.accentLight} strokeWidth={2.2} />
-              </View>
-            </PressableScale>
-          </View>
 
-          {/* Galerie + Réservation (bouton masqué si le resto ne propose pas ce service) */}
-          <View style={styles.secondaryRow}>
-            <PressableScale onPress={() => router.push(`/gallery/${resto.id}`)} style={{ flex: 1 }}>
-              <View style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Images size={18} color={Brand.accentLight} strokeWidth={2.3} />
-                <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Galerie</Text>
-              </View>
-            </PressableScale>
             {resto.reservationsActives && (
               <PressableScale onPress={() => setShowReserve(true)} style={{ flex: 1 }}>
-                <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.secondaryBtn, glow(Brand.green, 12)]}>
+                <LinearGradient colors={[Brand.green, Brand.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.primaryBtn, glow(Brand.green, 12)]}>
                   <CalendarCheck size={18} color="#fff" strokeWidth={2.4} />
-                  <Text style={[bodyFont(13.5, '800'), { color: '#fff' }]}>Réserver une place</Text>
+                  <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Réserver</Text>
                 </LinearGradient>
               </PressableScale>
             )}
           </View>
 
-          {/* Contribuer : le client propose une publication au restaurant */}
-          <PressableScale onPress={() => setShowComposer(true)} style={{ marginTop: 10 }}>
-            <View style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: Brand.accent + '66' }]}>
-              <Camera size={18} color={Brand.accentLight} strokeWidth={2.3} />
-              <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Partager une photo ou une vidéo</Text>
-            </View>
-          </PressableScale>
+          {/* ─── Actions secondaires : rangée d'icônes rondes défilable ─── */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginTop: 14 }}
+            contentContainerStyle={{ gap: 12, paddingHorizontal: 2, paddingVertical: 4 }}
+          >
+            {/* Chat */}
+            <PressableScale onPress={discuss}>
+              <View style={styles.iconPill}>
+                <View style={[styles.iconCircle, { backgroundColor: Brand.accent + '18', borderColor: Brand.accent + '50' }]}>
+                  <MessageCircle size={22} color={Brand.accentLight} strokeWidth={2.2} />
+                </View>
+                <Text style={[bodyFont(11, '700'), { color: colors.muted, textAlign: 'center' }]}>Chat</Text>
+              </View>
+            </PressableScale>
+
+            {/* Galerie */}
+            <PressableScale onPress={() => router.push(`/gallery/${resto.id}`)}>
+              <View style={styles.iconPill}>
+                <View style={[styles.iconCircle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Images size={22} color={Brand.accentLight} strokeWidth={2.2} />
+                </View>
+                <Text style={[bodyFont(11, '700'), { color: colors.muted, textAlign: 'center' }]}>Galerie</Text>
+              </View>
+            </PressableScale>
+
+            {/* Itinéraire */}
+            {resto.latitude != null && resto.longitude != null && (
+              <PressableScale onPress={async () => {
+                const lat = resto.latitude!;
+                const lon = resto.longitude!;
+                const label = encodeURIComponent(resto.name);
+                const url = Platform.select({
+                  ios: `maps://?daddr=${lat},${lon}&q=${label}`,
+                  android: `geo:${lat},${lon}?q=${lat},${lon}(${label})`,
+                  default: `https://www.openstreetmap.org/directions?to=${lat},${lon}`,
+                })!;
+                const fallback = `https://www.openstreetmap.org/directions?to=${lat},${lon}`;
+                try {
+                  if (await Linking.canOpenURL(url)) await Linking.openURL(url);
+                  else await Linking.openURL(fallback);
+                } catch { Alert.alert('Itinéraire indisponible', "Aucune app de navigation n'a pu être ouverte."); }
+              }}>
+                <View style={styles.iconPill}>
+                  <View style={[styles.iconCircle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Navigation size={22} color={Brand.accentLight} strokeWidth={2.2} />
+                  </View>
+                  <Text style={[bodyFont(11, '700'), { color: colors.muted, textAlign: 'center' }]}>Itinéraire</Text>
+                </View>
+              </PressableScale>
+            )}
+
+            {/* Partager photo/vidéo */}
+            <PressableScale onPress={() => setShowComposer(true)}>
+              <View style={styles.iconPill}>
+                <View style={[styles.iconCircle, { backgroundColor: Brand.accent + '12', borderColor: Brand.accent + '40', borderStyle: 'dashed' }]}>
+                  <Camera size={22} color={Brand.accentLight} strokeWidth={2.2} />
+                </View>
+                <Text style={[bodyFont(11, '700'), { color: colors.muted, textAlign: 'center' }]}>Partager</Text>
+              </View>
+            </PressableScale>
+          </ScrollView>
+
+          <LocalisationResto
+            nom={resto.name}
+            latitude={resto.latitude}
+            longitude={resto.longitude}
+            adresse={resto.adresse}
+          />
 
           <Text style={[displayFont(18, '700'), { color: colors.text, marginTop: 24 }]}>Ses plats</Text>
           <View style={styles.grid}>
@@ -242,20 +285,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 7,
     paddingVertical: 10, paddingHorizontal: 14, borderRadius: Radius.pill, borderWidth: 1,
   },
-  followRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  followIcon: {
+  primaryRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  primaryIconRound: {
     width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
   },
-  followBtn: {
+  primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: Radius.pill,
   },
-  chatBtn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  secondaryRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  secondaryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 13, borderRadius: Radius.pill, borderWidth: 1,
+  iconPill: { alignItems: 'center', gap: 6, width: 68 },
+  iconCircle: {
+    width: 56, height: 56, borderRadius: 28, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 14 },
   cell: { width: '47%', flexGrow: 1 },
