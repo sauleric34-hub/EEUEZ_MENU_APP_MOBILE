@@ -6,9 +6,9 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Heart, Flame, Star, Plus, Check, ChevronRight, MapPin } from 'lucide-react-native';
+import { Heart, Flame, Star, Plus, Minus, Check, ChevronRight, MapPin } from 'lucide-react-native';
 import { Brand, Radius, cardShadow } from '../constants/theme';
-import { useApp } from '../context/AppContext';
+import { useApp, cleLigne } from '../context/AppContext';
 import { formatPrice, formatKm, type Dish, type Resto } from '../data/menuData';
 import { PressableScale, DishTile, displayFont, bodyFont } from './ui';
 import { animateListChange } from '../lib/layoutAnimation';
@@ -92,54 +92,91 @@ export function DishCardGrid({ dish }: { dish: Dish }) {
 
 // ─── Bouton « + » ajouter au panier (pop + coche éphémère) ───
 export function AddButton({ dishId }: { dishId: number }) {
-  const { addToCart, dishById, restoById } = useApp();
+  const { addToCart, dishById, restoById, cart, cartInc, cartDec } = useApp();
   const router = useRouter();
   const pop = useRef(new Animated.Value(1)).current;
-  const [justAdded, setJustAdded] = React.useState(false);
+
+  const dish = dishById(dishId);
+  const exigeUnChoix = (dish?.groupesComplements ?? []).some(
+    g => g.obligatoire && g.options.length > 0,
+  );
+
+  const cle = cleLigne(dishId, []);
+  const inCartQty = cart[cle]?.qty || 0;
+
+  const widthAnim = useRef(new Animated.Value(inCartQty > 0 && !exigeUnChoix ? 84 : 32)).current;
+
+  React.useEffect(() => {
+    Animated.spring(widthAnim, {
+      toValue: inCartQty > 0 && !exigeUnChoix ? 84 : 32,
+      useNativeDriver: false,
+      speed: 40,
+      bounciness: 10,
+    }).start();
+  }, [inCartQty, exigeUnChoix]);
 
   // Ni livraison ni retrait sur place actifs pour ce restaurant → rien à
   // proposer depuis le panier (seule la réservation de table, si active,
   // reste accessible depuis la fiche restaurant).
-  const dishResto = restoById(dishById(dishId)?.restoId ?? -1);
+  const dishResto = restoById(dish?.restoId ?? -1);
   if (dishResto && !dishResto.livraisonActive && !dishResto.platsAEmporterActifs) {
     return null;
   }
 
   const onAdd = () => {
-    // Un plat qui exige un choix (accompagnement, boisson…) ne peut pas être
-    // ajouté en un clic : on ouvre sa fiche pour que le client choisisse,
-    // plutôt que de créer une ligne incomplète que la commande refuserait.
-    const dish = dishById(dishId);
-    const exigeUnChoix = (dish?.groupesComplements ?? []).some(
-      g => g.obligatoire && g.options.length > 0,
-    );
     if (exigeUnChoix) {
       router.push(`/dish/${dishId}`);
       return;
     }
-
     addToCart(dishId, 1);
-    setJustAdded(true);
+    animatePop();
+  };
+
+  const onInc = () => {
+    cartInc(cle);
+    animatePop();
+  };
+
+  const onDec = () => {
+    cartDec(cle);
+    animatePop();
+  };
+
+  const animatePop = () => {
     Animated.sequence([
-      Animated.spring(pop, { toValue: 1.35, useNativeDriver: true, speed: 50, bounciness: 16 }),
+      Animated.spring(pop, { toValue: 1.2, useNativeDriver: true, speed: 50, bounciness: 16 }),
       Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
     ]).start();
-    setTimeout(() => setJustAdded(false), 900);
   };
 
   return (
-    <PressableScale onPress={onAdd}>
-      <Animated.View style={{ transform: [{ scale: pop }] }}>
+    <Animated.View style={{ transform: [{ scale: pop }] }}>
+      <Animated.View style={{ width: widthAnim, height: 32 }}>
         <LinearGradient
-          colors={justAdded ? [Brand.green, Brand.greenDark] : [Brand.accentTop, Brand.accentBot]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.add}
+          colors={[Brand.accentTop, Brand.accentBot]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} 
+          style={s.addWrapper}
         >
-          {justAdded
-            ? <Check size={16} color="#fff" strokeWidth={3.2} />
-            : <Plus size={17} color="#fff" strokeWidth={3} />}
-        </LinearGradient>
+        {!exigeUnChoix && inCartQty > 0 ? (
+          <View style={s.addExpandedContent}>
+            <PressableScale onPress={onDec} style={s.qtyBtn}>
+              <Minus size={16} color="#fff" strokeWidth={3} />
+            </PressableScale>
+            <Text style={[displayFont(14, '700'), { color: '#fff', width: 20, textAlign: 'center' }]}>
+              {inCartQty}
+            </Text>
+            <PressableScale onPress={onInc} style={s.qtyBtn}>
+              <Plus size={16} color="#fff" strokeWidth={3} />
+            </PressableScale>
+          </View>
+        ) : (
+          <PressableScale onPress={onAdd} style={s.addCollapsedContent}>
+            <Plus size={17} color="#fff" strokeWidth={3} />
+          </PressableScale>
+        )}
+      </LinearGradient>
       </Animated.View>
-    </PressableScale>
+    </Animated.View>
   );
 }
 
@@ -187,8 +224,22 @@ const s = StyleSheet.create({
   wideFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   grid: { flex: 1, borderRadius: Radius.xl, borderWidth: 1, overflow: 'hidden' },
   gridTile: { height: 108, borderRadius: 0 },
-  add: {
-    width: 32, height: 32, borderRadius: 16,
+  addWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  addCollapsedContent: {
+    flex: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addExpandedContent: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  qtyBtn: {
+    width: 24, height: 24,
     alignItems: 'center', justifyContent: 'center',
   },
   restoRow: {
