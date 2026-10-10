@@ -28,8 +28,6 @@ import { fetchFeed } from '../../services/publications';
 import type { PublicationDTO } from '../../services/dto';
 import { errorIcon } from '../../components/ErrorNotice';
 
-/** Publications montrées juste après « Près de vous » ; le reste défile sous les restaurants. */
-const PUBS_EN_TETE = 5;
 
 /** Une ligne du fil : soit une publication, soit le bloc « Restaurants ». */
 type LigneFil =
@@ -87,14 +85,13 @@ export default function HomeScreen() {
     await chargerFeed(true);
   };
 
-  // Le fil est une seule liste : 5 publications, le bloc « Restaurants »,
-  // puis la suite. Tout étant item, la détection de visibilité couvre chaque
-  // publication (impossible dans un ListHeaderComponent).
-  const lignes = useMemo<LigneFil[]>(() => {
-    const debut: LigneFil[] = pubs.slice(0, PUBS_EN_TETE).map(p => ({ type: 'pub', pub: p }));
-    const suite: LigneFil[] = pubs.slice(PUBS_EN_TETE).map(p => ({ type: 'pub', pub: p }));
-    return [...debut, { type: 'restos' }, ...suite];
-  }, [pubs]);
+  // Le fil est une seule liste : le bloc « Restaurants » (juste après
+  // « Pour vous »), puis les publications. Tout étant item, la détection de
+  // visibilité couvre chaque publication (impossible dans un ListHeaderComponent).
+  const lignes = useMemo<LigneFil[]>(() => [
+    { type: 'restos' },
+    ...pubs.map(p => ({ type: 'pub' as const, pub: p })),
+  ], [pubs]);
 
   // ─── Lecture vidéo : seule la publication qui occupe l'écran est lue ──
   const [pubActive, setPubActive] = useState<number | null>(null);
@@ -207,13 +204,10 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* Le fil commence ici — les publications sont des items de la liste,
-              pour que la détection de visibilité (lecture vidéo) les couvre. */}
-          {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
         </>
-  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres, dataLoading, router]);
+  ), [colors, mode, firstName, categories, forYou, positionUsed, bannieres, dataLoading, router]);
 
-  /** Bloc « Restaurants » : intercalé dans le fil, après les 5 premières. */
+  /** Bloc « Restaurants » : premier item du fil, juste après « Pour vous ». */
   const SectionRestaurants = useCallback(() => (
     <>
       <SectionTitle title="Restaurants" colors={colors} />
@@ -239,9 +233,11 @@ export default function HomeScreen() {
           )}
         </View>
       )}
-      <SectionTitle title="Dans votre communauté" colors={colors} />
+      {/* Les publications suivent dans le fil (items de la liste, pour que
+          la détection de visibilité — lecture vidéo — les couvre). */}
+      {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
     </>
-  ), [colors, restoList, router, dataLoading]);
+  ), [colors, restoList, dataLoading, pubs.length]);
 
   // Écran de repli — placé après tous les hooks. Le chargement initial du
   // catalogue reste dans le flux normal (squelettes par section, cf. EnTete /
