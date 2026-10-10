@@ -1,0 +1,26 @@
+{# Actions de modération d'une publication (paramètres : pub, compact) #}
+{% if pub.supprime_par %}
+  <form method="post" action="{% url 'core:admin_publications' %}">{% csrf_token %}
+    <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+    <input type="hidden" name="action" value="restaurer">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn btn-amber btn-sm" title="Rendre de nouveau visible">↺{% if not compact %} Restaurer{% endif %}</button>
+  </form>
+{% else %}
+  <form method="post" action="{% url 'core:admin_publications' %}"
+        data-confirmer="Masquer la publication #{{ pub.pk }} ?"
+        data-detail="Elle disparaît de l'application mais reste en base : vous pourrez la restaurer à tout moment.">{% csrf_token %}
+    <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+    <input type="hidden" name="action" value="masquer">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn btn-secondary btn-sm" title="Masquer (réversible)">⊘{% if not compact %} Masquer{% endif %}</button>
+  </form>
+{% endif %}
+<form method="post" action="{% url 'core:admin_publications' %}"
+      data-confirmer="Détruire définitivement la publication #{{ pub.pk }} ?"
+      data-detail="La publication, ses médias et ses commentaires sont effacés de la base, et les points gagnés par l'auteur lui sont retirés. Cette action est irréversible."
+      data-irreversible="1">{% csrf_token %}
+  <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+  <input type="hidden" name="action" value="supprimer_definitivement">
+  <button class="btn btn-danger btn-sm" title="Supprimer définitivement">✕{% if not compact %} Détruire{% endif %}</button>
+</form>

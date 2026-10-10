@@ -1,0 +1,41 @@
+{# Fenêtre de confirmation des actions de modération (remplace confirm()).
+   Les actions irréversibles exigent de cocher une case explicite. #}
+<div class="md-modal" id="mdModal" role="dialog" aria-modal="true">
+  <div class="glass-card md-modal-boite">
+    <div class="md-modal-ico" id="mdModalIco">⊘</div>
+    <h3 id="mdModalTitre"></h3>
+    <p id="mdModalTexte"></p>
+    <label class="md-coche" id="mdCoche"><input type="checkbox" id="mdCocheInput"> Je comprends que cette action est irréversible</label>
+    <div class="md-modal-boutons">
+      <button type="button" class="btn btn-secondary" id="mdNon">Annuler</button>
+      <button type="button" class="btn btn-danger" id="mdOui">Confirmer</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('mdModal'), cible = null;
+  var oui = document.getElementById('mdOui'), coche = document.getElementById('mdCocheInput');
+  document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f._ok) return;
+      e.preventDefault(); cible = f;
+      var irreversible = !!f.dataset.irreversible;
+      document.getElementById('mdModalTitre').textContent = f.dataset.confirmer;
+      document.getElementById('mdModalTexte').textContent = f.dataset.detail || '';
+      document.getElementById('mdModalIco').textContent = irreversible ? '✕' : '⊘';
+      document.getElementById('mdCoche').style.display = irreversible ? 'flex' : 'none';
+      coche.checked = false;
+      oui.disabled = irreversible;
+      oui.textContent = irreversible ? 'Détruire définitivement' : 'Confirmer';
+      modal.classList.add('ouvert');
+    });
+  });
+  coche.addEventListener('change', function () { oui.disabled = !coche.checked; });
+  function fermer() { modal.classList.remove('ouvert'); cible = null; }
+  document.getElementById('mdNon').onclick = fermer;
+  modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.classList.contains('ouvert')) fermer(); });
+  oui.onclick = function () { if (cible && !oui.disabled) { cible._ok = true; cible.submit(); } };
+})();
+</script>

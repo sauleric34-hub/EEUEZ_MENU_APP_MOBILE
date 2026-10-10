@@ -2,8 +2,65 @@
 {% block title %}Publication #{{ pub.pk }} — Administration{% endblock %}
 {% block topbar_title %}Publication #{{ pub.pk }}{% endblock %}
 
+{% block extra_css %}
+{% include 'admin_panel/publications/_moderation_css.html' %}
+<style>
+  .pd { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px; align-items:start; }
+  .pd-visionneuse { padding:14px; }
+  .pd-scene { position:relative; border-radius:16px; overflow:hidden; background:#000; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; }
+  .pd-scene img, .pd-scene video { max-width:100%; max-height:100%; width:100%; height:100%; object-fit:contain; display:block; }
+  .pd-scene .pd-fleche { position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border-radius:50%; border:none; cursor:pointer;
+                         background:rgba(255,255,255,.9); color:#111; font-size:1.2rem; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .pd-scene .pd-fleche.g { left:12px; } .pd-scene .pd-fleche.d { right:12px; }
+  .pd-scene .pd-compte { position:absolute; top:12px; right:12px; z-index:2; font-size:.74rem; font-weight:800; color:#fff; padding:4px 10px; border-radius:999px; background:rgba(0,0,0,.55); }
+  .pd-scene .pd-hd { position:absolute; bottom:12px; right:12px; z-index:2; font-size:.74rem; font-weight:700; color:#fff; padding:6px 11px; border-radius:10px;
+                     background:rgba(0,0,0,.55); text-decoration:none; }
+  .pd-media { display:none; width:100%; height:100%; }
+  .pd-media.actif { display:flex; align-items:center; justify-content:center; animation:pdFondu .25s ease; }
+  @keyframes pdFondu { from { opacity:.3; } }
+  .pd-miniatures { display:flex; gap:8px; margin-top:10px; overflow-x:auto; padding-bottom:2px; }
+  .pd-mini { flex:0 0 64px; height:64px; border-radius:10px; overflow:hidden; border:2px solid transparent; cursor:pointer; background:var(--bg-tertiary);
+             display:flex; align-items:center; justify-content:center; color:var(--text-secondary); padding:0; }
+  .pd-mini img { width:100%; height:100%; object-fit:cover; }
+  .pd-mini.actif { border-color:var(--accent-orange); }
+  .pd-sans-media { padding:40px 24px; text-align:center; color:var(--text-muted); font-style:italic; }
+  .pd-texte { padding:6px 4px 2px; color:var(--text-secondary); line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+
+  .pd-panneau { position:sticky; top:calc(var(--topbar-height, 64px) + 16px); display:flex; flex-direction:column; gap:14px; }
+  .pd-bloc { padding:16px 18px; }
+  .pd-bloc h3 { font-size:.72rem; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); font-weight:800; margin-bottom:10px; }
+  .pd-ligne { display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:.85rem; color:var(--text-secondary); }
+  .pd-ligne b { color:var(--text-primary); text-align:right; }
+  .pd-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .pd-stat { padding:12px; border-radius:12px; background:var(--bg-tertiary); text-align:center; }
+  .pd-stat b { display:block; font-size:1.3rem; color:var(--text-primary); } .pd-stat span { font-size:.72rem; color:var(--text-muted); font-weight:600; }
+  .pd-auteur { display:flex; align-items:center; gap:12px; }
+  .pd-auteur .md-av { width:42px; height:42px; font-size:1rem; }
+  .pd-auteur b { display:block; color:var(--text-primary); } .pd-auteur span { font-size:.78rem; color:var(--text-muted); }
+  .pd-actions { display:flex; flex-direction:column; gap:8px; }
+  .pd-actions form, .pd-actions .btn { width:100%; }
+  .pd-actions .btn { justify-content:center; }
+
+  .pd-coms { padding:18px; margin-top:20px; }
+  .pd-coms-tete { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .pd-coms-tete h2 { font-size:1rem; color:var(--text-primary); }
+  .pd-coms-tete label { margin-left:auto; font-size:.8rem; color:var(--text-secondary); display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .pd-com { display:flex; gap:11px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .pd-com:last-child { border-bottom:none; }
+  .pd-com.masque { opacity:.5; }
+  .pd-com .md-av { width:32px; height:32px; font-size:.78rem; }
+  .pd-com-txt { flex:1; min-width:0; }
+  .pd-com-txt .nom { font-weight:700; font-size:.85rem; color:var(--text-primary); }
+  .pd-com-txt .nom small { font-weight:500; color:var(--text-muted); font-size:.75rem; margin-left:6px; }
+  .pd-com-txt p { color:var(--text-secondary); font-size:.86rem; margin-top:3px; white-space:pre-wrap; word-break:break-word; }
+  .pd-com .btn { align-self:flex-start; }
+  body.cacher-masques .pd-com.masque { display:none; }
+  @media (max-width: 1100px) { .pd { grid-template-columns:1fr; } .pd-panneau { position:static; } }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="breadcrumb">
+<div class="breadcrumb anim-fade-up">
   <a href="{% url 'core:admin_publications' %}">Publications</a>
   <span class="breadcrumb-sep">/</span>
   <span class="breadcrumb-current">#{{ pub.pk }}</span>
@@ -12,102 +69,144 @@
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title gradient-text">{{ pub.restaurant.nom|default:"Restaurant supprimé" }}</h1>
-    <p class="page-subtitle">
-      {% if pub.auteur %}
-        Contribution de @{{ pub.auteur.get_full_name|default:pub.auteur.username }}
-        ({{ pub.auteur.email }}) · {{ pub.auteur.points_solde }} points
-      {% else %}
-        Publication du restaurant
-      {% endif %}
-      · {{ pub.created_at|date:"d/m/Y H:i" }}
-    </p>
+    <p class="page-subtitle">Publication #{{ pub.pk }} · {{ pub.created_at|date:"d/m/Y à H:i" }} (il y a {{ pub.created_at|timesince }})</p>
   </div>
-  <div style="margin-left:auto;">
-    {% if pub.supprime_par %}
-      <span class="badge badge-red">Supprimée par {{ pub.supprime_par }}{% if pub.supprime_le %} le {{ pub.supprime_le|date:"d/m/Y" }}{% endif %}</span>
-    {% elif pub.statut == 'publiee' %}
-      <span class="badge badge-green">Visible</span>
-    {% else %}
-      <span class="badge badge-amber">{{ pub.get_statut_display }}</span>
-    {% endif %}
-  </div>
+  <div style="margin-left:auto;">{% include 'admin_panel/publications/_etat.html' %}</div>
 </div>
 
-<div class="grid-2" style="gap:18px;align-items:start;">
-  <div class="glass-card anim-fade-up" style="padding:22px;">
-    <h2 class="section-title">Contenu</h2>
-    <p style="color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;">{{ pub.texte|default:"(aucun texte)" }}</p>
-
-    {% if pub.plat %}
-      <div class="stat-row" style="margin-top:16px;">
-        <span class="stat-row-label">Plat associé</span>
-        <span class="stat-row-value">{{ pub.plat.nom }} — {{ pub.plat.prix }} F</span>
-      </div>
-    {% endif %}
-
-    {% if medias %}
-      <h3 class="section-title" style="margin-top:22px;">Médias ({{ medias|length }})</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+<div class="pd">
+  <div>
+    <div class="glass-card pd-visionneuse anim-fade-up">
+      {% if medias %}
+      <div class="pd-scene" id="pdScene">
         {% for m in medias %}
-          <div style="position:relative;border-radius:var(--radius);overflow:hidden;background:var(--bg-tertiary);">
+          <div class="pd-media {% if forloop.first %}actif{% endif %}">
             {% if m.type == 'video' %}
-              {# controls : sans eux, la modération voyait une image figée sans
-                 pouvoir visionner la vidéo — donc sans pouvoir la modérer. #}
-              <video src="{{ m.fichier.url }}" controls playsinline preload="metadata"
-                     style="width:100%;height:190px;object-fit:contain;background:#000;display:block;"></video>
-              <span class="badge badge-blue" style="position:absolute;top:8px;left:8px;pointer-events:none;">▶ Vidéo</span>
+              {# controls : indispensable pour visionner (et donc modérer) une vidéo #}
+              <video src="{{ m.fichier.url }}" controls playsinline preload="metadata"></video>
             {% else %}
-              {# L'aperçu s'affiche vite ; le lien ouvre l'original en pleine
-                 résolution, nécessaire pour juger un détail litigieux. #}
-              <a href="{{ m.fichier.url }}" target="_blank" rel="noopener noreferrer" title="Ouvrir en taille réelle">
-                <img src="{{ m.url_affichage }}" alt=""
-                     style="width:100%;height:190px;object-fit:cover;display:block;">
-              </a>
-              <span class="badge badge-gray" style="position:absolute;top:8px;left:8px;pointer-events:none;">Photo</span>
+              <img src="{{ m.url_affichage }}" alt="">
             {% endif %}
           </div>
         {% endfor %}
+        {% if medias|length > 1 %}
+          <span class="pd-compte"><span id="pdIndex">1</span> / {{ medias|length }}</span>
+          <button type="button" class="pd-fleche g" data-sens="-1" aria-label="Précédent">‹</button>
+          <button type="button" class="pd-fleche d" data-sens="1" aria-label="Suivant">›</button>
+        {% endif %}
+        <a class="pd-hd" id="pdHd" href="{{ medias.0.fichier.url }}" target="_blank" rel="noopener noreferrer">Taille réelle ↗</a>
       </div>
-    {% endif %}
-  </div>
+      {% if medias|length > 1 %}
+      <div class="pd-miniatures">
+        {% for m in medias %}
+          <button type="button" class="pd-mini {% if forloop.first %}actif{% endif %}" data-i="{{ forloop.counter0 }}" data-hd="{{ m.fichier.url }}">
+            {% if m.type == 'video' %}▶{% else %}<img src="{{ m.url_affichage }}" alt="">{% endif %}
+          </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="pd-sans-media">Publication sans photo ni vidéo</div>
+      {% endif %}
+      {% if pub.texte %}<div class="pd-texte" style="margin-top:14px;">{{ pub.texte }}</div>{% endif %}
+    </div>
 
-  <div class="glass-card anim-fade-up" style="padding:22px;">
-    <h2 class="section-title">Commentaires ({{ commentaires|length }})</h2>
-    {% for c in commentaires %}
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:0.85rem;">
-            {{ c.auteur.get_full_name|default:c.auteur.username|default:"Utilisateur supprimé" }}
-            <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">· {{ c.created_at|date:"d/m/Y H:i" }}</span>
+    <div class="glass-card pd-coms anim-fade-up">
+      <div class="pd-coms-tete">
+        <h2>Commentaires · {{ nb_commentaires_actifs }}</h2>
+        {% if commentaires|length != nb_commentaires_actifs %}
+        <label><input type="checkbox" id="pdMasques" checked> Afficher les commentaires masqués</label>
+        {% endif %}
+      </div>
+      {% for c in commentaires %}
+        <div class="pd-com {% if c.supprime_par %}masque{% endif %}">
+          {% if c.auteur %}{% firstof c.auteur.get_full_name c.auteur.username as nom_com %}{% else %}{% firstof 'Utilisateur supprimé' as nom_com %}{% endif %}
+          <span class="md-av">{{ nom_com|first|upper }}</span>
+          <div class="pd-com-txt">
+            <div class="nom">{{ nom_com }}<small>{{ c.created_at|date:"d/m/Y H:i" }}</small>
+              {% if c.supprime_par %}<span class="badge badge-gray" style="margin-left:6px;">{{ c.get_supprime_par_display }}</span>{% endif %}</div>
+            <p>{{ c.texte }}</p>
           </div>
-          <div style="color:var(--text-secondary);font-size:0.88rem;margin-top:4px;white-space:pre-wrap;">{{ c.texte }}</div>
+          {% if not c.supprime_par %}
+          <form method="post" action="{% url 'core:admin_publications' %}"
+                data-confirmer="Masquer ce commentaire ?" data-detail="Il ne sera plus visible dans l'application.">{% csrf_token %}
+            <input type="hidden" name="commentaire_id" value="{{ c.pk }}">
+            <input type="hidden" name="action" value="supprimer_commentaire">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="btn btn-secondary btn-sm" title="Masquer le commentaire">⊘</button>
+          </form>
+          {% endif %}
         </div>
-        <form method="post" action="{% url 'core:admin_publications' %}"
-              onsubmit="return confirm('Supprimer ce commentaire ?');">
-          {% csrf_token %}
-          <input type="hidden" name="commentaire_id" value="{{ c.pk }}">
-          <input type="hidden" name="action" value="supprimer_commentaire">
-          <button class="btn btn-danger btn-sm" style="padding:4px 9px;">✕</button>
-        </form>
-      </div>
-    {% empty %}
-      <div class="empty-state" style="padding:24px 0;">Aucun commentaire.</div>
-    {% endfor %}
+      {% empty %}
+        <div class="md-vide" style="padding:26px 0;"><b>Aucun commentaire</b></div>
+      {% endfor %}
+    </div>
   </div>
+
+  <aside class="pd-panneau">
+    <div class="glass-card pd-bloc">
+      <h3>Auteur</h3>
+      {% if pub.auteur %}
+      <div class="pd-auteur">
+        <span class="md-av">{{ pub.auteur.first_name|default:pub.auteur.username|first|upper }}</span>
+        <div><b>{% firstof pub.auteur.get_full_name pub.auteur.username %}</b><span>{{ pub.auteur.email }}</span></div>
+      </div>
+      <div class="pd-ligne" style="margin-top:8px;"><span>Points fidélité</span><b>{{ pub.auteur.points_solde }} pts</b></div>
+      {% else %}
+      <div class="pd-ligne"><span>Publiée par</span><b>Le restaurant</b></div>
+      {% endif %}
+    </div>
+
+    <div class="glass-card pd-bloc">
+      <h3>Engagement</h3>
+      <div class="pd-stats">
+        <div class="pd-stat"><b>{{ nb_likes }}</b><span>j'aime</span></div>
+        <div class="pd-stat"><b>{{ nb_commentaires_actifs }}</b><span>commentaires</span></div>
+      </div>
+    </div>
+
+    <div class="glass-card pd-bloc">
+      <h3>Détails</h3>
+      <div class="pd-ligne"><span>Restaurant</span><b>{{ pub.restaurant.nom|default:"—" }}</b></div>
+      <div class="pd-ligne"><span>Plat associé</span><b>{% if pub.plat %}{{ pub.plat.nom }} · {{ pub.plat.prix|floatformat:0 }} F{% else %}—{% endif %}</b></div>
+      <div class="pd-ligne"><span>Statut</span><b>{{ pub.get_statut_display }}</b></div>
+      {% if pub.supprime_par %}<div class="pd-ligne"><span>{{ pub.get_supprime_par_display }}</span><b>{{ pub.supprime_le|date:"d/m/Y H:i"|default:"—" }}</b></div>{% endif %}
+    </div>
+
+    <div class="glass-card pd-bloc">
+      <h3>Modération</h3>
+      <div class="pd-actions">{% include 'admin_panel/publications/_actions.html' with compact=False %}</div>
+      <p style="font-size:.75rem;color:var(--text-muted);margin-top:10px;line-height:1.45;">
+        « Masquer » est réversible. « Détruire » efface tout et retire les points gagnés par l'auteur.
+      </p>
+    </div>
+  </aside>
 </div>
 
-<div class="glass-card anim-fade-up" style="padding:22px;margin-top:18px;">
-  <h2 class="section-title">Zone dangereuse</h2>
-  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:14px;">
-    La suppression définitive efface la publication, ses médias et ses commentaires de la base
-    de données, et retire les points que l'auteur a gagnés grâce à elle. Elle est irréversible.
-  </p>
-  <form method="post" action="{% url 'core:admin_publications' %}"
-        onsubmit="return confirm('Supprimer DÉFINITIVEMENT la publication #{{ pub.pk }} ? Irréversible.');">
-    {% csrf_token %}
-    <input type="hidden" name="publication_id" value="{{ pub.pk }}">
-    <input type="hidden" name="action" value="supprimer_definitivement">
-    <button class="btn btn-danger">Supprimer définitivement</button>
-  </form>
-</div>
+{% include 'admin_panel/publications/_confirmation.html' %}
+
+<script>
+(function () {
+  var scene = document.getElementById('pdScene'); if (!scene) return;
+  var medias = scene.querySelectorAll('.pd-media'), minis = document.querySelectorAll('.pd-mini'), i = 0;
+  function aller(n) {
+    i = (n + medias.length) % medias.length;
+    medias.forEach(function (m, k) {
+      m.classList.toggle('actif', k === i);
+      if (k !== i) { var v = m.querySelector('video'); if (v) v.pause(); }
+    });
+    minis.forEach(function (b, k) { b.classList.toggle('actif', k === i); });
+    var idx = document.getElementById('pdIndex'); if (idx) idx.textContent = i + 1;
+    if (minis[i]) document.getElementById('pdHd').href = minis[i].dataset.hd;
+  }
+  scene.querySelectorAll('.pd-fleche').forEach(function (b) { b.addEventListener('click', function () { aller(i + (+b.dataset.sens)); }); });
+  minis.forEach(function (b) { b.addEventListener('click', function () { aller(+b.dataset.i); }); });
+  document.addEventListener('keydown', function (e) {
+    if (document.querySelector('.md-modal.ouvert')) return;
+    if (e.key === 'ArrowLeft') aller(i - 1); else if (e.key === 'ArrowRight') aller(i + 1);
+  });
+  var cb = document.getElementById('pdMasques');
+  if (cb) cb.addEventListener('change', function () { document.body.classList.toggle('cacher-masques', !cb.checked); });
+})();
+</script>
 {% endblock %}

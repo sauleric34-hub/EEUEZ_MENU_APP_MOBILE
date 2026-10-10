@@ -77,6 +77,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Clé CARTO disponible dans TOUS les gabarits (cartes Leaflet)
+                'core.context_processors.cartes',
             ],
         },
     },
@@ -277,7 +279,9 @@ PARTNER_WEBHOOK_TIMEOUT = 3  # secondes
 # Depuis 2025, CARTO exige une clé API sur ses tuiles basemaps.cartocdn.com
 # (sinon un filigrane "API KEY REQUIRED" s'affiche sur la carte). Clé gratuite
 # jusqu'à 5M requêtes/mois : https://carto.com/basemaps/apikey/
-CARTO_API_KEY = os.environ.get('CARTO_API_KEY', '')
+# Nom accepté sous les deux formes : CARTO_API_KEY ou PUBLIC_CARTO_API_KEY
+# (celle qu'utilise le .env, partagée avec l'app Expo).
+CARTO_API_KEY = (os.environ.get('CARTO_API_KEY') or os.environ.get('PUBLIC_CARTO_API_KEY') or '').strip()
 
 # ─── E-mail (boîte menu@cambus.cm, cPanel) ──────────────────────────────────
 # SMTP uniquement (envoi) : rien dans ce backend ne relève le courrier entrant

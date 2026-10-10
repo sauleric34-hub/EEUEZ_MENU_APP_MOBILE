@@ -1,0 +1,6 @@
+{# Badge d'état d'une publication (paramètre : pub) #}
+{% if pub.supprime_par == 'admin' %}<span class="badge badge-red">Masquée (admin)</span>
+{% elif pub.supprime_par %}<span class="badge badge-red">Supprimée ({{ pub.supprime_par }})</span>
+{% elif pub.statut == 'publiee' %}<span class="badge badge-green">Visible</span>
+{% elif pub.statut == 'en_attente' %}<span class="badge badge-amber">En attente</span>
+{% else %}<span class="badge badge-gray">{{ pub.get_statut_display }}</span>{% endif %}

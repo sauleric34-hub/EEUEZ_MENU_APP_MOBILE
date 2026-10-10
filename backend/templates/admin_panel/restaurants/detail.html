@@ -97,11 +97,11 @@
   <!-- Plats -->
   <div class="glass-card" style="padding:0;overflow:hidden;">
     <div class="table-header"><div class="chart-title">Menu ({{ plats.count }} plats)</div>
-      <a href="{% url 'core:dish_list' %}?restaurant={{ restaurant.pk }}" class="btn btn-secondary btn-sm">Voir tout</a>
+      <a href="{% url 'core:dish_list' %}?restaurant={{ restaurant.pk }}" class="btn btn-secondary btn-sm">Voir les {{ plats.count }} plats</a>
     </div>
     {% if plats %}
     <table>
-      <thead><tr><th>Plat</th><th>Prix</th><th>Dispo</th><th>Visible</th></tr></thead>
+      <thead><tr><th>Plat</th><th>Prix</th><th>Dispo</th><th>Visible</th><th style="text-align:right;">Actions</th></tr></thead>
       <tbody>
         {% for plat in plats|slice:":8" %}
         <tr>
@@ -109,6 +109,10 @@
           <td style="color:var(--accent-green);">{{ plat.prix|floatformat:0 }} F</td>
           <td>{% if plat.is_available %}<span class="badge badge-green">Oui</span>{% else %}<span class="badge badge-red">Non</span>{% endif %}</td>
           <td>{% if plat.is_visible %}<span class="badge badge-blue">Visible</span>{% else %}<span class="badge badge-gray">Masqué</span>{% endif %}</td>
+          <td style="text-align:right;white-space:nowrap;">
+            <a href="{% url 'core:dish_detail' plat.pk %}" class="btn btn-secondary btn-sm">Voir</a>
+            <a href="{% url 'core:dish_edit' plat.pk %}" class="btn btn-primary btn-sm">✎ Modifier</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

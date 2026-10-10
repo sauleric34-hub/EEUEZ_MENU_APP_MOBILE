@@ -1,0 +1,21 @@
+<style>
+  .md-av { width:22px; height:22px; border-radius:50%; background:var(--accent-blue-dim); color:var(--accent-blue); font-size:.66rem; font-weight:800;
+           display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .md-auteur { display:inline-flex; align-items:center; gap:7px; font-size:.78rem; font-weight:600; color:var(--accent-blue); }
+  .md-auteur-resto { color:var(--text-muted); font-weight:600; }
+  .md-vide { text-align:center; padding:56px 20px; }
+  .md-vide .ico { font-size:2.4rem; margin-bottom:10px; }
+  .md-vide b { display:block; color:var(--text-primary); }
+  .md-modal { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; padding:20px; }
+  .md-modal.ouvert { display:flex; }
+  .md-modal-boite { max-width:420px; width:100%; padding:24px; text-align:center; animation:mdBoite .25s cubic-bezier(.2,1.2,.4,1); }
+  @keyframes mdBoite { from { transform:scale(.92); opacity:0; } }
+  .md-modal-ico { width:54px; height:54px; border-radius:16px; margin:0 auto 12px; display:flex; align-items:center; justify-content:center;
+                  font-size:1.4rem; background:var(--accent-red-dim); color:var(--accent-red); }
+  .md-modal h3 { color:var(--text-primary); font-size:1.05rem; }
+  .md-modal p { color:var(--text-secondary); font-size:.86rem; margin-top:6px; line-height:1.5; }
+  .md-coche { display:flex; align-items:center; gap:8px; justify-content:center; margin-top:14px; font-size:.82rem; color:var(--text-primary); font-weight:600; cursor:pointer; }
+  .md-modal-boutons { display:flex; gap:10px; margin-top:18px; }
+  .md-modal-boutons .btn { flex:1; justify-content:center; }
+  .md-modal-boutons .btn[disabled] { opacity:.45; cursor:not-allowed; }
+</style>
