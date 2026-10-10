@@ -10,10 +10,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Search, SlidersHorizontal, Bell, Sun, Moon, Star } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Bell, Sun, Moon } from 'lucide-react-native';
 import { Brand, Radius, hexToRgba } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { formatKm } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
 import { LogoMark } from '../../components/Logo';
 import {
@@ -21,7 +20,7 @@ import {
   AccentButton, displayFont, bodyFont,
 } from '../../components/ui';
 import { SkeletonBlock } from '../../components/Skeleton';
-import { DishCarousel } from '../../components/cards';
+import { DishCarousel, RestoFloatCard } from '../../components/cards';
 import { PromoBanner } from '../../components/PromoBanner';
 import { PublicationCard } from '../../components/PublicationCard';
 import { fetchFeed } from '../../services/publications';
@@ -216,26 +215,13 @@ export default function HomeScreen() {
       {dataLoading && !restoList.length ? (
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonBlock key={i} width={150} height={140} radius={22} colors={colors} />
+            <SkeletonBlock key={i} width={156} height={196} radius={22} colors={colors} />
           ))}
         </View>
       ) : (
         <View style={{ position: 'relative' }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 2, paddingHorizontal: 2, paddingRight: 28 }}>
-            {restoList.map(r => (
-              <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
-                <View style={[styles.restoMini, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <DishTile Icon={r.icon} grad={r.grad} image={r.image} iconSize={34} radius={16} style={{ height: 80 }} />
-                  <Text numberOfLines={1} style={[displayFont(14.5, '700'), { color: colors.text, marginTop: 10 }]}>{r.name}</Text>
-                  <View style={[styles.row, { gap: 4, marginTop: 3 }]}>
-                    <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                    <Text numberOfLines={1} style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
-                      {r.rating} · {r.distanceKm != null ? formatKm(r.distanceKm) : r.cuisine}
-                    </Text>
-                  </View>
-                </View>
-              </PressableScale>
-            ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 6, paddingHorizontal: 2, paddingRight: 28 }}>
+            {restoList.map((r, i) => <RestoFloatCard key={r.id} resto={r} index={i} />)}
           </ScrollView>
           {/* Dégradé de bord discret : signale qu'il y a plus à découvrir en scrollant. */}
           {restoList.length > 2 && (
@@ -309,6 +295,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 11, borderRadius: Radius.pill, borderWidth: 1,
   },
   cat: { width: 78, alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1 },
-  restoMini: { width: 150, padding: 14, borderRadius: 22, borderWidth: 1 },
   edgeFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 32 },
 });

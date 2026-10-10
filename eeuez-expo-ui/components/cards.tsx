@@ -348,6 +348,68 @@ export function AddButton({ dishId }: { dishId: number }) {
   );
 }
 
+// ─── Carte restaurant « logo flottant » (accueil) ─────────────
+// Couverture en fond, logo rond qui déborde du bord et lévite doucement.
+const RESTO_W = 156;
+const LOGO = 64;
+const COVER_H = 74;
+
+export function RestoFloatCard({ resto, index = 0 }: { resto: Resto; index?: number }) {
+  const { colors } = useApp();
+  const router = useRouter();
+
+  // Lévitation : monte et redescend en boucle, décalée d'une carte à l'autre
+  const float = useSharedValue(0);
+  useEffect(() => {
+    float.value = withDelay(index * 260, withRepeat(withSequence(
+      withTiming(1, { duration: 1700, easing: Easing.inOut(Easing.sin) }),
+      withTiming(0, { duration: 1700, easing: Easing.inOut(Easing.sin) }),
+    ), -1));
+    return () => cancelAnimation(float);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const logoStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -5 * float.value }] }));
+  const shadowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(float.value, [0, 1], [0.45, 0.2]),
+    transform: [{ scaleX: interpolate(float.value, [0, 1], [1, 0.75]) }],
+  }));
+
+  return (
+    <PressableScale onPress={() => router.push(`/resto/${resto.id}`)} scaleTo={0.95}>
+      <View style={[s.restoFloat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <DishTile
+          Icon={resto.icon} grad={resto.grad} image={resto.cover} iconSize={0} radius={0}
+          style={{ height: COVER_H }}
+        >
+          <LinearGradient colors={['rgba(8,12,9,0)', 'rgba(8,12,9,0.45)']} style={StyleSheet.absoluteFill} />
+        </DishTile>
+
+        {/* Ombre au sol qui se resserre quand le logo s'élève */}
+        <Reanimated.View style={[s.logoShadow, shadowStyle]} />
+        <Reanimated.View style={[s.logoWrap, { borderColor: colors.surface === '#ffffff' ? '#fff' : colors.page }, logoStyle]}>
+          <DishTile Icon={resto.icon} grad={resto.grad} image={resto.image} iconSize={26} radius={LOGO / 2} size={LOGO - 6} />
+        </Reanimated.View>
+
+        <View style={s.restoBody}>
+          <Text numberOfLines={1} style={[displayFont(14.5, '800'), { color: colors.text, textAlign: 'center' }]}>{resto.name}</Text>
+          <Text numberOfLines={1} style={[bodyFont(11, '600'), { color: colors.faint, textAlign: 'center', marginTop: 2 }]}>{resto.cuisine}</Text>
+          <View style={[s.row, s.restoMeta]}>
+            <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
+            <Text style={[bodyFont(11, '800'), { color: colors.text }]}>{resto.rating}</Text>
+            {resto.distanceKm != null && (
+              <>
+                <View style={[s.dot, { backgroundColor: colors.faint }]} />
+                <MapPin size={10.5} color={Brand.green} strokeWidth={2.5} />
+                <Text style={[bodyFont(11, '700'), { color: colors.muted }]}>{formatKm(resto.distanceKm)}</Text>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
+
 // ─── Carte restaurant (liste) ────────────────────────────────
 export function RestoCard({ resto }: { resto: Resto }) {
   const { colors } = useApp();
@@ -420,6 +482,19 @@ const s = StyleSheet.create({
     width: 24, height: 24,
     alignItems: 'center', justifyContent: 'center',
   },
+  restoFloat: { width: RESTO_W, borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
+  logoWrap: {
+    position: 'absolute', top: COVER_H - LOGO / 2, alignSelf: 'center',
+    width: LOGO, height: LOGO, borderRadius: LOGO / 2, borderWidth: 3,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  logoShadow: {
+    position: 'absolute', top: COVER_H + LOGO / 2 + 2, alignSelf: 'center',
+    width: LOGO * 0.7, height: 6, borderRadius: 3, backgroundColor: '#000',
+  },
+  restoBody: { paddingTop: LOGO / 2 + 12, paddingHorizontal: 10, paddingBottom: 12 },
+  restoMeta: { gap: 4, marginTop: 7, justifyContent: 'center' },
+  dot: { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 2 },
   restoRow: {
     flexDirection: 'row', alignItems: 'center', gap: 13,
     padding: 12, borderRadius: Radius.lg, borderWidth: 1,
