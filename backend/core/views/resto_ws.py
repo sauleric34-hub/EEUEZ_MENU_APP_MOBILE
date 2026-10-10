@@ -11,7 +11,7 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
@@ -19,13 +19,13 @@ from core.models import (
     User, RestaurantProfile, Plat, PlatImage, Categorie, Commande, Livraison,
     Conversation, Message, Favori, Abonnement, RetraitFonds, AuditLog,
     RestaurantMedia, Reservation,
-    Publication, PublicationMedia, PublicationCommentaire,
+    Publication, PublicationMedia, PublicationCommentaire, PublicationLike,
     GroupeComplement, OptionComplement, ElementInclus,
 )
 from core import fidelite
 from core.delivery import parser_bareme_livraison, remplacer_bareme_livraison
 from core.publications_utils import (
-    MAX_MEDIAS_PAR_PUBLICATION, creer_medias, valider_medias,
+    MAX_MEDIAS_PAR_PUBLICATION, MAX_TAILLE_IMAGE_MO, MAX_TAILLE_VIDEO_MO, creer_medias, valider_medias,
 )
 
 
@@ -731,21 +731,45 @@ def publications(request):
         return redirect('core:resto_publications')
 
     onglet = request.GET.get('onglet', 'publiees')
-    base = Publication.objects.du_restaurant(resto).select_related(
-        'auteur', 'plat',
-    ).prefetch_related('medias')
+    tri = request.GET.get('tri', 'recentes')
+    base = Publication.objects.du_restaurant(resto)
 
-    if onglet == 'attente':
-        liste = base.filter(statut='en_attente')
-    else:
-        liste = base.filter(statut='publiee')
+    # Compteurs annotés et commentaires préchargés : quelques requêtes pour
+    # toute la page au lieu de deux ou trois par publication.
+    commentaires_actifs = Prefetch(
+        'commentaires',
+        queryset=PublicationCommentaire.objects.filter(supprime_par='')
+        .select_related('auteur').order_by('-created_at'),
+        to_attr='commentaires_actifs',
+    )
+    liste = (
+        base.filter(statut='en_attente' if onglet == 'attente' else 'publiee')
+        .select_related('auteur', 'plat')
+        .prefetch_related('medias', commentaires_actifs)
+        .annotate(
+            n_likes=Count('likes', distinct=True),
+            n_commentaires=Count('commentaires', filter=Q(commentaires__supprime_par=''), distinct=True),
+        )
+    )
+    liste = liste.order_by('-n_likes', '-created_at') if tri == 'populaires' else liste.order_by('-created_at')
 
+    publiees = base.filter(statut='publiee')
+    stats = {
+        'likes': PublicationLike.objects.filter(publication__in=publiees).count(),
+        'commentaires': PublicationCommentaire.objects.filter(publication__in=publiees, supprime_par='').count(),
+    }
     return render(request, 'resto/publications.html', {
         'resto': resto,
         'publications': liste,
         'onglet': onglet,
-        'nb_publiees': base.filter(statut='publiee').count(),
+        'tri': tri,
+        'stats': stats,
+        'nb_publiees': publiees.count(),
         'nb_attente': base.filter(statut='en_attente').count(),
+        'points_contribution': fidelite.config().points_publication_validee,
+        'max_medias': MAX_MEDIAS_PAR_PUBLICATION,
+        'max_video_mo': MAX_TAILLE_VIDEO_MO,
+        'max_image_mo': MAX_TAILLE_IMAGE_MO,
         'plats': resto.plats.filter(is_visible=True).order_by('nom'),
         'active_page': 'publications',
     })

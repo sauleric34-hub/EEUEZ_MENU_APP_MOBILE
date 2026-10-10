@@ -1,165 +1,579 @@
 {% extends 'resto_base.html' %}
+{% load static %}
 {% block title %}Publications — {{ resto.nom }}{% endblock %}
 {% block topbar_title %}Publications{% endblock %}
 
+{% block extra_css %}
+<style>
+  .pb svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .pb-muted { color: var(--text-secondary); }
+
+  /* ─── Statistiques ─── */
+  .pb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .pb-stat { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--radius-lg); background: var(--bg-card);
+             border: 1px solid var(--border); box-shadow: var(--card-shadow); text-decoration: none; color: inherit; transition: var(--transition); }
+  a.pb-stat:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+  .pb-stat-ico { width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+  .pb-stat b { display: block; font-size: 1.45rem; font-weight: 800; line-height: 1.1; color: var(--text-primary); }
+  .pb-stat span { font-size: .78rem; color: var(--text-secondary); font-weight: 600; }
+  .pb-stat.alerte { border-color: rgba(245,166,35,.45); background: linear-gradient(135deg, var(--accent-amber-dim), transparent); }
+  .pb-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-amber); margin-left: 6px; animation: pbPing 1.6s infinite; vertical-align: middle; }
+  @keyframes pbPing { 0% { box-shadow: 0 0 0 0 rgba(245,166,35,.6); } 100% { box-shadow: 0 0 0 8px rgba(245,166,35,0); } }
+
+  /* ─── Éditeur + aperçu ─── */
+  .pb-edition { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; margin-bottom: 26px; }
+  .pb-carte { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--card-shadow); }
+  .pb-composer { padding: 22px; }
+  .pb-composer h2 { font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; gap: 9px; color: var(--text-primary); }
+  .pb-composer h2 .pb-chip-ico { width: 32px; height: 32px; border-radius: 10px; background: var(--accent-orange-dim); color: var(--accent-orange);
+                                  display: flex; align-items: center; justify-content: center; }
+  .pb-texte { position: relative; margin-top: 16px; }
+  .pb-texte textarea { width: 100%; min-height: 96px; resize: none; padding: 14px 16px 30px; border-radius: 14px; font: inherit; font-size: .95rem; line-height: 1.5;
+                       background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); transition: border-color .2s, box-shadow .2s; }
+  .pb-texte textarea:focus { outline: none; border-color: var(--input-border-focus); box-shadow: 0 0 0 4px var(--input-focus-ring); }
+  .pb-compteur { position: absolute; right: 12px; bottom: 10px; font-size: .72rem; font-weight: 700; color: var(--text-muted); }
+  .pb-compteur.long { color: var(--accent-amber); }
+
+  .pb-drop { margin-top: 14px; border: 2px dashed var(--input-border); border-radius: 16px; padding: 22px; text-align: center; cursor: pointer;
+             transition: border-color .2s, background .2s, transform .15s; background: var(--input-bg); }
+  .pb-drop:hover, .pb-drop.survol { border-color: var(--accent-orange); background: var(--accent-orange-dim); }
+  .pb-drop.survol { transform: scale(1.01); }
+  .pb-drop-ico { width: 48px; height: 48px; border-radius: 14px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center;
+                 background: var(--accent-orange-dim); color: var(--accent-orange); font-size: 1.4rem; }
+  .pb-drop b { color: var(--text-primary); font-size: .92rem; } .pb-drop b u { color: var(--accent-orange); text-decoration: none; }
+  .pb-drop small { display: block; margin-top: 4px; font-size: .76rem; color: var(--text-secondary); }
+  .pb-vignettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin-top: 12px; }
+  .pb-vignette { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #000; animation: pbIn .3s ease both; }
+  @keyframes pbIn { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+  .pb-vignette img, .pb-vignette video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pb-vignette .pb-x { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+                       background: rgba(0,0,0,.65); color: #fff; display: flex; align-items: center; justify-content: center; font-size: .85rem; }
+  .pb-vignette .pb-x:hover { background: var(--accent-red); }
+  .pb-vignette .pb-video { position: absolute; left: 6px; bottom: 6px; font-size: .65rem; font-weight: 800; color: #fff; background: rgba(0,0,0,.6);
+                           padding: 3px 7px; border-radius: 6px; display: flex; align-items: center; gap: 4px; }
+  .pb-vignette .pb-un { position: absolute; left: 6px; top: 6px; font-size: .62rem; font-weight: 800; color: #fff; background: var(--accent-orange); padding: 2px 6px; border-radius: 6px; }
+  .pb-erreur { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: .82rem; font-weight: 600; display: none;
+               background: var(--accent-red-dim); color: var(--accent-red); }
+
+  .pb-plat { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
+  .pb-plat-img { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; background: var(--bg-tertiary); flex-shrink: 0;
+                 display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .pb-plat select { flex: 1; padding: 12px 14px; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); font: inherit; }
+  .pb-aide { font-size: .75rem; color: var(--text-secondary); margin-top: 6px; }
+
+  .pb-pied { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .pb-pied .pb-aide { flex: 1; margin: 0; display: flex; align-items: center; gap: 6px; min-width: 200px; }
+  .pb-publier { display: inline-flex; align-items: center; gap: 8px; }
+  .pb-publier[disabled] { opacity: .5; cursor: not-allowed; }
+  .pb-progression { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 14px; display: none; }
+  .pb-progression i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-orange), var(--accent-amber)); transition: width .2s; }
+
+  /* Aperçu « téléphone » du fil */
+  .pb-apercu { position: sticky; top: calc(var(--topbar-height) + 16px); }
+  .pb-apercu-titre { display: flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; }
+  .pb-apercu-titre i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: pbPingV 1.6s infinite; }
+  @keyframes pbPingV { 0% { box-shadow: 0 0 0 0 rgba(56,161,105,.6); } 100% { box-shadow: 0 0 0 8px rgba(56,161,105,0); } }
+  .pb-tel { border-radius: 38px; padding: 10px; background: linear-gradient(145deg, #2a2f2c, #0d100e); box-shadow: 0 26px 60px rgba(0,0,0,.35); }
+  .pb-ecran { border-radius: 30px; overflow: hidden; background: #080c09; color: #f4f1ec; padding: 34px 0 16px; }
+  .pb-post-tete { display: flex; align-items: center; gap: 10px; padding: 0 14px 10px; }
+  .pb-post-tete img, .pb-post-tete .pb-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #1f8a4c; flex-shrink: 0; }
+  .pb-post-tete b { font-size: .84rem; display: block; } .pb-post-tete span { font-size: .68rem; color: rgba(244,241,236,.55); }
+  .pb-post-media { position: relative; aspect-ratio: 4/5; background: linear-gradient(135deg, #f7891b, #0f5132); display: flex; align-items: center; justify-content: center; }
+  .pb-post-media img, .pb-post-media video { width: 100%; height: 100%; object-fit: cover; animation: pbIn .35s ease; }
+  .pb-post-media .pb-vide { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.8); text-align: center; padding: 20px; }
+  .pb-post-media .pb-compte { position: absolute; top: 10px; right: 10px; font-size: .65rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.55); }
+  .pb-post-points { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 4px; }
+  .pb-post-points i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.5); }
+  .pb-post-points i:first-child { width: 14px; background: #fff; }
+  .pb-post-actions { display: flex; align-items: center; gap: 14px; padding: 10px 14px 4px; font-size: .78rem; font-weight: 700; }
+  .pb-post-actions .pb-cmd { margin-left: auto; display: none; align-items: center; gap: 5px; padding: 7px 12px; border-radius: 999px;
+                             background: linear-gradient(135deg, #f7891b, #f2611b); color: #fff; font-size: .72rem; max-width: 150px; }
+  .pb-post-actions .pb-cmd span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pb-post-texte { padding: 6px 14px 0; font-size: .8rem; line-height: 1.45; color: rgba(244,241,236,.85); word-break: break-word;
+                   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pb-post-texte b { color: #f7a03b; margin-right: 4px; }
+  .pb-post-texte.vide { color: rgba(244,241,236,.35); font-style: italic; }
+
+  /* ─── Onglets + tri ─── */
+  .pb-barre { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .pb-onglets { display: inline-flex; padding: 4px; border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border); }
+  .pb-onglets a { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 10px; font-size: .86rem; font-weight: 700;
+                  color: var(--text-secondary); text-decoration: none; transition: var(--transition); }
+  .pb-onglets a.actif { background: var(--accent-orange); color: #fff; box-shadow: var(--glow-orange); }
+  .pb-onglets a .pb-nb { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 7px; font-size: .74rem; display: flex; align-items: center; justify-content: center;
+                         background: rgba(255,255,255,.12); }
+  .pb-onglets a:not(.actif) .pb-nb { background: var(--bg-tertiary); }
+  .pb-onglets a .pb-nb.chaud { background: var(--accent-amber); color: #1a1200; }
+  .pb-tri { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--text-secondary); font-weight: 600; }
+  .pb-tri select { padding: 8px 12px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font: inherit; font-weight: 600; }
+
+  /* ─── Cartes de publication ─── */
+  .pb-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+  .pb-pub { overflow: hidden; display: flex; flex-direction: column; animation: pbIn .4s ease both; transition: transform .2s, box-shadow .2s, border-color .2s; }
+  .pb-pub:hover { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 16px 40px rgba(0,0,0,.18); }
+  .pb-pub.attente { border-color: rgba(245,166,35,.45); }
+  .pb-media { position: relative; aspect-ratio: 4/5; background: #000; }
+  .pb-media-piste { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; scroll-behavior: smooth; }
+  .pb-media-piste::-webkit-scrollbar { display: none; }
+  .pb-media-piste > * { flex: 0 0 100%; height: 100%; object-fit: cover; scroll-snap-align: start; }
+  .pb-media .pb-compte { position: absolute; top: 10px; right: 10px; font-size: .7rem; font-weight: 800; color: #fff; padding: 4px 9px;
+                         border-radius: 999px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+  .pb-media .pb-fleche { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; border: none;
+                         background: rgba(255,255,255,.88); color: #111; cursor: pointer; display: flex; align-items: center; justify-content: center;
+                         opacity: 0; transition: opacity .2s; font-size: 1rem; }
+  .pb-media:hover .pb-fleche { opacity: 1; }
+  .pb-media .pb-fleche.g { left: 10px; } .pb-media .pb-fleche.d { right: 10px; }
+  .pb-media .pb-jouer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .pb-media .pb-jouer span { width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+  .pb-media-vide { aspect-ratio: auto; height: 120px; background: linear-gradient(135deg, var(--accent-orange), #0f5132); display: flex; align-items: center;
+                   justify-content: center; color: rgba(255,255,255,.85); font-size: 2rem; }
+  .pb-corps { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .pb-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pb-badge { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 700; padding: 4px 9px; border-radius: 8px; }
+  .pb-badge .pb-av { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: .6rem; font-weight: 800;
+                     display: flex; align-items: center; justify-content: center; }
+  .pb-badge.bleu { background: var(--accent-blue-dim); color: var(--accent-blue); }
+  .pb-badge.ambre { background: var(--accent-amber-dim); color: var(--accent-amber); }
+  .pb-texte-pub { font-size: .88rem; line-height: 1.55; color: var(--text-secondary); white-space: pre-line; word-break: break-word;
+                  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pb-texte-pub.ouvert { -webkit-line-clamp: unset; display: block; }
+  .pb-plus { background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-size: .8rem; font-weight: 700; color: var(--accent-orange); align-self: flex-start; }
+  .pb-plat-chip { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; padding: 5px 10px 5px 5px; border-radius: 999px;
+                  background: var(--accent-orange-dim); color: var(--accent-orange); font-size: .78rem; font-weight: 700; }
+  .pb-plat-chip img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+  .pb-meta { display: flex; align-items: center; gap: 14px; font-size: .8rem; font-weight: 700; color: var(--text-secondary); margin-top: auto; padding-top: 4px; }
+  .pb-meta span { display: inline-flex; align-items: center; gap: 5px; }
+  .pb-meta .coeur { color: #ef4c63; } .pb-meta .bulle { color: var(--accent-blue); }
+  .pb-meta time { margin-left: auto; font-weight: 600; color: var(--text-muted); font-size: .74rem; }
+  .pb-actions { display: flex; gap: 8px; }
+  .pb-actions form { flex: 1; display: flex; }
+  .pb-actions .btn { flex: 1; justify-content: center; display: inline-flex; align-items: center; gap: 6px; }
+  .pb-btn-retirer { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); }
+  .pb-btn-retirer:hover { border-color: var(--accent-red); color: var(--accent-red); background: var(--accent-red-dim); }
+
+  .pb-coms { border-top: 1px solid var(--border); padding-top: 10px; }
+  .pb-coms summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 700; color: var(--text-secondary); }
+  .pb-coms summary::-webkit-details-marker { display: none; }
+  .pb-coms summary .pb-chev { margin-left: auto; transition: transform .2s; }
+  .pb-coms[open] summary .pb-chev { transform: rotate(180deg); }
+  .pb-com { display: flex; gap: 9px; padding: 9px 0; border-bottom: 1px dashed var(--border); animation: pbIn .25s ease both; }
+  .pb-com:last-child { border-bottom: none; }
+  .pb-com .pb-av { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-tertiary); color: var(--text-primary); font-size: .72rem; font-weight: 800;
+                   display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .pb-com-txt { flex: 1; min-width: 0; font-size: .8rem; color: var(--text-secondary); line-height: 1.45; word-break: break-word; }
+  .pb-com-txt b { color: var(--text-primary); margin-right: 4px; }
+  .pb-com-txt small { display: block; font-size: .68rem; color: var(--text-muted); margin-top: 2px; }
+  .pb-com button { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: 8px; font-size: .95rem; }
+  .pb-com button:hover { color: var(--accent-red); background: var(--accent-red-dim); }
+
+  .pb-vide-etat { text-align: center; padding: 50px 20px; }
+  .pb-vide-etat .pb-vide-ico { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+                               font-size: 1.9rem; color: var(--accent-orange); background: var(--accent-orange-dim); }
+  .pb-vide-etat b { display: block; font-size: 1rem; color: var(--text-primary); }
+  .pb-vide-etat p { margin: 6px auto 0; max-width: 380px; font-size: .86rem; color: var(--text-secondary); line-height: 1.5; }
+
+  /* Confirmation (remplace la boîte confirm() du navigateur) */
+  .pb-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 20px; }
+  .pb-modal.ouvert { display: flex; animation: pbFond .2s ease; }
+  @keyframes pbFond { from { opacity: 0; } }
+  .pb-modal-boite { width: 100%; max-width: 400px; padding: 24px; text-align: center; animation: pbBoite .25s cubic-bezier(.2,1.2,.4,1); background: var(--bg-secondary); }
+  @keyframes pbBoite { from { transform: scale(.92); opacity: 0; } }
+  .pb-modal-ico { width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center;
+                  font-size: 1.5rem; background: var(--accent-red-dim); color: var(--accent-red); }
+  .pb-modal-boite h3 { font-size: 1.05rem; color: var(--text-primary); }
+  .pb-modal-boite p { margin-top: 6px; font-size: .86rem; color: var(--text-secondary); line-height: 1.5; }
+  .pb-modal-boutons { display: flex; gap: 10px; margin-top: 20px; }
+  .pb-modal-boutons .btn { flex: 1; justify-content: center; }
+
+  @media (max-width: 1200px) { .pb-edition { grid-template-columns: 1fr; } .pb-apercu { display: none; } }
+  @media (max-width: 900px) { .pb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pb-tri { margin-left: 0; } }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="pb">
+{# Icônes (tracés type Lucide) #}
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="p-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="p-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+  <symbol id="p-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="p-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="p-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></symbol>
+  <symbol id="p-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="p-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="p-utensils" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></symbol>
+  <symbol id="p-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="p-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="p-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="p-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="p-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="p-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="p-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="p-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="p-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
+  <symbol id="p-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></symbol>
+</svg>
+
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title gradient-text">Publications</h1>
-    <p class="page-subtitle">Vos photos, vidéos et actualités — affichées dans le fil d'accueil de l'app</p>
+    <p class="page-subtitle">Vos photos, vidéos et actualités — affichées dans le fil d'accueil de l'application</p>
   </div>
 </div>
 
-<!-- Nouvelle publication -->
-<form method="post" action="{% url 'core:resto_publication_create' %}" enctype="multipart/form-data"
-      class="glass-card anim-fade-up" style="padding:22px;margin-bottom:20px;">
-  {% csrf_token %}
-  <div class="form-group">
-    <label class="form-label">Votre message</label>
-    <textarea name="texte" class="input-field" rows="3"
-              placeholder="Racontez votre plat du jour, une nouveauté, une ambiance…"></textarea>
+{# ─── Statistiques ─── #}
+<div class="pb-stats anim-fade-up">
+  <div class="pb-stat">
+    <span class="pb-stat-ico" style="background:var(--accent-orange-dim);color:var(--accent-orange);"><svg class="i"><use href="#p-image"/></svg></span>
+    <div><b>{{ nb_publiees }}</b><span>Publication{{ nb_publiees|pluralize }} en ligne</span></div>
   </div>
-  <div class="grid-2" style="gap:18px;">
-    <div class="form-group" style="margin:0;">
-      <label class="form-label">Photos / vidéos</label>
-      <input type="file" name="medias" accept="image/*,video/*" multiple class="input-field">
-      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
-        10 médias maximum · vidéo limitée à 50 Mo
-      </div>
+  <div class="pb-stat">
+    <span class="pb-stat-ico" style="background:rgba(239,76,99,.14);color:#ef4c63;"><svg class="i"><use href="#p-heart"/></svg></span>
+    <div><b>{{ stats.likes }}</b><span>J'aime reçu{{ stats.likes|pluralize }}</span></div>
+  </div>
+  <div class="pb-stat">
+    <span class="pb-stat-ico" style="background:var(--accent-blue-dim);color:var(--accent-blue);"><svg class="i"><use href="#p-chat"/></svg></span>
+    <div><b>{{ stats.commentaires }}</b><span>Commentaire{{ stats.commentaires|pluralize }}</span></div>
+  </div>
+  <a class="pb-stat {% if nb_attente %}alerte{% endif %}" href="?onglet=attente">
+    <span class="pb-stat-ico" style="background:var(--accent-amber-dim);color:var(--accent-amber);"><svg class="i"><use href="#p-inbox"/></svg></span>
+    <div><b>{{ nb_attente }}{% if nb_attente %}<span class="pb-pulse"></span>{% endif %}</b><span>Contribution{{ nb_attente|pluralize }} à valider</span></div>
+  </a>
+</div>
+
+{# ─── Nouvelle publication + aperçu ─── #}
+<div class="pb-edition">
+  <form method="post" action="{% url 'core:resto_publication_create' %}" enctype="multipart/form-data"
+        class="pb-carte pb-composer anim-fade-up" id="pbForm">
+    {% csrf_token %}
+    <h2><span class="pb-chip-ico"><svg class="i"><use href="#p-pen"/></svg></span> Nouvelle publication</h2>
+
+    <div class="pb-texte">
+      <textarea name="texte" id="pbTexte" maxlength="2000"
+                placeholder="Racontez votre plat du jour, une nouveauté, une ambiance…"></textarea>
+      <span class="pb-compteur" id="pbCompteur">0 / 2000</span>
     </div>
-    <div class="form-group" style="margin:0;">
-      <label class="form-label">Plat associé (facultatif)</label>
-      <select name="plat" class="input-select">
-        <option value="">— Aucun —</option>
-        {% for p in plats %}<option value="{{ p.pk }}">{{ p.nom }}</option>{% endfor %}
+
+    <div class="pb-drop" id="pbDrop" tabindex="0" role="button" aria-label="Ajouter des photos ou vidéos">
+      <div class="pb-drop-ico"><svg class="i"><use href="#p-upload"/></svg></div>
+      <b>Glissez vos photos et vidéos ici, ou <u>parcourez</u></b>
+      <small>JPG, PNG, WEBP · MP4, MOV — {{ max_medias }} médias max · photo {{ max_image_mo }} Mo · vidéo {{ max_video_mo }} Mo</small>
+    </div>
+    <input type="file" name="medias" id="pbFichiers" accept="image/*,video/*" multiple hidden>
+    <div class="pb-vignettes" id="pbVignettes"></div>
+    <div class="pb-erreur" id="pbErreur"></div>
+
+    <div class="pb-plat">
+      <div class="pb-plat-img" id="pbPlatImg"><svg class="i"><use href="#p-utensils"/></svg></div>
+      <select name="plat" id="pbPlat">
+        <option value="">Aucun plat associé</option>
+        {% for p in plats %}<option value="{{ p.pk }}" {% if p.image %}data-image="{{ p.image.url }}"{% endif %}>{{ p.nom }}</option>{% endfor %}
       </select>
-      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
-        Le client pourra commander ce plat en un clic depuis la publication.
-      </div>
     </div>
-  </div>
-  <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-    <button type="submit" class="btn btn-primary">Publier</button>
-    <span style="font-size:0.75rem;color:var(--text-muted);">
-      Une publication ne peut pas être modifiée après envoi — elle peut seulement être retirée.
-    </span>
-  </div>
-</form>
+    <div class="pb-aide">Avec un plat associé, le client peut le commander en un tap depuis la publication.</div>
 
-<!-- Onglets -->
-<div class="filter-bar anim-fade-up" style="margin-bottom:16px;">
-  <a href="?onglet=publiees" class="btn {% if onglet != 'attente' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
-    Publiées ({{ nb_publiees }})
-  </a>
-  <a href="?onglet=attente" class="btn {% if onglet == 'attente' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
-    Contributions en attente ({{ nb_attente }})
-  </a>
+    <div class="pb-progression" id="pbProgression"><i></i></div>
+    <div class="pb-pied">
+      <span class="pb-aide"><svg class="i"><use href="#p-lock"/></svg> Une publication ne peut plus être modifiée après envoi — seulement retirée.</span>
+      <button type="submit" class="btn btn-primary pb-publier" id="pbPublier" disabled>
+        <svg class="i"><use href="#p-send"/></svg><span>Publier</span>
+      </button>
+    </div>
+  </form>
+
+  <aside class="pb-apercu" aria-label="Aperçu dans le fil de l'application">
+    <div class="pb-apercu-titre"><i></i> Aperçu dans le fil de l'app</div>
+    <div class="pb-tel"><div class="pb-ecran">
+      <div class="pb-post-tete">
+        {% if resto.logo %}<img src="{{ resto.logo.url }}" alt="">{% else %}<div class="pb-av"></div>{% endif %}
+        <div><b>{{ resto.nom }}</b><span>À l'instant</span></div>
+      </div>
+      <div class="pb-post-media" id="pvMedia"><div class="pb-vide">Ajoutez une photo ou une vidéo pour illustrer votre publication</div></div>
+      <div class="pb-post-actions">
+        <span style="display:inline-flex;align-items:center;gap:4px;"><svg class="i" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;"><use href="#p-heart"/></svg>0</span><span style="display:inline-flex;align-items:center;gap:4px;"><svg class="i" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;"><use href="#p-chat"/></svg>0</span><span><svg class="i" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;"><use href="#p-share"/></svg></span>
+        <span class="pb-cmd" id="pvCmd"><svg class="i" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.4;"><use href="#p-cart"/></svg><span id="pvCmdNom">Commander</span></span>
+      </div>
+      <div class="pb-post-texte vide" id="pvTexte">Votre message apparaîtra ici.</div>
+    </div></div>
+  </aside>
 </div>
 
-<div class="glass-card anim-fade-up" style="padding:22px;">
-  {% if publications %}
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;">
-    {% for pub in publications %}
-    <div style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-card);">
+{# ─── Onglets + tri ─── #}
+<div class="pb-barre anim-fade-up">
+  <div class="pb-onglets">
+    <a href="?onglet=publiees&tri={{ tri }}" class="{% if onglet != 'attente' %}actif{% endif %}">Publiées <span class="pb-nb">{{ nb_publiees }}</span></a>
+    <a href="?onglet=attente&tri={{ tri }}" class="{% if onglet == 'attente' %}actif{% endif %}">Contributions à valider <span class="pb-nb {% if nb_attente %}chaud{% endif %}">{{ nb_attente }}</span></a>
+  </div>
+  <label class="pb-tri">Trier par
+    <select onchange="location.search='?onglet={{ onglet }}&tri='+this.value">
+      <option value="recentes" {% if tri != 'populaires' %}selected{% endif %}>Plus récentes</option>
+      <option value="populaires" {% if tri == 'populaires' %}selected{% endif %}>Plus aimées</option>
+    </select>
+  </label>
+</div>
 
-      <!-- Médias -->
-      {% if pub.medias.all %}
-      <div style="display:flex;overflow-x:auto;background:#000;">
-        {% for m in pub.medias.all %}
+{% if publications %}
+<div class="pb-grille">
+  {% for pub in publications %}
+  <article class="pb-carte pb-pub {% if pub.statut == 'en_attente' %}attente{% endif %}" style="animation-delay:{{ forloop.counter0|stringformat:'d' }}0ms;">
+    {% with medias=pub.medias.all %}
+    {% if medias %}
+    <div class="pb-media" data-carrousel>
+      <div class="pb-media-piste">
+        {% for m in medias %}
           {% if m.type == 'video' %}
-          <div style="position:relative;flex:0 0 100%;aspect-ratio:1;">
-            <video src="{{ m.fichier.url }}" style="width:100%;height:100%;object-fit:cover;" muted playsinline preload="metadata"></video>
-            <span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:0.7rem;padding:3px 8px;border-radius:8px;">▶ Vidéo</span>
-          </div>
+          <video src="{{ m.fichier.url }}" muted playsinline loop preload="metadata"></video>
           {% else %}
-          <img src="{{ m.fichier.url }}" style="flex:0 0 100%;aspect-ratio:1;object-fit:cover;" alt="">
+          <img src="{{ m.url_affichage }}" alt="" loading="lazy">
           {% endif %}
         {% endfor %}
       </div>
+      {% if medias|length > 1 %}
+      <span class="pb-compte"><span data-index>1</span> / {{ medias|length }}</span>
+      <button type="button" class="pb-fleche g" data-sens="-1" aria-label="Précédent"><svg class="i"><use href="#p-left"/></svg></button>
+      <button type="button" class="pb-fleche d" data-sens="1" aria-label="Suivant"><svg class="i"><use href="#p-right"/></svg></button>
+      {% endif %}
+      {% if medias.0.type == 'video' %}<div class="pb-jouer"><span><svg class="i"><use href="#p-play"/></svg></span></div>{% endif %}
+    </div>
+    {% else %}
+    <div class="pb-media-vide"><svg class="i"><use href="#p-pen"/></svg></div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="pb-corps">
+      {% if pub.auteur or pub.statut != 'publiee' %}
+      <div class="pb-badges">
+        {% if pub.auteur %}
+        {% with nom=pub.auteur.first_name|default:pub.auteur.username %}
+        <span class="pb-badge bleu"><span class="pb-av">{{ nom|first|upper }}</span> Contribution de {{ nom }}</span>
+        {% endwith %}
+        {% endif %}
+        {% if pub.statut == 'en_attente' %}<span class="pb-badge ambre">En attente de validation</span>{% endif %}
+      </div>
       {% endif %}
 
-      <div style="padding:14px;">
-        <!-- Auteur : contribution client ou publication du restaurant -->
-        {% if pub.auteur %}
-        <span class="badge badge-blue" style="margin-bottom:8px;display:inline-block;">
-          Contribution de {{ pub.auteur.first_name|default:pub.auteur.username }}
-        </span>
-        {% endif %}
-        {% if pub.statut == 'en_attente' %}
-          <span class="badge badge-amber" style="margin-bottom:8px;display:inline-block;">En attente</span>
-        {% elif pub.statut == 'refusee' %}
-          <span class="badge badge-red" style="margin-bottom:8px;display:inline-block;">Refusée</span>
-        {% endif %}
+      {% if pub.texte %}
+      <p class="pb-texte-pub" data-texte>{{ pub.texte }}</p>
+      <button type="button" class="pb-plus" data-plus hidden>Voir plus</button>
+      {% endif %}
 
-        {% if pub.texte %}
-        <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.5;margin:0 0 10px;">{{ pub.texte|truncatechars:180 }}</p>
-        {% endif %}
+      {% if pub.plat %}
+      <span class="pb-plat-chip">{% if pub.plat.image %}<img src="{{ pub.plat.image.url }}" alt="">{% endif %}{{ pub.plat.nom }}</span>
+      {% endif %}
 
-        {% if pub.plat %}
-        <div style="font-size:0.78rem;color:var(--accent-orange);margin-bottom:10px;">🍽 {{ pub.plat.nom }}</div>
-        {% endif %}
-
-        <div class="stat-row" style="border:0;padding:0;margin-bottom:12px;">
-          <span class="stat-row-label" style="font-size:0.78rem;">
-            ♥ {{ pub.likes.count }} · 💬 {{ pub.commentaires.count }}
-          </span>
-          <span class="stat-row-value" style="font-size:0.72rem;color:var(--text-muted);">{{ pub.created_at|date:"d/m/Y H:i" }}</span>
-        </div>
-
-        <div class="btn-group" style="flex-wrap:wrap;gap:6px;">
-          {% if pub.statut == 'en_attente' %}
-            <form method="post" style="display:inline;">{% csrf_token %}
-              <input type="hidden" name="publication_id" value="{{ pub.pk }}">
-              <input type="hidden" name="action" value="valider">
-              <button class="btn btn-primary btn-sm">Valider</button>
-            </form>
-            <form method="post" style="display:inline;" onsubmit="return confirm('Refuser cette contribution ?');">{% csrf_token %}
-              <input type="hidden" name="publication_id" value="{{ pub.pk }}">
-              <input type="hidden" name="action" value="refuser">
-              <button class="btn btn-secondary btn-sm">Refuser</button>
-            </form>
-          {% else %}
-            <form method="post" action="{% url 'core:resto_publication_delete' pub.pk %}"
-                  onsubmit="return confirm('Retirer cette publication de l\'application ?');" style="display:inline;">
-              {% csrf_token %}
-              <button class="btn btn-danger btn-sm">Retirer</button>
-            </form>
-          {% endif %}
-        </div>
-
-        <!-- Commentaires modérables -->
-        {% with actifs=pub.commentaires.all %}
-          {% if actifs %}
-          <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
-            {% for c in actifs %}
-              {% if not c.supprime_par %}
-              <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
-                <div style="flex:1;font-size:0.78rem;color:var(--text-secondary);">
-                  <strong style="color:var(--text-primary);">{{ c.auteur.first_name|default:c.auteur.username }}</strong>
-                  {{ c.texte|truncatechars:90 }}
-                </div>
-                <form method="post" action="{% url 'core:resto_publication_commentaire_delete' c.pk %}"
-                      onsubmit="return confirm('Supprimer ce commentaire ?');">{% csrf_token %}
-                  <button class="btn btn-danger btn-sm" style="padding:2px 6px;font-size:0.7rem;">✕</button>
-                </form>
-              </div>
-              {% endif %}
-            {% endfor %}
-          </div>
-          {% endif %}
-        {% endwith %}
+      <div class="pb-meta">
+        <span class="coeur"><svg class="i"><use href="#p-heart"/></svg>{{ pub.n_likes }}</span>
+        <span class="bulle"><svg class="i"><use href="#p-chat"/></svg>{{ pub.n_commentaires }}</span>
+        <time datetime="{{ pub.created_at|date:'c' }}" title="{{ pub.created_at|date:'d/m/Y à H:i' }}">il y a {{ pub.created_at|timesince }}</time>
       </div>
+
+      <div class="pb-actions">
+        {% if pub.statut == 'en_attente' %}
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+            <input type="hidden" name="action" value="valider">
+            <button class="btn btn-primary btn-sm"><svg class="i"><use href="#p-check"/></svg> Valider · +{{ points_contribution }} pts</button>
+          </form>
+          <form method="post" data-confirmer="Refuser cette contribution ?" data-detail="Elle ne sera pas publiée et le client ne recevra pas de points.">{% csrf_token %}
+            <input type="hidden" name="publication_id" value="{{ pub.pk }}">
+            <input type="hidden" name="action" value="refuser">
+            <button class="btn btn-secondary btn-sm"><svg class="i"><use href="#p-x"/></svg> Refuser</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'core:resto_publication_delete' pub.pk %}"
+                data-confirmer="Retirer cette publication ?" data-detail="Elle disparaîtra du fil de l'application. Cette action est définitive.">{% csrf_token %}
+            <button class="btn btn-sm pb-btn-retirer"><svg class="i"><use href="#p-trash"/></svg> Retirer de l'application</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {% if pub.commentaires_actifs %}
+      <details class="pb-coms">
+        <summary><svg class="i"><use href="#p-chat"/></svg> {{ pub.commentaires_actifs|length }} commentaire{{ pub.commentaires_actifs|length|pluralize }}
+          <svg class="i pb-chev"><use href="#p-chevron"/></svg></summary>
+        {% for c in pub.commentaires_actifs %}
+        {% with nom=c.auteur.first_name|default:c.auteur.username %}
+        <div class="pb-com">
+          <span class="pb-av">{{ nom|first|upper }}</span>
+          <div class="pb-com-txt"><b>{{ nom }}</b>{{ c.texte }}<small>il y a {{ c.created_at|timesince }}</small></div>
+          <form method="post" action="{% url 'core:resto_publication_commentaire_delete' c.pk %}"
+                data-confirmer="Supprimer ce commentaire ?" data-detail="Il ne sera plus visible dans l'application.">{% csrf_token %}
+            <button title="Supprimer le commentaire"><svg class="i"><use href="#p-trash"/></svg></button>
+          </form>
+        </div>
+        {% endwith %}
+        {% endfor %}
+      </details>
+      {% endif %}
     </div>
-    {% endfor %}
-  </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="pb-carte pb-vide-etat anim-fade-up">
+  {% if onglet == 'attente' %}
+    <div class="pb-vide-ico"><svg class="i"><use href="#p-inbox"/></svg></div>
+    <b>Aucune contribution à valider</b>
+    <p>Quand un client publie une photo de vos plats, elle arrive ici. Validez-la pour l'afficher dans l'app — le client gagne {{ points_contribution }} points.</p>
   {% else %}
-  <div class="empty-state" style="text-align:center;color:var(--text-muted);padding:36px;">
-    {% if onglet == 'attente' %}
-      Aucune contribution client en attente.
-    {% else %}
-      Aucune publication. Créez la première ci-dessus — elle apparaîtra dans le fil d'accueil de l'app.
-    {% endif %}
-  </div>
+    <div class="pb-vide-ico"><svg class="i"><use href="#p-image"/></svg></div>
+    <b>Aucune publication pour l'instant</b>
+    <p>Partagez votre plat du jour ou l'ambiance de votre restaurant : vos publications apparaissent dans le fil d'accueil des clients.</p>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="document.getElementById('pbTexte').focus();window.scrollTo({top:0,behavior:'smooth'});">Créer ma première publication</button>
   {% endif %}
 </div>
+{% endif %}
+
+{# Fenêtre de confirmation #}
+<div class="pb-modal" id="pbModal" role="dialog" aria-modal="true">
+  <div class="pb-carte pb-modal-boite">
+    <div class="pb-modal-ico"><svg class="i"><use href="#p-trash"/></svg></div>
+    <h3 id="pbModalTitre"></h3>
+    <p id="pbModalTexte"></p>
+    <div class="pb-modal-boutons">
+      <button type="button" class="btn btn-secondary" id="pbModalNon">Annuler</button>
+      <button type="button" class="btn btn-danger" id="pbModalOui">Confirmer</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var MAX = {{ max_medias }}, MAX_IMG = {{ max_image_mo }} * 1048576, MAX_VID = {{ max_video_mo }} * 1048576;
+  var EXT_IMG = /\.(jpe?g|png|webp|heic|heif|gif)$/i, EXT_VID = /\.(mp4|mov|webm|m4v|3gp)$/i;
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('pbForm'), input = $('pbFichiers'), texte = $('pbTexte');
+  var fichiers = [];   // liste gérée localement (ajout, retrait), recopiée dans l'input avant envoi
+
+  function estVideo(f) { return (f.type || '').indexOf('video') === 0 || EXT_VID.test(f.name); }
+  function erreur(msg) { $('pbErreur').textContent = msg || ''; $('pbErreur').style.display = msg ? 'block' : 'none'; }
+
+  // ─── Texte + compteur ───
+  texte.addEventListener('input', function () {
+    texte.style.height = 'auto'; texte.style.height = Math.min(texte.scrollHeight, 320) + 'px';
+    var n = texte.value.length;
+    $('pbCompteur').textContent = n + ' / 2000';
+    $('pbCompteur').classList.toggle('long', n > 1800);
+    maj();
+  });
+
+  // ─── Médias : glisser-déposer, contrôles, vignettes ───
+  var drop = $('pbDrop');
+  drop.addEventListener('click', function () { input.click(); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('survol'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('survol'); }); });
+  drop.addEventListener('drop', function (e) { ajouter(e.dataTransfer.files); });
+  input.addEventListener('change', function () { ajouter(input.files); input.value = ''; });
+
+  function ajouter(liste) {
+    erreur('');
+    Array.prototype.forEach.call(liste, function (f) {
+      if (fichiers.length >= MAX) { erreur(MAX + ' médias maximum par publication.'); return; }
+      if (!EXT_IMG.test(f.name) && !EXT_VID.test(f.name)) { erreur('« ' + f.name + ' » : format non pris en charge.'); return; }
+      if (estVideo(f) ? f.size > MAX_VID : f.size > MAX_IMG) {
+        erreur('« ' + f.name + ' » est trop lourd (' + (estVideo(f) ? '{{ max_video_mo }}' : '{{ max_image_mo }}') + ' Mo maximum).'); return;
+      }
+      f._url = URL.createObjectURL(f);
+      fichiers.push(f);
+    });
+    rendreVignettes(); maj();
+  }
+  function retirer(i) { URL.revokeObjectURL(fichiers[i]._url); fichiers.splice(i, 1); erreur(''); rendreVignettes(); maj(); }
+  function rendreVignettes() {
+    $('pbVignettes').innerHTML = fichiers.map(function (f, i) {
+      return '<div class="pb-vignette">' + (estVideo(f) ? '<video src="' + f._url + '" muted></video><span class="pb-video">▶ Vidéo</span>' : '<img src="' + f._url + '" alt="">')
+        + (i === 0 ? '<span class="pb-un">Couverture</span>' : '')
+        + '<button type="button" class="pb-x" data-retirer="' + i + '" aria-label="Retirer">✕</button></div>';
+    }).join('');
+  }
+  $('pbVignettes').addEventListener('click', function (e) { var b = e.target.closest('[data-retirer]'); if (b) retirer(+b.dataset.retirer); });
+
+  // ─── Plat associé ───
+  $('pbPlat').addEventListener('change', maj);
+
+  // ─── Aperçu + état du bouton ───
+  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function maj() {
+    var t = texte.value.trim();
+    $('pbPublier').disabled = !t && !fichiers.length;
+    var pv = $('pvTexte');
+    pv.classList.toggle('vide', !t);
+    pv.innerHTML = t ? '<b>{{ resto.nom|escapejs }}</b>' + esc(t) : 'Votre message apparaîtra ici.';
+    var m = $('pvMedia'), f = fichiers[0];
+    if (!f) m.innerHTML = '<div class="pb-vide">Ajoutez une photo ou une vidéo pour illustrer votre publication</div>';
+    else {
+      m.innerHTML = (estVideo(f) ? '<video src="' + f._url + '" muted autoplay loop playsinline></video>' : '<img src="' + f._url + '" alt="">')
+        + (fichiers.length > 1 ? '<span class="pb-compte">1/' + fichiers.length + '</span><div class="pb-post-points">' + '<i></i>'.repeat(Math.min(fichiers.length, 8)) + '</div>' : '');
+    }
+    var sel = $('pbPlat'), opt = sel.options[sel.selectedIndex];
+    $('pvCmd').style.display = sel.value ? 'inline-flex' : 'none';
+    $('pvCmdNom').textContent = sel.value ? 'Commander · ' + opt.text : '';
+    var img = $('pbPlatImg');
+    img.innerHTML = sel.value && opt.dataset.image ? '<img src="' + opt.dataset.image + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">' : '<svg class="i"><use href="#p-utensils"/></svg>';
+  }
+
+  // ─── Envoi avec barre de progression ───
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if ($('pbPublier').disabled) return;
+    var data = new FormData(form);
+    data.delete('medias');
+    fichiers.forEach(function (f) { data.append('medias', f, f.name); });
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', form.action);
+    xhr.upload.onprogress = function (ev) { if (ev.lengthComputable) $('pbProgression').firstElementChild.style.width = Math.round(ev.loaded / ev.total * 100) + '%'; };
+    xhr.onload = function () { window.location.href = window.location.pathname; };
+    xhr.onerror = function () { erreur('Envoi impossible — vérifiez votre connexion et réessayez.'); fin(); };
+    $('pbProgression').style.display = 'block';
+    $('pbPublier').disabled = true;
+    $('pbPublier').querySelector('span').textContent = fichiers.length ? 'Envoi en cours…' : 'Publication…';
+    xhr.send(data);
+  });
+  function fin() { $('pbProgression').style.display = 'none'; $('pbPublier').querySelector('span').textContent = 'Publier'; maj(); }
+
+  // ─── Carrousels des cartes ───
+  document.querySelectorAll('[data-carrousel]').forEach(function (c) {
+    var piste = c.querySelector('.pb-media-piste'), idx = c.querySelector('[data-index]');
+    var courant = function () { return Math.round(piste.scrollLeft / piste.clientWidth); };
+    piste.addEventListener('scroll', function () { if (idx) idx.textContent = courant() + 1; });
+    c.querySelectorAll('.pb-fleche').forEach(function (b) {
+      b.addEventListener('click', function () { piste.scrollTo({ left: (courant() + (+b.dataset.sens)) * piste.clientWidth, behavior: 'smooth' }); });
+    });
+    // Les vidéos se lisent au survol
+    c.addEventListener('mouseenter', function () { c.querySelectorAll('video').forEach(function (v) { v.play().catch(function () {}); }); });
+    c.addEventListener('mouseleave', function () { c.querySelectorAll('video').forEach(function (v) { v.pause(); }); });
+  });
+
+  // ─── « Voir plus » seulement si le texte est réellement tronqué ───
+  document.querySelectorAll('[data-texte]').forEach(function (p) {
+    var b = p.nextElementSibling;
+    if (b && p.scrollHeight > p.clientHeight + 2) {
+      b.hidden = false;
+      b.addEventListener('click', function () { var o = p.classList.toggle('ouvert'); b.textContent = o ? 'Voir moins' : 'Voir plus'; });
+    }
+  });
+
+  // ─── Confirmations ───
+  var modal = $('pbModal'), cible = null;
+  document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f._confirme) return;
+      e.preventDefault(); cible = f;
+      $('pbModalTitre').textContent = f.dataset.confirmer;
+      $('pbModalTexte').textContent = f.dataset.detail || '';
+      modal.classList.add('ouvert'); $('pbModalOui').focus();
+    });
+  });
+  function fermer() { modal.classList.remove('ouvert'); cible = null; }
+  $('pbModalNon').addEventListener('click', fermer);
+  modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.classList.contains('ouvert')) fermer(); });
+  $('pbModalOui').addEventListener('click', function () { if (cible) { cible._confirme = true; cible.submit(); } });
+
+  maj();
+})();
+</script>
 {% endblock %}
