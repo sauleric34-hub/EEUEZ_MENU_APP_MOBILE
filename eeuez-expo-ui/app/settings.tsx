@@ -2,7 +2,7 @@
 //  Paramètres — préférences réelles (thème, notifications…)
 // ═══════════════════════════════════════════════════════════
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Switch, Linking, Alert, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
@@ -22,6 +22,7 @@ import { deleteAccount } from '../services/auth';
 import { WEB_BASE_URL } from '../constants/api';
 import { friendlyMessage } from '../services/errors';
 import { useDeconnexion } from '../hooks/useDeconnexion';
+import { appleDisponible, googleDisponible, obtenirJeton, type Fournisseur } from '../services/socialAuth';
 
 const APP_VERSION = '1.0.0';
 const SUPPORT_EMAIL = 'menu@cambus.cm';
@@ -75,6 +76,11 @@ export default function SettingsScreen() {
   const [motDePasse, setMotDePasse] = useState('');
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
   const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
+  // Compte créé via Google/Apple : pas de mot de passe à redemander, on
+  // redemande à la place une connexion au fournisseur.
+  const sansMotDePasse = user?.a_mot_de_passe === false;
+  const [appleOk, setAppleOk] = useState(false);
+  useEffect(() => { appleDisponible().then(setAppleOk); }, []);
 
   const fermerSuppression = () => {
     if (suppressionEnCours) return;
@@ -83,12 +89,19 @@ export default function SettingsScreen() {
     setErreurSuppression(null);
   };
 
-  const confirmerSuppression = async () => {
-    if (!motDePasse) { setErreurSuppression('Saisissez votre mot de passe.'); return; }
+  const confirmerSuppression = async (fournisseur?: Fournisseur) => {
+    if (suppressionEnCours) return;
+    if (!fournisseur && !motDePasse) { setErreurSuppression('Saisissez votre mot de passe.'); return; }
     setSuppressionEnCours(true);
     setErreurSuppression(null);
     try {
-      await deleteAccount(motDePasse);
+      if (fournisseur) {
+        const jeton = await obtenirJeton(fournisseur);
+        if (!jeton) return; // fenêtre Google/Apple fermée
+        await deleteAccount(jeton);
+      } else {
+        await deleteAccount({ password: motDePasse });
+      }
       setSuppressionOuverte(false);
       await deconnecter();
       toast.success('Votre compte a été supprimé.');
@@ -145,7 +158,8 @@ export default function SettingsScreen() {
 
           <Section title="Sécurité" colors={colors}>
             <Row
-              Icon={KeyRound} iconColor={Brand.green} label="Changer mon mot de passe"
+              Icon={KeyRound} iconColor={Brand.green}
+              label={sansMotDePasse ? 'Définir un mot de passe' : 'Changer mon mot de passe'}
               value="Vérification par code envoyé par e-mail" colors={colors} last
               onPress={() => router.push('/change-password')}
             />
@@ -203,16 +217,42 @@ export default function SettingsScreen() {
               Cette action est définitive. Vos informations personnelles, adresses, messages, publications et
               points de fidélité seront effacés. L'historique de vos paiements est conservé de façon anonyme.
             </Text>
-            <TextInput
-              value={motDePasse}
-              onChangeText={setMotDePasse}
-              placeholder="Mot de passe"
-              placeholderTextColor={colors.faint}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!suppressionEnCours}
-              style={[styles.champ, bodyFont(14, '600'), { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
-            />
+            {sansMotDePasse ? (
+              <>
+                <Text style={[bodyFont(13, '600'), { color: colors.text, marginTop: 14 }]}>
+                  Pour confirmer, reconnectez-vous avec le compte utilisé pour vous inscrire.
+                </Text>
+                {googleDisponible && (
+                  <PressableScale onPress={() => confirmerSuppression('google')} style={{ marginTop: 12 }}>
+                    <View style={[styles.modalBtn, { backgroundColor: Brand.danger }]}>
+                      {suppressionEnCours
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Supprimer avec Google</Text>}
+                    </View>
+                  </PressableScale>
+                )}
+                {appleOk && (
+                  <PressableScale onPress={() => confirmerSuppression('apple')} style={{ marginTop: 10 }}>
+                    <View style={[styles.modalBtn, { backgroundColor: Brand.danger }]}>
+                      {suppressionEnCours
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Supprimer avec Apple</Text>}
+                    </View>
+                  </PressableScale>
+                )}
+              </>
+            ) : (
+              <TextInput
+                value={motDePasse}
+                onChangeText={setMotDePasse}
+                placeholder="Mot de passe"
+                placeholderTextColor={colors.faint}
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!suppressionEnCours}
+                style={[styles.champ, bodyFont(14, '600'), { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface2 }]}
+              />
+            )}
             {erreurSuppression && (
               <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', marginTop: 8 }]}>{erreurSuppression}</Text>
             )}
@@ -222,13 +262,15 @@ export default function SettingsScreen() {
                   <Text style={[bodyFont(14, '700'), { color: colors.text }]}>Annuler</Text>
                 </View>
               </PressableScale>
-              <PressableScale onPress={confirmerSuppression} style={{ flex: 1 }}>
-                <View style={[styles.modalBtn, { backgroundColor: Brand.danger }]}>
-                  {suppressionEnCours
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Supprimer</Text>}
-                </View>
-              </PressableScale>
+              {!sansMotDePasse && (
+                <PressableScale onPress={() => confirmerSuppression()} style={{ flex: 1 }}>
+                  <View style={[styles.modalBtn, { backgroundColor: Brand.danger }]}>
+                    {suppressionEnCours
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={[bodyFont(14, '800'), { color: '#fff' }]}>Supprimer</Text>}
+                  </View>
+                </PressableScale>
+              )}
             </View>
           </View>
         </View>

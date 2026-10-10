@@ -102,6 +102,7 @@ urlpatterns = [
     # sous POST /api/client/commandes/{id}/initier_paiement/
     path('camerpay/notify/', api_views.camerpay_notify, name='api-camerpay-notify'),
     path('paiements/<str:code>/notify/', api_views.paiement_notify, name='api-paiement-notify'),
+    path('client/paiement/moyens', api_views.moyens_de_paiement, name='api-client-moyens-paiement'),
 
     # Restaurant
     path('restaurant/workspace', api_views.RestaurantWorkspaceView.as_view(), name='api-restaurant-workspace'),

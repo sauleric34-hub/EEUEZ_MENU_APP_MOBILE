@@ -13,6 +13,7 @@ import {
   type Resto, type Dish, type Category,
 } from '../data/menuData';
 import * as authService from '../services/auth';
+import { obtenirJeton, type Fournisseur } from '../services/socialAuth';
 import * as menu from '../services/menu';
 import { deviceCountry } from '../lib/geo';
 import { setAuthExpiredHandler } from '../services/http';
@@ -118,6 +119,8 @@ interface AppContextValue {
   /** Compte de démonstration : navigation libre, actions engageantes bloquées. */
   estDemo: boolean;
   signIn: (email: string, password: string) => Promise<UserDTO>;
+  /** « Continuer avec Google / Apple ». null si l'utilisateur a annulé. */
+  signInWithProvider: (fournisseur: Fournisseur) => Promise<UserDTO | null>;
   register: (p: authService.RegisterParams) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (p: authService.ProfileUpdate) => Promise<void>;
@@ -462,6 +465,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ─── Auth ──────────────────────────────────────────────────
   const signIn = async (email: string, password: string) => {
     const u = await authService.login(email, password);
+    await ouvrirSession(u);
+    return u;
+  };
+  const signInWithProvider = async (fournisseur: Fournisseur) => {
+    const jeton = await obtenirJeton(fournisseur);
+    if (!jeton) return null;
+    const u = await authService.loginWithProvider(jeton);
+    await ouvrirSession(u);
+    return u;
+  };
+  const ouvrirSession = async (u: UserDTO) => {
     setUser(u);
     reloadCatalogue(); // ordre des plats personnalisé (ville, goûts) — sans bloquer l'entrée
     registerForPush();
@@ -470,7 +484,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await reloadOrders();
       await reloadAddresses();
     }
-    return u;
   };
   const register = async (p: authService.RegisterParams) => {
     const u = await authService.registerClient(p);
@@ -879,7 +892,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     mode, colors, toggleTheme,
     notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
-    user, authReady, estDemo, signIn, register, signOut, updateUser, refreshUser,
+    user, authReady, estDemo, signIn, signInWithProvider, register, signOut, updateUser, refreshUser,
     addresses, reloadAddresses, addAddress, removeAddress, makeDefaultAddress, deliveryAddress, setDeliveryAddress,
     categories, restaurants, plats, popular, dataLoading, dataError, reloadCatalogue,
     bannieres, checkBannieres,

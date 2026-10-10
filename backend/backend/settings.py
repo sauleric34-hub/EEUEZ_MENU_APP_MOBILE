@@ -79,6 +79,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 # Clé CARTO disponible dans TOUS les gabarits (cartes Leaflet)
                 'core.context_processors.cartes',
+                'core.context_processors.alertes_admin',
             ],
         },
     },
@@ -251,6 +252,18 @@ APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://menu.cambus.cm')
 # Versement vers un bénéficiaire (retrait restaurant), via POST /payouts/batch.
 # Tant que désactivé, les retraits sont traités manuellement (aucun versement auto).
 CAMERPAY_PAYOUT_ENABLED = _env_bool('CAMERPAY_PAYOUT_ENABLED', False)
+
+# ─── Autres agrégateurs de paiement (activés depuis l'admin → Paiements) ──
+# Les secrets restent ICI (variables d'environnement), jamais en base.
+CINETPAY_API_KEY = os.environ.get('CINETPAY_API_KEY', '')
+CINETPAY_SITE_ID = os.environ.get('CINETPAY_SITE_ID', '')
+CINETPAY_SECRET_KEY = os.environ.get('CINETPAY_SECRET_KEY', '')
+CAMPAY_USERNAME = os.environ.get('CAMPAY_USERNAME', '')
+CAMPAY_PASSWORD = os.environ.get('CAMPAY_PASSWORD', '')
+CAMPAY_WEBHOOK_KEY = os.environ.get('CAMPAY_WEBHOOK_KEY', '')
+CAMPAY_BASE_URL = os.environ.get('CAMPAY_BASE_URL', 'https://demo.campay.net/api')
+PAWAPAY_API_TOKEN = os.environ.get('PAWAPAY_API_TOKEN', '')
+PAWAPAY_BASE_URL = os.environ.get('PAWAPAY_BASE_URL', 'https://api.sandbox.pawapay.io')
 
 # ─── Partenaires API (KYB + authentification par clé signée HMAC) ──────────────
 # Les identifiants API partenaires (core.models_partenaire.APICredential et

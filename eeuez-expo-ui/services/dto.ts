@@ -23,6 +23,8 @@ export interface UserDTO {
   gain_total?: string;
   nombre_livraisons?: number;
   solde_livreur?: number;
+  /** Faux pour un compte créé via Google/Apple (aucun mot de passe défini). */
+  a_mot_de_passe?: boolean;
 }
 
 export type NiveauFidelite = 'bronze' | 'argent' | 'or';
@@ -231,6 +233,8 @@ export interface CommandeGroupeDTO {
   id: number;
   montant_total: string;
   paiement_confirme: boolean;
+  /** en_attente / complete / echouee / remboursee (null sans paiement en ligne). */
+  paiement_statut?: string | null;
   commandes: CommandeDTO[];
   exclusions: ExclusionCommandeDTO[];
   created_at: string;
@@ -391,9 +395,13 @@ export interface AbonnementToggleDTO {
 /** Réponse d'initiation de paiement CamerPay (commande ou réservation).
  *  `free` = réservation gratuite déjà confirmée (pas de paiement). */
 export interface CamerPayPaymentDTO {
+  /** Vide pour un paiement « push » (validation directement sur le téléphone). */
   payment_url?: string;
   payment_ref?: string;
   free?: boolean;
+  flux?: 'redirection' | 'push';
+  message?: string;
+  agregateur?: string;
 }
 
 // ─── Galerie ─────────────────────────────────────────────────

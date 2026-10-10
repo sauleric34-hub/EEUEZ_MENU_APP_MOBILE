@@ -17,7 +17,10 @@ import { LogoMark } from '../components/Logo';
 import { NgAfricaCredit } from '../components/NgAfricaCredit';
 import { AccentButton, PressableScale, bodyFont } from '../components/ui';
 import { ErrorNotice } from '../components/ErrorNotice';
+import { GoogleButton } from '../components/GoogleButton';
 import { describeError, type ErrorInfo } from '../services/errors';
+import { appleDisponible, googleDisponible, type Fournisseur } from '../services/socialAuth';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 import { DEMO } from '../constants/demo';
 
@@ -36,7 +39,7 @@ const UNSUPPORTED: ErrorInfo = {
 };
 
 export default function SplashScreen() {
-  const { colors, user, authReady, signIn, signOut } = useApp();
+  const { colors, mode, user, authReady, signIn, signInWithProvider, signOut } = useApp();
   const router = useRouter();
 
   const [email, setEmail] = useState(DEMO.email);
@@ -60,6 +63,11 @@ export default function SplashScreen() {
   const passwordError = touchedPassword && !passwordValid ? 'Le mot de passe est requis.' : null;
 
   const float = useRef(new Animated.Value(0)).current;
+
+  // « Se connecter avec Apple » : iPhone seulement (exigé par l'App Store
+  // dès qu'une connexion Google est proposée).
+  const [appleOk, setAppleOk] = useState(false);
+  useEffect(() => { appleDisponible().then(setAppleOk); }, []);
 
   // ─── Shake horizontal des champs (échec de connexion) ──────
   const shake = useRef(new Animated.Value(0)).current;
@@ -120,6 +128,23 @@ export default function SplashScreen() {
     } catch (e) {
       setError(describeError(e, 'La connexion a échoué. Réessayez.'));
       triggerShake();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connecterAvec = async (fournisseur: Fournisseur) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const u = await signInWithProvider(fournisseur);
+      if (!u) return; // fenêtre Google/Apple fermée par l'utilisateur
+      const dest = homeFor(u.role);
+      if (dest) router.replace(dest);
+      else { setError(UNSUPPORTED); signOut(); }
+    } catch (e) {
+      setError(describeError(e, 'La connexion a échoué. Réessayez.'));
     } finally {
       setBusy(false);
     }
@@ -188,6 +213,28 @@ export default function SplashScreen() {
               <AccentButton label="Connexion" onPress={submit} style={{ marginTop: 4 }} />
             )}
 
+            {(googleDisponible || appleOk) && (
+              <>
+                <View style={styles.separateur}>
+                  <View style={[styles.trait, { backgroundColor: colors.border }]} />
+                  <Text style={[bodyFont(12, '700'), { color: colors.faint }]}>ou</Text>
+                  <View style={[styles.trait, { backgroundColor: colors.border }]} />
+                </View>
+                {googleDisponible && <GoogleButton onPress={() => connecterAvec('google')} disabled={busy} />}
+                {appleOk && (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                    buttonStyle={mode === 'dark'
+                      ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                      : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={25}
+                    style={[styles.appleBtn, googleDisponible && { marginTop: 10 }]}
+                    onPress={() => connecterAvec('apple')}
+                  />
+                )}
+              </>
+            )}
+
             <PressableScale onPress={() => { setError(null); router.push('/register'); }}>
               <Text style={[bodyFont(13, '700'), { color: Brand.accentLight, textAlign: 'center', marginTop: 16 }]}>
                 Pas de compte ? Créer un compte
@@ -226,6 +273,9 @@ const styles = StyleSheet.create({
     marginTop: 4, paddingVertical: 16, borderRadius: Radius.pill,
     backgroundColor: Brand.accent, alignItems: 'center', justifyContent: 'center',
   },
+  separateur: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 },
+  trait: { flex: 1, height: 1 },
+  appleBtn: { height: 50, width: '100%' },
   faceBtn: {
     marginTop: 22, flexDirection: 'row', gap: 10, alignSelf: 'center',
     paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.pill, borderWidth: 1,

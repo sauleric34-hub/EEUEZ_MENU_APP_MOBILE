@@ -1,6 +1,6 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
-from core.views import publications_admin, bannieres, categories_admin, cuisine_ws
+from core.views import publications_admin, bannieres, categories_admin, cuisine_ws, paiements_admin
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
 from core.views import partenaires_admin
@@ -46,6 +46,16 @@ urlpatterns = [
     path('categories/<int:pk>/toggle/', categories_admin.categorie_toggle, name='categorie_toggle'),
     path('categories/<int:pk>/monter/', categories_admin.categorie_move, {'direction': 'up'}, name='categorie_up'),
     path('categories/<int:pk>/descendre/', categories_admin.categorie_move, {'direction': 'down'}, name='categorie_down'),
+    path('paiements/', paiements_admin.paiements_index, name='paiements'),
+    path('paiements/agregateurs/<str:code>/', paiements_admin.agregateur_action, name='paiements_agregateur'),
+    path('paiements/bascule/', paiements_admin.bascule_crise, name='paiements_bascule'),
+    path('paiements/routes/nouvelle/', paiements_admin.route_form, name='paiements_route_create'),
+    path('paiements/routes/<int:pk>/', paiements_admin.route_form, name='paiements_route_edit'),
+    path('paiements/routes/<int:pk>/supprimer/', paiements_admin.route_delete, name='paiements_route_delete'),
+    path('paiements/routes/<int:pk>/toggle/', paiements_admin.route_toggle, name='paiements_route_toggle'),
+    path('paiements/referentiels/', paiements_admin.referentiels, name='paiements_referentiels'),
+    path('paiements/journal/', paiements_admin.journal, name='paiements_journal'),
+    path('alertes/', paiements_admin.alertes_index, name='alertes'),
     path('bannieres/', bannieres.banniere_list, name='banniere_list'),
     path('bannieres/nouvelle/', bannieres.banniere_form, name='banniere_create'),
     path('bannieres/<int:pk>/', bannieres.banniere_form, name='banniere_edit'),

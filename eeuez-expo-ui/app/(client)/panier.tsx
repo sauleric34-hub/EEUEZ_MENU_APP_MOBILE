@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated, PanResponder, Image,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TextInput, Alert, Animated, PanResponder, Image, Modal,
   type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,8 +14,8 @@ import { ShoppingCart, Minus, Plus, Trash2, ArrowRight, MapPin, TriangleAlert, C
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp, type CartLine, type CartGroup } from '../../context/AppContext';
 import { formatPrice } from '../../data/menuData';
-import type { PaymentMode, FideliteApercuDTO } from '../../services/menu';
-import { initiateCamerPayPaymentGroupe, cancelOrderGroup, fetchFideliteApercu } from '../../services/menu';
+import type { PaymentMode, FideliteApercuDTO, OperateurPaiementDTO } from '../../services/menu';
+import { initiateCamerPayPaymentGroupe, cancelOrderGroup, fetchFideliteApercu, fetchMoyensPaiement, fetchOrderGroup } from '../../services/menu';
 import type { CommandeGroupeDTO } from '../../services/dto';
 import { ScreenBg } from '../../components/ScreenBg';
 import { DishTile, PressableScale, displayFont, bodyFont } from '../../components/ui';
@@ -25,13 +25,21 @@ import { useToast } from '../../context/ToastContext';
 import { animateListChange } from '../../lib/layoutAnimation';
 import { friendlyMessage } from '../../services/errors';
 
-const PAYMENTS: { mode: PaymentMode; label: string; logo: ImageSourcePropType }[] = [
-  { mode: 'mtn_money', label: 'MTN Money', logo: require('../../assets/mtn-money.png') },
-  { mode: 'orange_money', label: 'Orange Money', logo: require('../../assets/orange-money.png') },
+/** Logos embarqués (repli quand l'admin n'a pas téléversé de logo). */
+const LOGOS_LOCAUX: Record<string, ImageSourcePropType> = {
+  mtn_momo: require('../../assets/mtn-money.png'),
+  orange_money: require('../../assets/orange-money.png'),
+};
+
+/** Repli si le serveur est injoignable : les opérateurs historiques. Le
+ *  serveur reste seul juge de l'agrégateur réellement utilisé. */
+const OPERATEURS_SECOURS: OperateurPaiementDTO[] = [
+  { code: 'mtn_momo', nom: 'MTN Money', couleur: '#ffcc00', format_numero: '6 7X XX XX XX', mode_paiement: 'mtn_money', flux: 'redirection', indicatif: '237', logo: '' },
+  { code: 'orange_money', nom: 'Orange Money', couleur: '#ff7900', format_numero: '6 9X XX XX XX', mode_paiement: 'orange_money', flux: 'redirection', indicatif: '237', logo: '' },
 ];
 
-/** Modes qui nécessitent le widget CamerPay (tous les modes actuels) */
-const CAMERPAY_MODES: PaymentMode[] = ['mtn_money', 'orange_money'];
+/** Durée maximale d'attente de la validation sur le téléphone (flux « push »). */
+const ATTENTE_PUSH_MS = 3 * 60 * 1000;
 
 const SWIPE_DELETE_THRESHOLD = 96;
 const GAP = 13;
@@ -287,7 +295,28 @@ export default function PanierScreen() {
   const toast = useToast();
   // Le compte de démonstration peut remplir un panier, mais pas commander.
   const { bloquer } = useGardeDemo();
-  const [mode, setMode] = useState<PaymentMode>('mtn_money');
+  // ─── Moyens de paiement : fournis par le serveur selon le pays/la ville du
+  // restaurant (agrégateurs et routes choisis dans l'admin) ──────────────
+  const [operateurs, setOperateurs] = useState<OperateurPaiementDTO[]>(OPERATEURS_SECOURS);
+  const [opCode, setOpCode] = useState<string>('mtn_momo');
+  const restoPaiement = groupesPayables[0]?.restoId;
+  useEffect(() => {
+    let vivant = true;
+    fetchMoyensPaiement(restoPaiement)
+      .then(res => {
+        if (!vivant) return;
+        setOperateurs(res.operateurs);
+        setOpCode(code => (res.operateurs.some(o => o.code === code) ? code : res.operateurs[0]?.code ?? ''));
+      })
+      .catch(() => { /* hors ligne : on garde les opérateurs connus */ });
+    return () => { vivant = false; };
+  }, [restoPaiement]);
+  const operateur = operateurs.find(o => o.code === opCode) ?? operateurs[0];
+  const mode: PaymentMode = operateur?.mode_paiement ?? 'mtn_money';
+  const enLigne = mode !== 'especes';
+
+  // ─── Paiement « push » : validation directement sur le téléphone ─────────
+  const [attentePush, setAttentePush] = useState<{ message: string; depuis: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phone, setPhone] = useState(user?.telephone || '');
@@ -368,13 +397,29 @@ export default function PanierScreen() {
     );
   };
 
+  /** Paiement confirmé (page de paiement ou validation sur le téléphone) :
+   *  ce sont de vraies commandes — on retire du panier ce qui a été payé. */
+  const paiementConfirme = (groupe: CommandeGroupeDTO) => {
+    removeCartForCommandes(groupe.commandes);
+    signalerExclusions(groupe);
+    const destination = routeApresPaiement(groupe);
+    setPendingGroup(null);
+    reloadOrders();
+    router.push(destination);
+  };
+
   /** Lance (ou relance) le widget CamerPay pour un groupe déjà créé. */
   const launchPayment = async (groupeId: number) => {
     setBusy(true); setError(null);
     try {
-      const data = await initiateCamerPayPaymentGroupe(groupeId, phone || undefined);
+      const data = await initiateCamerPayPaymentGroupe(groupeId, phone || undefined, operateur?.code);
       if (data.payment_url) setPaymentUrl(data.payment_url);
-      else setError('Paiement indisponible pour le moment. Réessayez.');
+      else if (data.flux === 'push') {
+        setAttentePush({
+          message: data.message || `Une demande de paiement a été envoyée sur votre téléphone. Validez-la avec votre code ${operateur?.nom ?? 'Mobile Money'}.`,
+          depuis: Date.now(),
+        });
+      } else setError('Paiement indisponible pour le moment. Réessayez.');
     } catch (e) {
       setError(friendlyMessage(e, "L'initiation du paiement a échoué."));
     } finally {
@@ -412,7 +457,7 @@ export default function PanierScreen() {
       // 1. Créer une Commande par restaurant payable (toujours)
       const groupe = await checkout(mode, usePoints);
 
-      if (CAMERPAY_MODES.includes(mode)) {
+      if (enLigne) {
         // 2. Pour MTN/Orange Money → initier UN SEUL paiement CamerPay pour
         //    tout le groupe. On NE retire RIEN du panier : les commandes
         //    n'existent vraiment qu'une fois payées. Si le paiement est
@@ -518,11 +563,17 @@ export default function PanierScreen() {
 
               {/* Mode de paiement */}
               <Text style={[displayFont(15, '700'), { color: colors.text, marginTop: 20, marginBottom: 10 }]}>Paiement</Text>
-              <View style={styles.payRow}>
-                {PAYMENTS.map(p => {
-                  const on = p.mode === mode;
+              {operateurs.length === 0 && (
+                <Text style={[bodyFont(12.5, '600'), { color: colors.muted }]}>
+                  Le paiement en ligne n'est pas encore disponible pour ce restaurant.
+                </Text>
+              )}
+              <View style={[styles.payRow, { flexWrap: 'wrap' }]}>
+                {operateurs.map(p => {
+                  const on = p.code === operateur?.code;
+                  const logo = p.logo ? { uri: p.logo } : LOGOS_LOCAUX[p.code];
                   return (
-                    <PressableScale key={p.mode} onPress={() => setMode(p.mode)} style={{ flex: 1 }}>
+                    <PressableScale key={p.code} onPress={() => setOpCode(p.code)} style={{ flexGrow: 1, flexBasis: '45%' }}>
                       <View style={[
                         styles.payChip,
                         on
@@ -534,8 +585,14 @@ export default function PanierScreen() {
                             <Check size={11} color="#fff" strokeWidth={3} />
                           </View>
                         )}
-                        <Image source={p.logo} style={[styles.payLogo, !on && { opacity: 0.55 }]} resizeMode="cover" />
-                        <Text numberOfLines={1} style={[bodyFont(12, '700'), { color: on ? colors.text : colors.muted }]}>{p.label}</Text>
+                        {logo ? (
+                          <Image source={logo} style={[styles.payLogo, !on && { opacity: 0.55 }]} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.payLogo, { backgroundColor: p.couleur, alignItems: 'center', justifyContent: 'center' }, !on && { opacity: 0.55 }]}>
+                            <Text style={[bodyFont(11, '900'), { color: '#fff' }]}>{p.nom.slice(0, 2).toUpperCase()}</Text>
+                          </View>
+                        )}
+                        <Text numberOfLines={1} style={[bodyFont(12, '700'), { color: on ? colors.text : colors.muted }]}>{p.nom}</Text>
                       </View>
                     </PressableScale>
                   );
@@ -543,7 +600,7 @@ export default function PanierScreen() {
               </View>
 
               {/* Numéro de téléphone (Mobile Money uniquement) */}
-              {CAMERPAY_MODES.includes(mode) && (
+              {enLigne && operateur && (
                 <View style={[styles.phoneRow, { backgroundColor: colors.surface, borderColor: Brand.accent + '55' }]}>
                   <View style={[styles.phoneIcon, { backgroundColor: Brand.accent + '1f' }]}>
                     <Phone size={16} color={Brand.accentLight} strokeWidth={2.3} />
@@ -551,7 +608,7 @@ export default function PanierScreen() {
                   <TextInput
                     value={phone}
                     onChangeText={setPhone}
-                    placeholder="N° de téléphone (ex: 6XXXXXXXX)"
+                    placeholder={`N° ${operateur.nom}${operateur.format_numero ? ` (ex : ${operateur.format_numero})` : ''}`}
                     placeholderTextColor={colors.muted}
                     keyboardType="phone-pad"
                     style={[bodyFont(13.5, '600'), styles.phoneInput, { color: colors.text }]}
@@ -693,6 +750,10 @@ export default function PanierScreen() {
                   <View style={[styles.checkout, { backgroundColor: Brand.accent, marginTop: 16 }]}>
                     <ActivityIndicator color="#fff" />
                   </View>
+                ) : enLigne && operateurs.length === 0 ? (
+                  <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
+                    <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Paiement en ligne indisponible</Text>
+                  </View>
                 ) : groupesPayables.length === 0 ? (
                   <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
                     <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Cochez un restaurant à payer</Text>
@@ -727,18 +788,7 @@ export default function PanierScreen() {
         groupeId={pendingGroup.id}
         amount={totalAPayer}
         onRetry={() => launchPayment(pendingGroup.id)}
-        onSuccess={() => {
-          setPaymentUrl(null);
-          // Paiement confirmé → ce sont de vraies commandes : on retire du
-          // panier les restaurants commandés (les exclus y restent déjà —
-          // ils n'ont jamais fait partie de ce groupe).
-          removeCartForCommandes(pendingGroup.commandes);
-          signalerExclusions(pendingGroup);
-          const destination = routeApresPaiement(pendingGroup);
-          setPendingGroup(null);
-          reloadOrders();
-          router.push(destination);
-        }}
+        onSuccess={() => { setPaymentUrl(null); paiementConfirme(pendingGroup); }}
         onCancel={() => {
           setPaymentUrl(null);
           Alert.alert(
@@ -760,7 +810,97 @@ export default function PanierScreen() {
         }}
       />
     )}
+
+    {/* ─── Paiement « push » : validation sur le téléphone ─────────── */}
+    {attentePush && pendingGroup && (
+      <AttenteValidation
+        groupeId={pendingGroup.id}
+        message={attentePush.message}
+        depuis={attentePush.depuis}
+        operateur={operateur}
+        onConfirme={() => { setAttentePush(null); paiementConfirme(pendingGroup); }}
+        onEchec={() => {
+          setAttentePush(null);
+          Alert.alert('Paiement refusé', "L'opérateur n'a pas validé le paiement (solde, code ou délai). Voulez-vous réessayer ?", [
+            { text: 'Abandonner', style: 'destructive', onPress: () => { abandonOrder(); } },
+            { text: 'Réessayer', onPress: () => launchPayment(pendingGroup.id) },
+          ], { cancelable: false });
+        }}
+        onAnnuler={() => { setAttentePush(null); abandonOrder(); }}
+      />
+    )}
   </>);
+}
+
+/** Fenêtre d'attente d'un paiement « push » : le client valide sur son
+ *  téléphone ; on interroge le serveur toutes les 4 s (le webhook de
+ *  l'agrégateur y confirme le paiement). */
+function AttenteValidation({ groupeId, message, depuis, operateur, onConfirme, onEchec, onAnnuler }: {
+  groupeId: number; message: string; depuis: number; operateur?: OperateurPaiementDTO;
+  onConfirme: () => void; onEchec: () => void; onAnnuler: () => void;
+}) {
+  const { colors } = useApp();
+  const pulse = useRef(new Animated.Value(0)).current;
+  const [ecoule, setEcoule] = useState(0);
+  const termine = useRef(false);
+
+  useEffect(() => {
+    const boucle = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: true }));
+    boucle.start();
+    return () => boucle.stop();
+  }, [pulse]);
+
+  useEffect(() => {
+    const tic = setInterval(() => setEcoule(Date.now() - depuis), 1000);
+    const verifier = setInterval(async () => {
+      if (termine.current) return;
+      try {
+        const g = await fetchOrderGroup(groupeId);
+        if (g.paiement_confirme) { termine.current = true; onConfirme(); }
+        else if (g.paiement_statut === 'echouee') { termine.current = true; onEchec(); }
+      } catch { /* réseau instable : on réessaie au prochain tour */ }
+    }, 4000);
+    return () => { clearInterval(tic); clearInterval(verifier); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupeId, depuis]);
+
+  const depasse = ecoule > ATTENTE_PUSH_MS;
+  const secondes = Math.floor(ecoule / 1000);
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onAnnuler}>
+      <View style={styles.pushFond}>
+        <View style={[styles.pushCarte, { backgroundColor: colors.page, borderColor: colors.border }]}>
+          <View style={styles.pushIcone}>
+            <Animated.View style={[styles.pushOnde, { borderColor: operateur?.couleur ?? Brand.accent,
+              opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }] }]} />
+            <View style={[styles.pushRond, { backgroundColor: operateur?.couleur ?? Brand.accent }]}>
+              <Phone size={30} color="#fff" strokeWidth={2.2} />
+            </View>
+          </View>
+          <Text style={[displayFont(20, '800'), { color: colors.text, textAlign: 'center', marginTop: 18 }]}>
+            {depasse ? 'Toujours en attente…' : 'Validez sur votre téléphone'}
+          </Text>
+          <Text style={[bodyFont(13.5, '500'), { color: colors.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 }]}>
+            {depasse
+              ? "Nous n'avons pas encore reçu la confirmation. Si vous avez validé, la commande sera confirmée automatiquement dès réception."
+              : message}
+          </Text>
+          <View style={[styles.row, { justifyContent: 'center', gap: 8, marginTop: 16 }]}>
+            <ActivityIndicator color={Brand.accent} />
+            <Text style={[bodyFont(12.5, '700'), { color: colors.faint }]}>
+              {Math.floor(secondes / 60)}:{String(secondes % 60).padStart(2, '0')}
+            </Text>
+          </View>
+          <PressableScale onPress={onAnnuler} style={{ marginTop: 20 }}>
+            <View style={[styles.pushAnnuler, { borderColor: colors.border }]}>
+              <Text style={[bodyFont(14, '700'), { color: colors.muted }]}>Annuler le paiement</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -812,6 +952,13 @@ const styles = StyleSheet.create({
   },
   phoneIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   phoneInput: { flex: 1, paddingVertical: 4 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  pushFond: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  pushCarte: { width: '100%', maxWidth: 380, borderRadius: 26, borderWidth: 1, padding: 24, alignItems: 'center' },
+  pushIcone: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  pushOnde: { position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 3 },
+  pushRond: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  pushAnnuler: { paddingVertical: 13, paddingHorizontal: 26, borderRadius: Radius.pill, borderWidth: 1 },
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   points: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}{% if route %}Modifier{% else %}Nouvelle{% endif %} route — Paiements{% endblock %}
+{% block topbar_title %}Route de paiement{% endblock %}
+{% block extra_css %}{% include 'admin_panel/paiements/_css.html' %}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:paiements' %}">Paiements</a><span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">{% if route %}Modifier la route{% else %}Nouvelle route{% endif %}</span>
+</div>
+<div class="page-header anim-fade-up"><h1 class="page-title">{% if route %}Modifier la route{% else %}Nouvelle route{% endif %}</h1></div>
+
+<form method="post" class="glass-card anim-fade-up" style="padding:26px;max-width:720px;">
+  {% csrf_token %}
+  <p class="py-aide" style="margin-bottom:18px;">
+    « Dans ce <b>pays</b> (ou cette <b>ville</b>), les paiements <b>de cet opérateur</b> passent par <b>cet agrégateur</b>. »
+    La priorité 1 est l'agrégateur principal ; 2, 3… sont les secours utilisés automatiquement en cas de panne.
+  </p>
+  <div class="grid-2" style="gap:16px;">
+    <div class="form-group">
+      <label class="form-label">Pays *</label>
+      <select name="pays_code" id="rPays" class="input-field" required>
+        {% for c, n, d in pays %}<option value="{{ c }}" {% if c == pays_initial %}selected{% endif %}>{{ d }} {{ n }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ville (facultatif)</label>
+      <input type="text" name="ville" class="input-field" value="{{ ville_initiale }}" placeholder="Vide = tout le pays">
+      <div class="py-aide" style="margin-top:5px;">Une règle de ville remplace celles du pays pour cette ville.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Opérateur *</label>
+      <select name="operateur" id="rOp" class="input-field" required>
+        {% for o in operateurs %}<option value="{{ o.pk }}" data-code="{{ o.code }}" {% if route.operateur_id == o.pk %}selected{% endif %}>{{ o.nom }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Agrégateur *</label>
+      <select name="agregateur" id="rAg" class="input-field" required>
+        {% for a in agregateurs %}<option value="{{ a.pk }}" data-code="{{ a.code }}" {% if route.agregateur_id == a.pk %}selected{% endif %}>{{ a }}{% if not a.actif %} (désactivé){% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Priorité *</label>
+      <input type="number" name="priorite" class="input-field" min="1" max="20" value="{{ route.priorite|default:1 }}" required>
+    </div>
+    <div class="form-group" style="display:flex;align-items:flex-end;">
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" name="actif" {% if not route or route.actif %}checked{% endif %}> Route active</label>
+    </div>
+  </div>
+  <div id="rCouverture" class="py-aide" style="margin-top:4px;padding:10px 12px;border-radius:10px;"></div>
+  <div style="display:flex;gap:10px;margin-top:20px;">
+    <button class="btn btn-primary">Enregistrer la route</button>
+    <a href="{% url 'core:paiements' %}" class="btn btn-secondary">Annuler</a>
+  </div>
+</form>
+{{ couverture|json_script:"couverture" }}
+<script>
+(function () {
+  var cov = JSON.parse(document.getElementById('couverture').textContent);
+  var pays = document.getElementById('rPays'), op = document.getElementById('rOp'), ag = document.getElementById('rAg'), out = document.getElementById('rCouverture');
+  function maj() {
+    var a = ag.options[ag.selectedIndex].dataset.code, o = op.options[op.selectedIndex].dataset.code, p = pays.value;
+    var ops = (cov[a] || {})[p];
+    if (!ops) { out.style.background = 'rgba(239,68,68,.1)'; out.innerHTML = '⚠ Cet agrégateur ne couvre pas ce pays (d\'après sa documentation).'; }
+    else if (ops.indexOf(o) === -1) { out.style.background = 'rgba(245,166,35,.12)'; out.innerHTML = '⚠ Opérateur non listé pour ce pays chez cet agrégateur. Opérateurs couverts : ' + ops.join(', '); }
+    else { out.style.background = 'rgba(56,161,105,.1)'; out.innerHTML = '✓ Cet agrégateur couvre cet opérateur dans ce pays.'; }
+  }
+  [pays, op, ag].forEach(function (el) { el.addEventListener('change', maj); });
+  maj();
+})();
+</script>
+{% endblock %}

@@ -395,10 +395,17 @@ class CommandeGroupeSerializer(serializers.ModelSerializer):
     """Panier multi-restaurant : les commandes qui ont pu être créées (une par
     restaurant livrable), plus le montant combiné à payer en une fois."""
     commandes = CommandeSerializer(many=True, read_only=True)
+    # État du paiement unique du groupe (en_attente / complete / echouee…) :
+    # permet à l'app de détecter un refus pendant un paiement « push ».
+    paiement_statut = serializers.SerializerMethodField()
 
     class Meta:
         model = CommandeGroupe
-        fields = ['id', 'montant_total', 'paiement_confirme', 'commandes', 'created_at']
+        fields = ['id', 'montant_total', 'paiement_confirme', 'paiement_statut', 'commandes', 'created_at']
+
+    def get_paiement_statut(self, obj):
+        paiement = getattr(obj, 'paiement', None)
+        return paiement.statut if paiement else None
 
 
 class MissionPoolSerializer(serializers.ModelSerializer):

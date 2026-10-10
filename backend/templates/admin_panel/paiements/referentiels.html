@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Opérateurs & pays — Paiements{% endblock %}
+{% block topbar_title %}Opérateurs & pays{% endblock %}
+{% block extra_css %}{% include 'admin_panel/paiements/_css.html' %}
+<style>
+  .rf-grille { display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:20px; align-items:start; }
+  .rf-ligne { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); }
+  .rf-ligne:last-child { border-bottom:none; }
+  .rf-logo { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:.8rem; overflow:hidden; flex-shrink:0; }
+  .rf-logo img { width:100%; height:100%; object-fit:cover; }
+  .rf-ligne b { color:var(--text-primary); font-size:.9rem; } .rf-ligne small { display:block; color:var(--text-muted); font-size:.74rem; }
+  .rf-ligne .btn { margin-left:auto; }
+  .rf-form { display:none; grid-template-columns:1fr 1fr; gap:10px; padding:14px; margin-top:8px; border-radius:12px; background:var(--bg-tertiary); }
+  .rf-form.ouvert { display:grid; }
+  .rf-form label { display:flex; flex-direction:column; gap:4px; font-size:.74rem; font-weight:700; color:var(--text-secondary); }
+  .rf-form input, .rf-form select { padding:8px 10px; border-radius:9px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font:inherit; font-size:.84rem; }
+  .rf-form .plein { grid-column:1 / -1; display:flex; gap:8px; align-items:center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div><h1 class="page-title">Opérateurs & pays</h1>
+  <p class="page-subtitle">Opérateurs Mobile Money proposés aux clients et pays où le paiement en ligne est ouvert</p></div>
+</div>
+{% with onglet='referentiels' %}{% include 'admin_panel/paiements/_onglets.html' %}{% endwith %}
+
+<div class="rf-grille">
+  <div class="glass-card" style="padding:20px;">
+    <div style="display:flex;align-items:center;"><div class="py-section" style="margin:0;">Opérateurs</div>
+      <button type="button" class="btn btn-primary btn-sm" style="margin-left:auto;" data-ouvrir="op-nouveau">+ Opérateur</button></div>
+    <form method="post" enctype="multipart/form-data" class="rf-form" id="op-nouveau">{% csrf_token %}
+      <input type="hidden" name="quoi" value="operateur">
+      <label>Code (technique)<input name="code" placeholder="ex. wave" required></label>
+      <label>Nom affiché<input name="nom" placeholder="ex. Wave" required></label>
+      <label>Couleur<input type="color" name="couleur" value="#f26a1b"></label>
+      <label>Ordre d'affichage<input type="number" name="ordre" value="10"></label>
+      <label>Format du numéro<input name="format_numero" placeholder="ex. 07 XX XX XX XX"></label>
+      <label>Logo<input type="file" name="logo" accept="image/*"></label>
+      <div class="plein"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" checked> Actif</label><button class="btn btn-primary btn-sm" style="margin-left:auto;">Ajouter</button></div>
+    </form>
+    {% for o in operateurs %}
+    <div class="rf-ligne">
+      <span class="rf-logo" style="background:{{ o.couleur }};">{% if o.logo %}<img src="{{ o.logo.url }}" alt="">{% else %}{{ o.nom|slice:":2"|upper }}{% endif %}</span>
+      <div><b>{{ o.nom }}</b><small><code>{{ o.code }}</code> · {{ o.nb_routes }} route{{ o.nb_routes|pluralize }}{% if o.format_numero %} · {{ o.format_numero }}{% endif %}</small></div>
+      {% if o.actif %}<span class="py-pill py-ok">Actif</span>{% else %}<span class="py-pill py-off">Inactif</span>{% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" data-ouvrir="op-{{ o.pk }}">Modifier</button>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="rf-form" id="op-{{ o.pk }}">{% csrf_token %}
+      <input type="hidden" name="quoi" value="operateur"><input type="hidden" name="id" value="{{ o.pk }}">
+      <label>Code<input name="code" value="{{ o.code }}" required></label>
+      <label>Nom<input name="nom" value="{{ o.nom }}" required></label>
+      <label>Couleur<input type="color" name="couleur" value="{{ o.couleur }}"></label>
+      <label>Ordre<input type="number" name="ordre" value="{{ o.ordre }}"></label>
+      <label>Format du numéro<input name="format_numero" value="{{ o.format_numero }}"></label>
+      <label>Logo<input type="file" name="logo" accept="image/*"></label>
+      <div class="plein"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" {% if o.actif %}checked{% endif %}> Actif</label><button class="btn btn-primary btn-sm" style="margin-left:auto;">Enregistrer</button></div>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div class="glass-card" style="padding:20px;">
+    <div style="display:flex;align-items:center;"><div class="py-section" style="margin:0;">Pays ouverts au paiement</div>
+      <button type="button" class="btn btn-primary btn-sm" style="margin-left:auto;" data-ouvrir="pays-nouveau">+ Pays</button></div>
+    <form method="post" class="rf-form" id="pays-nouveau">{% csrf_token %}
+      <input type="hidden" name="quoi" value="pays">
+      <label class="plein" style="flex-direction:column;align-items:stretch;">Pays<select name="pays_code">{% for c, n, d in pays %}<option value="{{ c }}">{{ d }} {{ n }}</option>{% endfor %}</select></label>
+      <label>Devise<input name="devise" value="XAF" maxlength="3"></label>
+      <label>Indicatif<input name="indicatif" placeholder="ex. 225"></label>
+      <div class="plein"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" checked> Ouvert</label><button class="btn btn-primary btn-sm" style="margin-left:auto;">Ajouter</button></div>
+    </form>
+    {% for p, nom, dr in pays_paiement %}
+    <div class="rf-ligne">
+      <span style="font-size:1.6rem;">{{ dr }}</span>
+      <div><b>{{ nom }}</b><small>{{ p.devise }}{% if p.indicatif %} · +{{ p.indicatif }}{% endif %}</small></div>
+      {% if p.actif %}<span class="py-pill py-ok">Ouvert</span>{% else %}<span class="py-pill py-off">Fermé</span>{% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" data-ouvrir="pays-{{ p.pk }}">Modifier</button>
+    </div>
+    <form method="post" class="rf-form" id="pays-{{ p.pk }}">{% csrf_token %}
+      <input type="hidden" name="quoi" value="pays"><input type="hidden" name="pays_code" value="{{ p.pays_code }}">
+      <label>Devise<input name="devise" value="{{ p.devise }}" maxlength="3"></label>
+      <label>Indicatif<input name="indicatif" value="{{ p.indicatif }}"></label>
+      <div class="plein"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" {% if p.actif %}checked{% endif %}> Ouvert</label><button class="btn btn-primary btn-sm" style="margin-left:auto;">Enregistrer</button></div>
+    </form>
+    {% empty %}<p class="py-aide">Aucun pays ouvert.</p>{% endfor %}
+  </div>
+</div>
+<script>
+document.querySelectorAll('[data-ouvrir]').forEach(function (b) {
+  b.addEventListener('click', function () { document.getElementById(b.dataset.ouvrir).classList.toggle('ouvert'); });
+});
+</script>
+{% endblock %}

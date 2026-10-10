@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Journal des paiements — Menu Admin{% endblock %}
+{% block topbar_title %}Journal des tentatives{% endblock %}
+{% block extra_css %}{% include 'admin_panel/paiements/_css.html' %}
+<style>
+  .jr-filtres { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .jr-filtres input, .jr-filtres select { padding:9px 12px; border-radius:10px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font:inherit; font-size:.84rem; }
+  .jr td code { font-size:.75rem; }
+  .jr .err { color:#EF4444; font-size:.76rem; max-width:280px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header anim-fade-up"><div><h1 class="page-title">Journal des tentatives</h1>
+<p class="page-subtitle">Chaque lancement de paiement, l'agrégateur utilisé et son résultat</p></div></div>
+{% with onglet='journal' %}{% include 'admin_panel/paiements/_onglets.html' %}{% endwith %}
+<form method="get" class="jr-filtres">
+  <input type="search" name="q" value="{{ filtres.q }}" placeholder="Référence…">
+  <select name="agregateur" onchange="this.form.submit()"><option value="">Tous les agrégateurs</option>{% for a in agregateurs %}<option value="{{ a.code }}" {% if filtres.agregateur == a.code %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
+  <select name="statut" onchange="this.form.submit()"><option value="">Tous les statuts</option>{% for c, l in statuts %}<option value="{{ c }}" {% if filtres.statut == c %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <input name="pays" value="{{ filtres.pays }}" placeholder="Pays (CM…)" maxlength="2" style="width:110px;">
+  <button class="btn btn-secondary btn-sm">Filtrer</button>
+</form>
+<div class="glass-card jr" style="padding:0;overflow-x:auto;">
+  <table class="data-table">
+    <thead><tr><th>Date</th><th>Référence</th><th>Objet</th><th>Agrégateur</th><th>Opérateur</th><th>Lieu</th><th>Montant</th><th>Statut</th><th>Réponse</th></tr></thead>
+    <tbody>
+      {% for t in page_obj %}
+      <tr>
+        <td style="white-space:nowrap;font-size:.8rem;">{{ t.created_at|date:"d/m H:i:s" }}</td>
+        <td><code>{{ t.reference }}</code>{% if t.provider_reference %}<div style="font-size:.7rem;color:var(--text-muted);">{{ t.provider_reference|truncatechars:24 }}</div>{% endif %}</td>
+        <td>{{ t.get_objet_display }}</td>
+        <td><b>{{ t.agregateur }}</b>{% if t.bascule %} <span class="py-pill py-warn" title="Lancé en secours">secours</span>{% endif %}</td>
+        <td>{{ t.operateur|default:"—" }}</td>
+        <td>{{ t.pays_code }}{% if t.ville %} · {{ t.ville }}{% endif %}</td>
+        <td style="white-space:nowrap;">{{ t.montant|floatformat:0 }} {{ t.devise }}</td>
+        <td>{% if t.statut == 'complete' %}<span class="py-pill py-ok">Payé</span>{% elif t.statut == 'en_attente' %}<span class="py-pill py-info">En attente</span>{% elif t.statut == 'echec_lancement' %}<span class="py-pill py-err">Échec lancement</span>{% else %}<span class="py-pill py-warn">{{ t.get_statut_display }}</span>{% endif %}</td>
+        <td>{% if t.erreur %}<div class="err">{{ t.erreur }}</div>{% else %}<span style="font-size:.78rem;color:var(--text-muted);">{{ t.duree_ms }} ms</span>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);">Aucune tentative.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if page_obj.has_other_pages %}
+<div class="pagination">
+  {% if page_obj.has_previous %}<a class="page-link" href="?page={{ page_obj.previous_page_number }}&agregateur={{ filtres.agregateur }}&statut={{ filtres.statut }}&pays={{ filtres.pays }}&q={{ filtres.q|urlencode }}">‹</a>{% endif %}
+  <span class="page-link" style="pointer-events:none;">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="page-link" href="?page={{ page_obj.next_page_number }}&agregateur={{ filtres.agregateur }}&statut={{ filtres.statut }}&pays={{ filtres.pays }}&q={{ filtres.q|urlencode }}">›</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

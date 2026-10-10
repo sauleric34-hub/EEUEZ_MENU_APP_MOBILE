@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "cm.cambus.menu"
+      "bundleIdentifier": "cm.cambus.menu",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -66,7 +67,13 @@
         }
       ],
       "expo-localization",
-      "@react-native-google-signin/google-signin"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REMPLACER_PAR_IOS_URL_SCHEME"
+        }
+      ],
+      "expo-apple-authentication"
     ],
     "extra": {
       "router": {},

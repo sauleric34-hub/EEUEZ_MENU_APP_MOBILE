@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Paiements — Menu Admin{% endblock %}
+{% block topbar_title %}Agrégateurs de paiement{% endblock %}
+
+{% block extra_css %}
+{% include 'admin_panel/paiements/_css.html' %}
+<style>
+  .ag-grille { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+  .ag-carte { padding:18px; display:flex; flex-direction:column; gap:12px; position:relative; overflow:hidden; }
+  .ag-carte::before { content:''; position:absolute; left:0; top:0; right:0; height:4px; background:var(--etat, var(--border)); }
+  .ag-carte.ok { --etat:#38A169; } .ag-carte.warn { --etat:#F5A623; } .ag-carte.err { --etat:#EF4444; } .ag-carte.off { --etat:var(--border); opacity:.85; }
+  .ag-tete { display:flex; align-items:center; gap:12px; }
+  .ag-logo { width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:1.05rem;
+             background:var(--bg-tertiary); color:var(--text-primary); }
+  .ag-nom { font-weight:800; font-size:1.05rem; color:var(--text-primary); }
+  .ag-sous { font-size:.75rem; color:var(--text-muted); }
+  .ag-tete .py-pill { margin-left:auto; }
+  .ag-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  .ag-stat { background:var(--bg-tertiary); border-radius:12px; padding:9px 6px; text-align:center; }
+  .ag-stat b { display:block; font-size:1.05rem; color:var(--text-primary); }
+  .ag-stat span { font-size:.66rem; color:var(--text-muted); font-weight:600; }
+  .ag-vars { display:flex; flex-wrap:wrap; gap:5px; }
+  .ag-vars code { font-size:.68rem; padding:3px 7px; border-radius:6px; }
+  .ag-vars code.oui { background:rgba(56,161,105,.13); color:#38A169; } .ag-vars code.non { background:rgba(239,68,68,.12); color:#EF4444; }
+  .ag-erreur { font-size:.76rem; color:var(--text-secondary); background:rgba(239,68,68,.07); border-radius:10px; padding:8px 10px; line-height:1.4; word-break:break-word; }
+  .ag-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:auto; }
+  .ag-actions form { display:flex; gap:6px; }
+  .ag-actions input[type=text] { padding:7px 10px; border-radius:9px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font:inherit; font-size:.78rem; width:150px; }
+
+  .crise { padding:18px 20px; border-color:rgba(239,68,68,.35); background:linear-gradient(135deg, rgba(239,68,68,.07), transparent); }
+  .crise form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px; }
+  .crise label { display:flex; flex-direction:column; gap:5px; font-size:.75rem; font-weight:700; color:var(--text-secondary); }
+  .crise select, .crise input { padding:9px 12px; border-radius:10px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font:inherit; font-size:.85rem; min-width:150px; }
+
+  .pays-bloc { padding:0; overflow:hidden; margin-bottom:16px; }
+  .pays-tete { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); }
+  .pays-tete b { font-size:1rem; color:var(--text-primary); }
+  .pays-tete .btn { margin-left:auto; }
+  .lieu { padding:12px 18px; border-bottom:1px dashed var(--border); }
+  .lieu:last-child { border-bottom:none; }
+  .lieu-nom { font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--text-muted); margin-bottom:8px; }
+  .chaine { display:flex; align-items:center; gap:10px; padding:7px 0; flex-wrap:wrap; }
+  .chaine .op { min-width:150px; display:flex; align-items:center; gap:8px; font-weight:700; font-size:.88rem; color:var(--text-primary); }
+  .chaine .op i { width:12px; height:12px; border-radius:4px; }
+  .maillon { display:inline-flex; align-items:center; gap:6px; padding:6px 6px 6px 11px; border-radius:10px; border:1px solid var(--border); background:var(--bg-tertiary); font-size:.8rem; font-weight:700; color:var(--text-primary); }
+  .maillon small { font-size:.66rem; font-weight:800; color:var(--text-muted); }
+  .maillon.principal { border-color:rgba(56,161,105,.5); background:rgba(56,161,105,.1); }
+  .maillon.hs { opacity:.5; text-decoration:line-through; }
+  .maillon .mini { display:inline-flex; gap:2px; }
+  .maillon .mini a, .maillon .mini button { border:none; background:none; color:var(--text-muted); cursor:pointer; padding:2px 4px; border-radius:6px; font-size:.78rem; text-decoration:none; }
+  .maillon .mini a:hover, .maillon .mini button:hover { color:var(--text-primary); background:var(--bg-card-hover); }
+  .fleche { color:var(--text-muted); font-size:.85rem; }
+  .vide { padding:18px; text-align:center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Agrégateurs de paiement</h1>
+    <p class="page-subtitle">Choisissez par pays, ville et opérateur quel agrégateur encaisse — avec bascule automatique sur le secours en cas de panne</p>
+  </div>
+  <a href="{% url 'core:paiements_route_create' %}" class="btn btn-primary" style="margin-left:auto;">+ Nouvelle route</a>
+</div>
+{% with onglet='tableau' %}{% include 'admin_panel/paiements/_onglets.html' %}{% endwith %}
+
+{# ─── Agrégateurs ─── #}
+<div class="py-section">Agrégateurs <small>santé sur les dernières 24 h</small></div>
+<div class="ag-grille">
+  {% for a in agregateurs %}
+  <div class="glass-card ag-carte {% if a.utilisable and not a.disjoncteur %}ok{% elif a.obj.en_maintenance or a.disjoncteur %}warn{% elif not a.ad.implemente %}off{% elif a.obj.actif %}err{% else %}off{% endif %}">
+    <div class="ag-tete">
+      <span class="ag-logo">{{ a.ad.nom|slice:":2" }}</span>
+      <div><div class="ag-nom">{{ a.ad.nom }}</div><div class="ag-sous">{% if a.ad.flux == 'push' %}Validation sur le téléphone{% else %}Page de paiement{% endif %} · {{ a.nb_routes }} route{{ a.nb_routes|pluralize }}</div></div>
+      {% if not a.ad.implemente %}<span class="py-pill py-info">Intégration à venir</span>
+      {% elif a.disjoncteur %}<span class="py-pill py-warn">Écarté (pannes)</span>
+      {% elif a.obj.en_maintenance %}<span class="py-pill py-warn">Maintenance</span>
+      {% elif a.utilisable %}<span class="py-pill py-ok">En service</span>
+      {% elif a.obj.actif %}<span class="py-pill py-err">{{ a.raison|capfirst }}</span>
+      {% else %}<span class="py-pill py-off">Désactivé</span>{% endif %}
+    </div>
+
+    {% if a.ad.implemente %}
+    <div class="ag-stats">
+      <div class="ag-stat"><b>{{ a.total }}</b><span>tentatives</span></div>
+      <div class="ag-stat"><b>{% if a.taux_lancement is not None %}{{ a.taux_lancement }}%{% else %}—{% endif %}</b><span>lancées</span></div>
+      <div class="ag-stat"><b>{{ a.payes }}</b><span>payées</span></div>
+      <div class="ag-stat"><b>{% if a.duree %}{{ a.duree }} ms{% else %}—{% endif %}</b><span>réponse</span></div>
+    </div>
+    {% if a.bascules %}<div class="py-aide">↪ {{ a.bascules }} paiement{{ a.bascules|pluralize }} reçu{{ a.bascules|pluralize }} en secours.</div>{% endif %}
+    {% endif %}
+
+    <div class="ag-vars" title="Variables attendues dans le .env (les valeurs ne sont jamais affichées)">
+      {% for nom, ok in a.variables %}<code class="{% if ok %}oui{% else %}non{% endif %}">{% if ok %}✓{% else %}✗{% endif %} {{ nom }}</code>{% endfor %}
+    </div>
+
+    {% if a.obj.en_maintenance and a.obj.note_maintenance %}<div class="py-aide">🛠 {{ a.obj.note_maintenance }}</div>{% endif %}
+    {% if a.derniere_erreur %}<div class="ag-erreur"><b>Dernière erreur</b> · il y a {{ a.derniere_erreur.created_at|timesince }}<br>{{ a.derniere_erreur.erreur }}</div>{% endif %}
+
+    <div class="ag-actions">
+      {% if a.obj.actif %}
+        <form method="post" action="{% url 'core:paiements_agregateur' a.obj.code %}" data-confirmer="Désactiver {{ a.ad.nom }} ? Ses routes basculeront sur les agrégateurs de secours.">{% csrf_token %}
+          <input type="hidden" name="action" value="desactiver"><button class="btn btn-secondary btn-sm">Désactiver</button></form>
+        {% if a.obj.en_maintenance %}
+          <form method="post" action="{% url 'core:paiements_agregateur' a.obj.code %}">{% csrf_token %}
+            <input type="hidden" name="action" value="fin_maintenance"><button class="btn btn-primary btn-sm">Remettre en service</button></form>
+        {% else %}
+          <form method="post" action="{% url 'core:paiements_agregateur' a.obj.code %}">{% csrf_token %}
+            <input type="hidden" name="action" value="maintenance">
+            <input type="text" name="note" placeholder="Raison (facultatif)">
+            <button class="btn btn-amber btn-sm">Maintenance</button></form>
+        {% endif %}
+      {% else %}
+        <form method="post" action="{% url 'core:paiements_agregateur' a.obj.code %}">{% csrf_token %}
+          <input type="hidden" name="action" value="activer"><button class="btn btn-primary btn-sm" {% if not a.ad.implemente %}disabled title="Intégration à venir"{% endif %}>Activer</button></form>
+      {% endif %}
+      {% if a.disjoncteur %}
+        <form method="post" action="{% url 'core:paiements_agregateur' a.obj.code %}">{% csrf_token %}
+          <input type="hidden" name="action" value="reinitialiser_disjoncteur"><button class="btn btn-secondary btn-sm">Réarmer</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ─── Bascule de crise ─── #}
+<div class="glass-card crise" style="margin-top:22px;">
+  <div style="font-weight:800;color:var(--text-primary);">🚨 Bascule de crise</div>
+  <div class="py-aide" style="margin-top:4px;">Met un agrégateur en <b>priorité 1</b> pour un pays (et éventuellement une ville ou un seul opérateur) ; les autres passent en secours. Effet immédiat sur les paiements suivants.</div>
+  <form method="post" action="{% url 'core:paiements_bascule' %}" data-confirmer="Basculer le trafic de paiement ?">{% csrf_token %}
+    <label>Pays<select name="pays" required>{% for c, n, d in pays_ouverts %}<option value="{{ c }}">{{ d }} {{ n }}</option>{% endfor %}</select></label>
+    <label>Ville (facultatif)<input type="text" name="ville" placeholder="Tout le pays"></label>
+    <label>Opérateur<select name="operateur"><option value="">Tous les opérateurs</option>{% for o in operateurs %}<option value="{{ o.code }}">{{ o.nom }}</option>{% endfor %}</select></label>
+    <label>Vers l'agrégateur<select name="agregateur" required>{% for a in agregateurs_choix %}<option value="{{ a.code }}">{{ a }}</option>{% endfor %}</select></label>
+    <button class="btn btn-danger">Basculer maintenant</button>
+  </form>
+</div>
+
+{# ─── Routes par pays ─── #}
+<div class="py-section">Routes de paiement <small>principal → secours, dans l'ordre de priorité</small></div>
+{% for p in pays_blocs %}
+<div class="glass-card pays-bloc">
+  <div class="pays-tete">
+    <span style="font-size:1.4rem;">{{ p.drapeau }}</span>
+    <b>{{ p.nom }}</b>
+    {% if p.conf %}{% if p.conf.actif %}<span class="py-pill py-ok">Ouvert · {{ p.conf.devise }}</span>{% else %}<span class="py-pill py-off">Fermé</span>{% endif %}{% else %}<span class="py-pill py-warn">Pays non déclaré</span>{% endif %}
+    <a href="{% url 'core:paiements_route_create' %}?pays={{ p.code }}" class="btn btn-secondary btn-sm">+ Route</a>
+  </div>
+  {% for ville, ops in p.lieux %}
+  <div class="lieu">
+    <div class="lieu-nom">{% if ville %}📍 {{ ville }} <span style="text-transform:none;font-weight:600;">— remplace les règles du pays pour cette ville</span>{% else %}Tout le pays{% endif %}</div>
+    {% for op, chaine in ops %}
+    <div class="chaine">
+      <span class="op"><i style="background:{{ op.couleur }};"></i>{{ op.nom }}</span>
+      {% for r in chaine %}
+        {% if not forloop.first %}<span class="fleche">→</span>{% endif %}
+        <span class="maillon {% if forloop.first and r.actif %}principal{% endif %} {% if not r.actif %}hs{% endif %}" title="{% if not r.actif %}Route désactivée{% endif %}">
+          {{ r.agregateur }} <small>#{{ r.priorite }}</small>
+          <span class="mini">
+            <a href="{% url 'core:paiements_route_edit' r.pk %}" title="Modifier">✎</a>
+            <form method="post" action="{% url 'core:paiements_route_toggle' r.pk %}" style="display:inline;">{% csrf_token %}<button title="{% if r.actif %}Désactiver{% else %}Activer{% endif %}">{% if r.actif %}⏸{% else %}▶{% endif %}</button></form>
+            <form method="post" action="{% url 'core:paiements_route_delete' r.pk %}" style="display:inline;" data-confirmer="Supprimer cette route ?">{% csrf_token %}<button title="Supprimer">✕</button></form>
+          </span>
+        </span>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% empty %}
+  <div class="vide py-aide">Aucune route : les clients de ce pays ne peuvent pas payer en ligne. <a href="{% url 'core:paiements_route_create' %}?pays={{ p.code }}">Créer une route</a></div>
+  {% endfor %}
+</div>
+{% empty %}
+<div class="glass-card vide py-aide">Aucune route configurée.</div>
+{% endfor %}
+
+{% include 'admin_panel/publications/_confirmation.html' %}
+{% include 'admin_panel/publications/_moderation_css.html' %}
+{% endblock %}

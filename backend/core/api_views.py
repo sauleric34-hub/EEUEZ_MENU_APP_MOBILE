@@ -660,6 +660,33 @@ def _reponse_echec_lancement(resultat):
     return Response({'error': resultat.erreur}, status=code)
 
 
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def moyens_de_paiement(request):
+    """
+    GET /api/client/paiement/moyens?restaurant=<id>
+    Opérateurs Mobile Money proposés pour une commande chez ce restaurant
+    (pays et ville du restaurant), selon la configuration de l'admin.
+    """
+    from .models import RestaurantProfile
+    resto = None
+    rid = request.GET.get('restaurant')
+    if rid and str(rid).isdigit():
+        resto = RestaurantProfile.objects.filter(pk=rid).only('pays', 'ville').first()
+    pays_code, ville = routeur_paiement.lieu_du_restaurant(resto) if resto else (routeur_paiement.PAYS_DEFAUT, '')
+    operateurs = routeur_paiement.operateurs_disponibles(pays_code, ville)
+    base = request.build_absolute_uri('/').rstrip('/')
+    return Response({
+        'pays': pays_code,
+        'devise': routeur_paiement.devise_du_pays(pays_code),
+        'operateurs': [
+            {**{k: o[k] for k in ('code', 'nom', 'couleur', 'format_numero', 'mode_paiement', 'flux', 'indicatif')},
+             'logo': (base + o['logo']) if o['logo'] and o['logo'].startswith('/') else o['logo']}
+            for o in operateurs
+        ],
+    })
+
+
 # ── Checkout multi-restaurant (panier mélangeant plusieurs restaurants) ─────
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])

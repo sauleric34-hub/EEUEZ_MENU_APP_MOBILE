@@ -1,0 +1,6 @@
+<nav class="py-onglets">
+  <a href="{% url 'core:paiements' %}" class="{% if onglet == 'tableau' %}actif{% endif %}">Tableau de bord</a>
+  <a href="{% url 'core:paiements_referentiels' %}" class="{% if onglet == 'referentiels' %}actif{% endif %}">Opérateurs & pays</a>
+  <a href="{% url 'core:paiements_journal' %}" class="{% if onglet == 'journal' %}actif{% endif %}">Journal des tentatives</a>
+  <a href="{% url 'core:alertes' %}?categorie=paiement">Alertes{% if alertes_non_lues_total %} <span class="n">{{ alertes_non_lues_total }}</span>{% endif %}</a>
+</nav>

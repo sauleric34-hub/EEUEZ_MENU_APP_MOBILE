@@ -51,7 +51,9 @@ def invalider_cache():
 
 
 def _normaliser(texte):
-    sans_accents = unicodedata.normalize('NFD', texte or '')
+    # Apostrophes et tirets typographiques ou droits : « Côte d’Ivoire » = « Cote d'Ivoire »
+    texte = (texte or '').translate(str.maketrans({'’': ' ', "'": ' ', '-': ' ', '‐': ' '}))
+    sans_accents = unicodedata.normalize('NFD', texte)
     sans_accents = ''.join(c for c in sans_accents if unicodedata.category(c) != 'Mn')
     return ' '.join(sans_accents.lower().split())
 
@@ -131,8 +133,9 @@ def utilisable(code, cfg=None):
 
 def candidats(pays_code, ville, operateur, cfg=None):
     """Agrégateurs à essayer, dans l'ordre (disjoncteurs ouverts en dernier)."""
+    from core.models_bannieres import normaliser_ville
     cfg = cfg or config()
-    ville_n = _normaliser(ville)
+    ville_n = normaliser_ville(ville)  # même normalisation que RoutePaiement.ville_normalisee
     routes = [r for r in cfg['routes'] if r[0] == pays_code and r[2] == operateur]
     propres_a_la_ville = [r for r in routes if ville_n and r[1] == ville_n]
     retenues = propres_a_la_ville or [r for r in routes if r[1] == '']

@@ -103,7 +103,25 @@ export const toggleAbonnement = (restaurantId: number) =>
   apiPost<AbonnementToggleDTO>('/client/abonnements', { restaurant: restaurantId }, { auth: true });
 
 // ─── Commandes ───────────────────────────────────────────────
-export type PaymentMode = 'especes' | 'mtn_money' | 'orange_money' | 'carte';
+export type PaymentMode = 'especes' | 'mtn_money' | 'orange_money' | 'mobile_money' | 'carte';
+
+/** Opérateur Mobile Money proposé par le serveur pour le pays du restaurant
+ *  (choisi par l'admin : agrégateurs, routes, pays). */
+export interface OperateurPaiementDTO {
+  code: string;            // mtn_momo, orange_money, wave…
+  nom: string;
+  couleur: string;
+  format_numero: string;
+  mode_paiement: PaymentMode;
+  /** « redirection » : page de paiement ; « push » : validation sur le téléphone. */
+  flux: 'redirection' | 'push';
+  indicatif: string;
+  logo: string;
+}
+export interface MoyensPaiementDTO { pays: string; devise: string; operateurs: OperateurPaiementDTO[] }
+
+export const fetchMoyensPaiement = (restaurantId?: number) =>
+  apiGet<MoyensPaiementDTO>('/client/paiement/moyens', { query: restaurantId ? { restaurant: restaurantId } : {} });
 export interface CreateOrderItem {
   plat_id: number;
   quantite: number;
@@ -164,10 +182,10 @@ export const createOrderGroup = (params: CreateOrderGroupParams) =>
   apiPost<CommandeGroupeDTO>('/client/commandes/groupees/', params, { auth: true });
 
 /** Paiement CamerPay unique pour tout le groupe (toutes ses commandes). */
-export const initiateCamerPayPaymentGroupe = (groupeId: number, phone?: string) =>
+export const initiateCamerPayPaymentGroupe = (groupeId: number, phone?: string, operateur?: string) =>
   apiPost<CamerPayPaymentDTO>(
     `/client/commandes/groupes/${groupeId}/initier_paiement/`,
-    phone ? { phone } : {},
+    { ...(phone ? { phone } : {}), ...(operateur ? { operateur } : {}) },
     { auth: true },
   );
 

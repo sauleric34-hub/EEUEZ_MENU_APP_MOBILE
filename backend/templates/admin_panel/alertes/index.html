@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Alertes — Menu Admin{% endblock %}
+{% block topbar_title %}Alertes{% endblock %}
+{% block extra_css %}{% include 'admin_panel/paiements/_css.html' %}
+<style>
+  .al-grille { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:20px; align-items:start; }
+  .al-filtres { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .al-filtres a { padding:7px 12px; border-radius:9px; font-size:.8rem; font-weight:700; text-decoration:none; color:var(--text-secondary); background:var(--bg-card); border:1px solid var(--border); }
+  .al-filtres a.actif { background:var(--accent-orange); color:#fff; border-color:var(--accent-orange); }
+  .al { display:flex; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border); }
+  .al:last-child { border-bottom:none; }
+  .al.non-lue { background:linear-gradient(90deg, rgba(232,89,28,.06), transparent); }
+  .al-ico { width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:1rem; }
+  .al-ico.critique { background:rgba(239,68,68,.14); color:#EF4444; } .al-ico.avertissement { background:rgba(245,166,35,.15); color:#F5A623; } .al-ico.info { background:rgba(59,130,246,.14); color:#3B82F6; }
+  .al-corps { flex:1; min-width:0; }
+  .al-titre { font-weight:700; color:var(--text-primary); font-size:.9rem; }
+  .al-meta { font-size:.72rem; color:var(--text-muted); margin-top:2px; }
+  .al-msg { font-size:.82rem; color:var(--text-secondary); margin-top:6px; line-height:1.45; }
+  .al details { margin-top:6px; } .al summary { cursor:pointer; font-size:.76rem; font-weight:700; color:var(--accent-orange); }
+  .al dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin-top:6px; font-size:.76rem; }
+  .al dt { color:var(--text-muted); font-weight:700; } .al dd { margin:0; color:var(--text-primary); font-family:monospace; word-break:break-all; }
+  .al form button { border:none; background:none; color:var(--text-muted); cursor:pointer; font-size:.75rem; font-weight:700; padding:4px 8px; border-radius:7px; }
+  .al form button:hover { background:var(--bg-card-hover); color:var(--text-primary); }
+  .ds { padding:12px 0; border-bottom:1px solid var(--border); }
+  .ds:last-child { border-bottom:none; }
+  .ds b { color:var(--text-primary); font-size:.88rem; } .ds small { display:block; color:var(--text-muted); font-size:.74rem; margin-top:2px; }
+  .ds-form { display:grid; gap:10px; padding:14px; border-radius:12px; background:var(--bg-tertiary); margin-top:10px; }
+  .ds-form input[type=email], .ds-form input[type=text], .ds-form select { padding:9px 11px; border-radius:9px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text-primary); font:inherit; font-size:.84rem; }
+  .ds-form .cases { display:flex; flex-wrap:wrap; gap:10px; font-size:.8rem; color:var(--text-secondary); }
+  .ds-form label { font-size:.74rem; font-weight:700; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px; }
+  .ds-form .cases label { flex-direction:row; align-items:center; gap:5px; font-weight:600; }
+  @media (max-width: 1100px) { .al-grille { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div><h1 class="page-title">Alertes</h1>
+  <p class="page-subtitle">Bascules d'agrégateur, pannes, paiements bloqués… et qui reçoit les e-mails d'urgence</p></div>
+  <form method="post" style="margin-left:auto;">{% csrf_token %}<input type="hidden" name="action" value="tout_lire">
+    <button class="btn btn-secondary">Tout marquer comme lu</button></form>
+</div>
+
+<div class="al-grille">
+  <div>
+    <div class="al-filtres">
+      <a href="?" class="{% if not categorie and not non_lues %}actif{% endif %}">Toutes</a>
+      <a href="?non_lues=1" class="{% if non_lues %}actif{% endif %}">Non lues{% if alertes_non_lues_total %} ({{ alertes_non_lues_total }}){% endif %}</a>
+      {% for c, l in categories %}<a href="?categorie={{ c }}" class="{% if categorie == c %}actif{% endif %}">{{ l }}</a>{% endfor %}
+    </div>
+    <div class="glass-card" style="padding:0;overflow:hidden;">
+      {% for a in page_obj %}
+      <div class="al {% if not a.lue %}non-lue{% endif %}">
+        <span class="al-ico {{ a.niveau }}">{% if a.niveau == 'critique' %}🚨{% elif a.niveau == 'avertissement' %}⚠️{% else %}ℹ{% endif %}</span>
+        <div class="al-corps">
+          <div class="al-titre">{{ a.titre }}</div>
+          <div class="al-meta">{{ a.get_categorie_display }} · {{ a.created_at|date:"d/m/Y H:i:s" }} · il y a {{ a.created_at|timesince }}</div>
+          {% if a.message %}<div class="al-msg">{{ a.message }}</div>{% endif %}
+          {% if a.donnees %}
+          <details><summary>Détails techniques</summary>
+            <dl>{% for k, v in a.donnees.items %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+          </details>
+          {% endif %}
+        </div>
+        {% if not a.lue %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="lire"><input type="hidden" name="id" value="{{ a.pk }}">
+          <input type="hidden" name="next" value="{{ request.get_full_path }}"><button title="Marquer comme lue">✓ Lue</button></form>
+        {% endif %}
+      </div>
+      {% empty %}
+      <div style="padding:40px;text-align:center;color:var(--text-muted);">Aucune alerte. Tout fonctionne normalement. ✅</div>
+      {% endfor %}
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+      {% if page_obj.has_previous %}<a class="page-link" href="?page={{ page_obj.previous_page_number }}&categorie={{ categorie }}&non_lues={{ non_lues }}">‹</a>{% endif %}
+      <span class="page-link" style="pointer-events:none;">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="page-link" href="?page={{ page_obj.next_page_number }}&categorie={{ categorie }}&non_lues={{ non_lues }}">›</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="glass-card" style="padding:20px;">
+    <div style="font-weight:800;color:var(--text-primary);font-size:1rem;">Destinataires des e-mails d'urgence</div>
+    <p class="py-aide" style="margin-top:4px;">Chaque adresse reçoit les alertes des catégories cochées, à partir du niveau choisi. Un anti-rafale limite les envois pendant une panne.</p>
+
+    {% for d in destinataires %}
+    <div class="ds">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;min-width:0;"><b>{{ d.nom|default:d.email }}</b><small>{{ d.email }} · {% if d.categories %}{{ d.categories|join:", " }}{% else %}toutes catégories{% endif %} · dès « {{ d.get_niveau_minimum_display|lower }} »</small></div>
+        {% if d.actif %}<span class="py-pill py-ok">Actif</span>{% else %}<span class="py-pill py-off">Inactif</span>{% endif %}
+      </div>
+      <details style="margin-top:6px;"><summary style="font-size:.76rem;font-weight:700;color:var(--accent-orange);cursor:pointer;">Modifier</summary>
+        <form method="post" class="ds-form">{% csrf_token %}
+          <input type="hidden" name="action" value="destinataire"><input type="hidden" name="id" value="{{ d.pk }}">
+          <label>E-mail<input type="email" name="email" value="{{ d.email }}" required></label>
+          <label>Nom<input type="text" name="nom" value="{{ d.nom }}"></label>
+          <div class="cases">{% for c, l in categories %}<label><input type="checkbox" name="categories" value="{{ c }}" {% if c in d.categories %}checked{% endif %}> {{ l }}</label>{% endfor %}</div>
+          <label>Niveau minimum<select name="niveau_minimum">{% for c, l in niveaux %}<option value="{{ c }}" {% if d.niveau_minimum == c %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+          <div style="display:flex;align-items:center;gap:8px;"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" {% if d.actif %}checked{% endif %}> Actif</label>
+            <button class="btn btn-primary btn-sm" style="margin-left:auto;">Enregistrer</button></div>
+        </form>
+        <form method="post" style="margin-top:6px;" data-confirmer="Supprimer {{ d.email }} ?">{% csrf_token %}
+          <input type="hidden" name="action" value="supprimer_destinataire"><input type="hidden" name="id" value="{{ d.pk }}">
+          <button class="btn btn-danger btn-sm">Supprimer</button></form>
+      </details>
+    </div>
+    {% empty %}<p class="py-aide" style="padding:10px 0;">Aucun destinataire : ajoutez au moins une adresse pour recevoir les alertes d'urgence.</p>{% endfor %}
+
+    <form method="post" class="ds-form" style="margin-top:14px;">{% csrf_token %}
+      <input type="hidden" name="action" value="destinataire">
+      <div style="font-weight:700;color:var(--text-primary);font-size:.86rem;">+ Ajouter un destinataire</div>
+      <label>E-mail<input type="email" name="email" required placeholder="ops@exemple.com"></label>
+      <label>Nom<input type="text" name="nom" placeholder="Équipe technique"></label>
+      <div class="cases">{% for c, l in categories %}<label><input type="checkbox" name="categories" value="{{ c }}" {% if c == 'paiement' %}checked{% endif %}> {{ l }}</label>{% endfor %}</div>
+      <label>Niveau minimum<select name="niveau_minimum">{% for c, l in niveaux %}<option value="{{ c }}" {% if c == 'avertissement' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+      <div style="display:flex;align-items:center;gap:8px;"><label style="flex-direction:row;gap:6px;"><input type="checkbox" name="actif" checked> Actif</label>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;">Ajouter</button></div>
+    </form>
+
+    <form method="post" style="margin-top:14px;display:flex;gap:8px;align-items:center;">{% csrf_token %}
+      <input type="hidden" name="action" value="test">
+      <select name="categorie" style="padding:8px 10px;border-radius:9px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text-primary);">{% for c, l in categories %}<option value="{{ c }}">{{ l }}</option>{% endfor %}</select>
+      <button class="btn btn-secondary btn-sm">Envoyer une alerte de test</button>
+    </form>
+    {% if emails_env %}<p class="py-aide" style="margin-top:10px;">Reçoivent aussi toutes les alertes (ADMIN_ALERT_EMAILS du .env) : {{ emails_env|join:", " }}</p>{% endif %}
+  </div>
+</div>
+{% include 'admin_panel/publications/_confirmation.html' %}
+{% include 'admin_panel/publications/_moderation_css.html' %}
+{% endblock %}

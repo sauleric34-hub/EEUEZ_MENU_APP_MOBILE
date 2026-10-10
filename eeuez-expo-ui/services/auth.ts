@@ -4,8 +4,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, API_BASE_URL } from '../constants/api';
-import { apiPost, apiGet, apiUpload } from './http';
+import { apiPost, apiGet, apiUpload, ApiError } from './http';
 import type { AuthDTO, UserDTO } from './dto';
+import { oublierCompteGoogle, type JetonFournisseur } from './socialAuth';
 
 async function persist(auth: AuthDTO): Promise<void> {
   await AsyncStorage.setItem(AUTH_TOKEN_KEY, auth.token);
@@ -17,6 +18,19 @@ export async function login(email: string, password: string): Promise<UserDTO> {
   const auth = await apiPost<AuthDTO>('/auth/login', { email, password });
   await persist(auth);
   return auth.user;
+}
+
+/** Connexion / inscription via Google ou Apple (idToken vérifié côté serveur). */
+export async function loginWithProvider({ fournisseur, ...corps }: JetonFournisseur): Promise<UserDTO> {
+  try {
+    const auth = await apiPost<AuthDTO>(`/auth/${fournisseur}`, corps);
+    await persist(auth);
+    return auth.user;
+  } catch (e) {
+    // Un 401 ici n'est pas une « session expirée » : le jeton a été refusé.
+    if (e instanceof ApiError && e.status === 401) throw new ApiError(e.message, 401, 'auth', 'Connexion impossible');
+    throw e;
+  }
 }
 
 export interface RegisterParams {
@@ -37,9 +51,10 @@ export async function registerClient(params: RegisterParams): Promise<UserDTO> {
   return auth.user;
 }
 
-/** Suppression définitive du compte (mot de passe redemandé côté serveur). */
-export async function deleteAccount(password: string): Promise<void> {
-  await apiPost<void>('/client/compte/supprimer', { password }, { auth: true });
+/** Suppression définitive du compte : mot de passe redemandé côté serveur,
+ *  ou nouvelle connexion Google/Apple pour un compte créé sans mot de passe. */
+export async function deleteAccount(preuve: { password: string } | JetonFournisseur): Promise<void> {
+  await apiPost<void>('/client/compte/supprimer', preuve, { auth: true });
   await logout();
 }
 
@@ -70,6 +85,7 @@ export async function changerMotDePasse(code: string, nouveau: string): Promise<
 
 export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
+  await oublierCompteGoogle();
 }
 
 export async function getToken(): Promise<string | null> {
