@@ -18,6 +18,8 @@ urlpatterns = [
     path('auth/login', api_views.LoginView.as_view(), name='api-login'),
     path('auth/register/<str:role>', api_views.RegisterView.as_view(), name='api-register'),
     path('auth/refresh', TokenRefreshView.as_view(), name='api-token-refresh'),
+    path('auth/google', api_views.SocialLoginView.as_view(), {'fournisseur': 'google'}, name='api-login-google'),
+    path('auth/apple', api_views.SocialLoginView.as_view(), {'fournisseur': 'apple'}, name='api-login-apple'),
     path('auth/ping', api_views.ping_view, name='api-ping'),
 
     # Client — profil

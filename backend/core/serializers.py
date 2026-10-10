@@ -14,6 +14,9 @@ class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     niveau = serializers.SerializerMethodField()
     solde_livreur = serializers.SerializerMethodField()
+    # Faux pour un compte créé via Google/Apple : l'app adapte la suppression
+    # de compte et propose de « définir » plutôt que « changer » le mot de passe.
+    a_mot_de_passe = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -21,12 +24,15 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name', 'role',
             'telephone', 'allergies', 'pays', 'pays_code', 'ville', 'avatar', 'points_solde', 'niveau',
             'paiement_numero', 'paiement_operateur',
-            'gain_total', 'nombre_livraisons', 'solde_livreur',
+            'gain_total', 'nombre_livraisons', 'solde_livreur', 'a_mot_de_passe',
         ]
         # Le solde (points) et les gains ne se modifient jamais via l'API profil.
         read_only_fields = [
             'role', 'points_solde', 'gain_total', 'nombre_livraisons',
         ]
+
+    def get_a_mot_de_passe(self, obj):
+        return obj.has_usable_password()
 
     def get_solde_livreur(self, obj):
         return int(obj.solde_livreur) if obj.role == 'livreur' else 0

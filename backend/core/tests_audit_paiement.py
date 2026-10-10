@@ -246,7 +246,8 @@ class WebhookRobustesseTests(BaseAudit):
         self._notify_json('uuid-2', 'failed', 5000, '5000.00')
         self.txn.refresh_from_db()
         self.assertEqual(self.txn.statut, 'echouee')
-        with patch('core.api_views.camerpay_initier_paiement', return_value=('uuid-4', 'https://pay', None)):
+        # Le lancement passe par le routeur d'agrégateurs, qui appelle CamerPay.
+        with patch('core.camerpay.initier_paiement', return_value=('uuid-4', 'https://pay', None)):
             rep = self.api.post(f'/api/client/commandes/{self.commande.pk}/initier_paiement/')
         self.assertEqual(rep.status_code, 200)
         self.txn.refresh_from_db()
