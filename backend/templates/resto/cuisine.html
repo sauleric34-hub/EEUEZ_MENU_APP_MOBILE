@@ -1,0 +1,505 @@
+{% load static %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0f0c">
+<title>Écran cuisine — {{ resto.nom }}</title>
+<link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0f0c; --panel: #121915; --card: #18211b; --card2: #1e2a22; --border: rgba(255,255,255,0.08);
+    --text: #f4f1ec; --muted: rgba(244,241,236,0.62); --faint: rgba(244,241,236,0.38);
+    --orange: #f26a1b; --orange2: #f7a03b; --amber: #f7b500; --green: #2fbf71; --blue: #4d9fff; --red: #ff5a5f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+  button { font-family: inherit; cursor: pointer; border: none; }
+
+  /* ─── En-tête ─── */
+  .top { height: 76px; display: flex; align-items: center; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border);
+         background: linear-gradient(180deg, #111813, var(--bg)); }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand img { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; }
+  .brand-nom { font-weight: 800; font-size: 1.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .brand-sub { font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .live { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(47,191,113,.6); animation: ping 1.6s infinite; }
+  .live.off { background: var(--red); animation: none; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(47,191,113,.6); } 100% { box-shadow: 0 0 0 10px rgba(47,191,113,0); } }
+  .horloge { margin-left: auto; font-size: 2rem; font-weight: 900; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+  .stats { display: flex; gap: 10px; }
+  .stat { padding: 8px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); text-align: center; min-width: 84px; }
+  .stat b { display: block; font-size: 1.35rem; font-weight: 900; line-height: 1.1; transition: transform .3s; }
+  .stat span { font-size: 0.68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .stat.bump b { transform: scale(1.35); }
+  .outils { display: flex; gap: 8px; }
+  .outil { width: 46px; height: 46px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+           display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: background .2s, transform .15s; }
+  .outil:hover { background: var(--card2); } .outil:active { transform: scale(.92); }
+  .outil.muet { color: var(--red); }
+
+  /* ─── Colonnes ─── */
+  .board { height: calc(100% - 76px); display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 16px; }
+  .col { background: var(--panel); border: 1px solid var(--border); border-radius: 22px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .col-tete { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .col-tete .pastille { width: 12px; height: 12px; border-radius: 50%; }
+  .col-tete h2 { font-size: 1.15rem; font-weight: 900; letter-spacing: .3px; text-transform: uppercase; }
+  .col-tete .nb { margin-left: auto; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+                  font-weight: 900; font-size: 1.05rem; transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .col-tete .nb.bump { transform: scale(1.4); }
+  .col[data-col="nouvelles"] .pastille, .col[data-col="nouvelles"] .nb { background: var(--amber); color: #1a1200; }
+  .col[data-col="cuisine"] .pastille, .col[data-col="cuisine"] .nb { background: var(--orange); color: #fff; }
+  .col[data-col="pretes"] .pastille, .col[data-col="pretes"] .nb { background: var(--green); color: #fff; }
+  .liste { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+  .liste::-webkit-scrollbar { width: 6px; } .liste::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+  .vide { margin: auto; text-align: center; color: var(--faint); font-weight: 700; font-size: .95rem; padding: 30px 10px; }
+  .vide div { font-size: 2.6rem; margin-bottom: 8px; opacity: .6; }
+
+  /* ─── Carte commande ─── */
+  /* L'entrée (.entre) et la secousse (.arrivee) ne jouent qu'une fois : leurs
+     classes sont retirées à la fin (sinon déplacer la carte les rejouerait). */
+  .carte { background: var(--card); border: 2px solid var(--border); border-radius: 20px; padding: 16px; position: relative; }
+  @keyframes entree { from { opacity: 0; transform: translateY(26px) scale(.94); } to { opacity: 1; transform: none; } }
+  @keyframes lueur { 0%,100% { box-shadow: 0 0 0 0 rgba(247,181,0,0); } 50% { box-shadow: 0 0 0 6px rgba(247,181,0,.22), 0 0 34px rgba(247,181,0,.25); } }
+  .carte.entre { animation: entree .55s cubic-bezier(.2,.9,.3,1.2) both; }
+  .carte.nouvelle { border-color: var(--amber); animation: lueur 1.6s ease-in-out infinite; }
+  .carte.entre.nouvelle { animation: entree .55s cubic-bezier(.2,.9,.3,1.2) both, lueur 1.6s ease-in-out .6s infinite; }
+  .carte.entre.arrivee { animation: entree .55s cubic-bezier(.2,.9,.3,1.2) both, secousse .6s .55s, lueur 1.6s ease-in-out 1.2s infinite; }
+  @keyframes secousse { 0%,100% { transform: none; } 20% { transform: rotate(-1.6deg); } 40% { transform: rotate(1.6deg); } 60% { transform: rotate(-1deg); } 80% { transform: rotate(1deg); } }
+  .carte.flash::after { content: ''; position: absolute; inset: -2px; border-radius: 20px; pointer-events: none; animation: flash .9s ease-out; }
+  @keyframes flash { from { box-shadow: 0 0 0 4px var(--flash, var(--green)), 0 0 40px var(--flash, var(--green)); } to { box-shadow: 0 0 0 0 transparent; } }
+  .carte.sortie { animation: sortie .45s ease-in forwards; }
+  @keyframes sortie { to { opacity: 0; transform: scale(.85) translateY(-10px); } }
+  .carte.en_preparation { border-color: rgba(242,106,27,.55); }
+  .carte.prete { border-color: rgba(47,191,113,.55); }
+
+  .c-tete { display: flex; align-items: center; gap: 10px; }
+  .num { font-size: 1.9rem; font-weight: 900; letter-spacing: -.5px; }
+  .type { font-size: .78rem; font-weight: 800; padding: 5px 10px; border-radius: 999px; }
+  .type.livraison { background: rgba(77,159,255,.16); color: var(--blue); }
+  .type.emporter { background: rgba(47,191,113,.16); color: var(--green); }
+  .chrono { margin-left: auto; font-size: 1.25rem; font-weight: 900; font-variant-numeric: tabular-nums; padding: 5px 11px; border-radius: 12px;
+            background: rgba(47,191,113,.14); color: var(--green); transition: background .4s, color .4s; }
+  .chrono.moyen { background: rgba(247,181,0,.16); color: var(--amber); }
+  .chrono.tard { background: rgba(255,90,95,.18); color: var(--red); animation: tard 1s infinite; }
+  @keyframes tard { 50% { opacity: .55; } }
+  .client { margin-top: 4px; font-size: .88rem; color: var(--muted); font-weight: 600; }
+  .etat { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: .78rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
+  .etat.acceptee { background: rgba(77,159,255,.14); color: var(--blue); }
+  .etat.en_preparation { background: rgba(242,106,27,.16); color: var(--orange2); }
+  .etat.en_preparation i { display: inline-block; animation: flamme .7s ease-in-out infinite alternate; font-style: normal; }
+  @keyframes flamme { from { transform: scale(1) rotate(-6deg); } to { transform: scale(1.25) rotate(6deg); } }
+  .alerte { margin-top: 10px; padding: 9px 12px; border-radius: 12px; font-size: .85rem; font-weight: 700; line-height: 1.35; }
+  .alerte.allergie { background: rgba(255,90,95,.14); color: #ff8a8e; border: 1px solid rgba(255,90,95,.35); }
+  .alerte.note { background: rgba(247,181,0,.1); color: #ffd46b; border: 1px solid rgba(247,181,0,.25); }
+
+  .plats { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .plat { display: flex; align-items: center; gap: 12px; }
+  .plat-img { width: 62px; height: 62px; border-radius: 15px; object-fit: cover; flex-shrink: 0; background: linear-gradient(135deg, #f7891b, #0f5132);
+              display: flex; align-items: center; justify-content: center; font-size: 1.7rem; }
+  .qte { font-size: 1.55rem; font-weight: 900; color: var(--orange2); min-width: 44px; }
+  .plat-nom { font-size: 1.15rem; font-weight: 800; line-height: 1.2; }
+  .plat-choix { font-size: .8rem; color: var(--muted); font-weight: 600; margin-top: 2px; }
+
+  .action { margin-top: 14px; width: 100%; padding: 16px; border-radius: 16px; font-size: 1.08rem; font-weight: 900; color: #fff;
+            display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform .12s, filter .2s; position: relative; overflow: hidden; }
+  .action:active { transform: scale(.97); } .action:hover { filter: brightness(1.08); }
+  .action.accepter { background: linear-gradient(135deg, #f7c22b, #e0a10a); color: #1a1200; }
+  .action.preparation { background: linear-gradient(135deg, #f7891b, #f2611b); }
+  .action.prete { background: linear-gradient(135deg, #39c97c, #1f8a4c); }
+  .action[disabled] { opacity: .6; pointer-events: none; }
+  .attente { margin-top: 12px; text-align: center; font-size: .9rem; font-weight: 700; color: var(--green); padding: 10px; border-radius: 12px; background: rgba(47,191,113,.08); }
+
+  /* ─── Bandeau « nouvelle commande » ─── */
+  .bandeau { position: fixed; top: 92px; left: 50%; transform: translate(-50%, -160%); z-index: 50; padding: 18px 30px; border-radius: 22px;
+             background: linear-gradient(135deg, #f7c22b, #f26a1b); color: #1a1200; font-size: 1.5rem; font-weight: 900; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+             display: flex; align-items: center; gap: 14px; transition: transform .5s cubic-bezier(.2,1.3,.4,1); }
+  .bandeau.visible { transform: translate(-50%, 0); }
+  .bandeau .cloche { font-size: 2rem; animation: cloche .5s ease-in-out infinite alternate; transform-origin: top center; }
+  @keyframes cloche { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+
+  /* ─── Écran de démarrage (déverrouille le son) ─── */
+  .demarrage { position: fixed; inset: 0; z-index: 100; background: radial-gradient(circle at 50% 35%, #1b2a1f, #070a08 70%);
+               display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; transition: opacity .5s; }
+  .demarrage.cache { opacity: 0; pointer-events: none; }
+  .demarrage img { width: 96px; height: 96px; border-radius: 28px; animation: flotte 3s ease-in-out infinite; }
+  @keyframes flotte { 50% { transform: translateY(-10px); } }
+  .demarrage h1 { margin-top: 22px; font-size: 2.2rem; font-weight: 900; }
+  .demarrage p { margin-top: 8px; color: var(--muted); font-weight: 600; max-width: 460px; line-height: 1.5; }
+  .demarrage button { margin-top: 28px; padding: 18px 40px; border-radius: 999px; font-size: 1.15rem; font-weight: 900; color: #fff;
+                      background: linear-gradient(135deg, #f7891b, #f2611b); box-shadow: 0 14px 40px rgba(242,106,27,.4); }
+
+  .erreur-reseau { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--red); color: #fff; padding: 10px 18px;
+                   border-radius: 999px; font-weight: 800; font-size: .9rem; display: none; z-index: 40; }
+
+  /* ─── Responsive : tablettes portrait / téléphones ─── */
+  @media (max-width: 1100px) {
+    .stats { display: none; }
+  }
+  @media (max-width: 860px) {
+    html, body { overflow: auto; }
+    .top { height: auto; flex-wrap: wrap; padding: 12px 16px; gap: 10px; }
+    .horloge { font-size: 1.4rem; }
+    .board { height: auto; grid-template-columns: 1fr; padding: 12px; }
+    .col { max-height: none; }
+    .liste { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demarrage" id="demarrage">
+  <img src="{% if resto.logo %}{{ resto.logo.url }}{% else %}{% static 'logo.png' %}{% endif %}" alt="">
+  <h1>Écran cuisine</h1>
+  <p>{{ resto.nom }} — les commandes payées s'affichent ici en direct, avec une sonnerie à chaque étape.</p>
+  <button id="lancer">🔔 Lancer l'écran cuisine</button>
+  <p style="font-size:.8rem;margin-top:14px;">Le son et le plein écran s'activent au démarrage.</p>
+</div>
+
+<header class="top">
+  <div class="brand">
+    <img src="{% if resto.logo %}{{ resto.logo.url }}{% else %}{% static 'logo.png' %}{% endif %}" alt="">
+    <div>
+      <div class="brand-nom">{{ resto.nom }}</div>
+      <div class="brand-sub"><span class="live" id="live"></span><span id="liveTxt">En direct</span></div>
+    </div>
+  </div>
+  <div class="horloge" id="horloge">--:--</div>
+  <div class="stats">
+    <div class="stat" id="statNouvelles"><b>0</b><span>Nouvelles</span></div>
+    <div class="stat" id="statCuisine"><b>0</b><span>En cuisine</span></div>
+    <div class="stat" id="statPretes"><b>0</b><span>Prêtes</span></div>
+    <div class="stat" id="statServies"><b>0</b><span>Servies auj.</span></div>
+  </div>
+  <div class="outils">
+    <button class="outil" id="btnSon" title="Son">🔊</button>
+    <button class="outil" id="btnPlein" title="Plein écran">⛶</button>
+    <a class="outil" href="{% url 'core:resto_commandes' %}" title="Retour à l'espace restaurant" style="text-decoration:none;">↩</a>
+  </div>
+</header>
+
+<main class="board">
+  <section class="col" data-col="nouvelles">
+    <div class="col-tete"><span class="pastille"></span><h2>Nouvelles</h2><span class="nb" id="nbNouvelles">0</span></div>
+    <div class="liste" id="col-nouvelles"></div>
+  </section>
+  <section class="col" data-col="cuisine">
+    <div class="col-tete"><span class="pastille"></span><h2>En cuisine</h2><span class="nb" id="nbCuisine">0</span></div>
+    <div class="liste" id="col-cuisine"></div>
+  </section>
+  <section class="col" data-col="pretes">
+    <div class="col-tete"><span class="pastille"></span><h2>Prêtes</h2><span class="nb" id="nbPretes">0</span></div>
+    <div class="liste" id="col-pretes"></div>
+  </section>
+</main>
+
+<div class="bandeau" id="bandeau"><span class="cloche">🔔</span><span id="bandeauTxt">Nouvelle commande</span></div>
+<div class="erreur-reseau" id="erreurReseau">Connexion perdue — nouvelle tentative…</div>
+
+<script>
+(function () {
+  'use strict';
+  var URL_DONNEES = "{% url 'core:resto_cuisine_donnees' %}";
+  var URL_ACTION = "{% url 'core:resto_cuisine_action' 0 %}".replace('/0/', '/__ID__/');
+  var CSRF = "{{ csrf_token }}";
+  var POLL_MS = 4000;
+  var RAPPEL_MS = 15000;                       // re-sonne tant qu'une commande n'est pas acceptée
+  var SEUIL_MOYEN = 10 * 60, SEUIL_TARD = 20 * 60;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var etat = {};            // id → { statut, el, data }
+  var premierChargement = true;
+  var decalageHorloge = 0;  // horloge serveur - horloge locale (ms)
+  var sonActif = localStorage.getItem('kds-son') !== 'off';
+  var dernierRappel = 0;
+
+  // ─── Sonneries (Web Audio : aucune ressource externe) ──────────
+  var audio = null;
+  function ctx() {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+  // Note de cloche : fondamentale + harmonique, enveloppe percussive
+  function note(freq, debut, duree, volume) {
+    var c = ctx(), t = c.currentTime + debut;
+    [1, 2.01].forEach(function (mult, i) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = i ? 'triangle' : 'sine';
+      o.frequency.setValueAtTime(freq * mult, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime((volume || 0.35) / (i ? 3 : 1), t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + duree);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + duree + 0.05);
+    });
+  }
+  var SONS = {
+    // Nouvelle commande : carillon insistant (3 notes, deux fois)
+    nouvelle: function () { [0, 0.75].forEach(function (d) { note(1318.5, d, .5, .5); note(1046.5, d + .18, .5, .5); note(1568, d + .36, .8, .55); }); },
+    // Acceptée : une note douce
+    acceptee: function () { note(880, 0, .7, .3); },
+    // En préparation : deux notes montantes
+    en_preparation: function () { note(523.25, 0, .45, .35); note(783.99, .16, .7, .35); },
+    // Prête : arpège joyeux
+    prete: function () { [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) { note(f, i * .12, .6, .4); }); },
+  };
+  function sonner(type) { if (sonActif && SONS[type]) { try { SONS[type](); } catch (e) {} } }
+
+  // ─── Démarrage : un geste est requis pour le son et le plein écran ──
+  $('lancer').addEventListener('click', function () {
+    ctx(); note(1046.5, 0, .4, .25);
+    pleinEcran(true);
+    garderEcranAllume();
+    $('demarrage').classList.add('cache');
+  });
+  $('btnSon').addEventListener('click', function () {
+    sonActif = !sonActif;
+    localStorage.setItem('kds-son', sonActif ? 'on' : 'off');
+    majBoutonSon();
+    if (sonActif) sonner('acceptee');
+  });
+  function majBoutonSon() { $('btnSon').textContent = sonActif ? '🔊' : '🔇'; $('btnSon').classList.toggle('muet', !sonActif); }
+  $('btnPlein').addEventListener('click', function () { pleinEcran(!document.fullscreenElement); });
+  function pleinEcran(on) {
+    try {
+      if (on && !document.fullscreenElement) document.documentElement.requestFullscreen();
+      else if (!on && document.fullscreenElement) document.exitFullscreen();
+    } catch (e) {}
+  }
+  // Empêche la TV / tablette de se mettre en veille
+  var verrou = null;
+  function garderEcranAllume() {
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then(function (v) { verrou = v; }).catch(function () {});
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && verrou) garderEcranAllume(); });
+
+  // ─── Horloge + chronos ─────────────────────────────────────
+  function maintenant() { return Date.now() + decalageHorloge; }
+  function tic() {
+    var d = new Date(maintenant());
+    $('horloge').textContent = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    Object.keys(etat).forEach(function (id) {
+      var e = etat[id], chrono = e.el.querySelector('.chrono');
+      if (!chrono) return;
+      var s = Math.max(0, Math.floor((maintenant() - new Date(e.data.cree_le).getTime()) / 1000));
+      var m = Math.floor(s / 60);
+      chrono.textContent = (m >= 60 ? Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0') : String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'));
+      chrono.classList.toggle('moyen', s >= SEUIL_MOYEN && s < SEUIL_TARD);
+      chrono.classList.toggle('tard', s >= SEUIL_TARD);
+    });
+  }
+  setInterval(tic, 1000);
+
+  // ─── Rendu ─────────────────────────────────────────────────
+  function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+  function colonneDe(statut) { return statut === 'en_attente' ? 'nouvelles' : statut === 'prete' ? 'pretes' : 'cuisine'; }
+
+  function contenuCarte(c) {
+    var html = '<div class="c-tete"><span class="num">#' + c.id + '</span>'
+      + '<span class="type ' + (c.emporter ? 'emporter">🛍 À emporter' : 'livraison">🛵 Livraison') + '</span>'
+      + '<span class="chrono">00:00</span></div>'
+      + '<div class="client">' + esc(c.client) + '</div>';
+    if (c.statut === 'acceptee') html += '<span class="etat acceptee">● À lancer</span>';
+    if (c.statut === 'en_preparation') html += '<span class="etat en_preparation"><i>🔥</i> En préparation</span>';
+    if (c.allergies) html += '<div class="alerte allergie">⚠ Allergies : ' + esc(c.allergies) + '</div>';
+    if (c.notes) html += '<div class="alerte note">📝 ' + esc(c.notes) + '</div>';
+    html += '<div class="plats">';
+    c.lignes.forEach(function (l) {
+      html += '<div class="plat">'
+        + (l.image ? '<img class="plat-img" src="' + esc(l.image) + '" alt="" loading="lazy">' : '<div class="plat-img">🍲</div>')
+        + '<span class="qte">' + l.quantite + '×</span>'
+        + '<div><div class="plat-nom">' + esc(l.nom) + '</div>'
+        + (l.choix.length ? '<div class="plat-choix">' + esc(l.choix.join(' · ')) + '</div>' : '')
+        + '</div></div>';
+    });
+    html += '</div>';
+    if (c.statut === 'en_attente') html += '<button class="action accepter" data-action="accepter">✓ Accepter la commande</button>';
+    else if (c.statut === 'acceptee') html += '<button class="action preparation" data-action="preparation">🔥 Lancer la préparation</button>';
+    else if (c.statut === 'en_preparation') html += '<button class="action prete" data-action="prete">✓ Commande prête</button>';
+    else if (c.statut === 'prete') html += '<div class="attente">' + (c.emporter ? '🛍 En attente du client' : (c.livreur_assigne ? '🛵 Livreur en route' : '🛵 En attente d\'un livreur')) + '</div>';
+    return html;
+  }
+
+  function creerCarte(c, arrivee) {
+    var el = document.createElement('article');
+    el.className = 'carte entre ' + c.statut + (c.statut === 'en_attente' ? (arrivee ? ' nouvelle arrivee' : ' nouvelle') : '');
+    el.dataset.id = c.id;
+    el.innerHTML = contenuCarte(c);
+    el.addEventListener('animationend', function (ev) {
+      if (ev.target !== el) return;
+      if (ev.animationName === 'entree' && !el.classList.contains('arrivee')) el.classList.remove('entre');
+      if (ev.animationName === 'secousse') el.classList.remove('entre', 'arrivee');
+    });
+    return el;
+  }
+
+  // FLIP : mémorise les positions, applique les changements, puis anime
+  // chaque carte de son ancienne position vers la nouvelle (y compris
+  // d'une colonne à l'autre).
+  function positions() {
+    var p = {};
+    Object.keys(etat).forEach(function (id) { p[id] = etat[id].el.getBoundingClientRect(); });
+    return p;
+  }
+  function animerDeplacements(avant) {
+    Object.keys(etat).forEach(function (id) {
+      var a = avant[id]; if (!a) return;
+      var el = etat[id].el, b = el.getBoundingClientRect();
+      var dx = a.left - b.left, dy = a.top - b.top;
+      if (!dx && !dy) return;
+      el.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
+                 { duration: 650, easing: 'cubic-bezier(.2,.9,.25,1.05)' });
+    });
+  }
+
+  function appliquer(donnees) {
+    decalageHorloge = new Date(donnees.maintenant).getTime() - Date.now();
+    var avant = positions();
+    var vus = {}, nouvelles = [], changements = [];
+
+    donnees.commandes.forEach(function (c) {
+      vus[c.id] = true;
+      var col = $('col-' + colonneDe(c.statut));
+      var e = etat[c.id];
+      if (!e) {
+        var el = creerCarte(c, !premierChargement);
+        col.appendChild(el);
+        etat[c.id] = { statut: c.statut, el: el, data: c };
+        if (!premierChargement) {
+          if (c.statut === 'en_attente') nouvelles.push(c); else changements.push(c.statut);
+        }
+      } else {
+        if (e.statut !== c.statut) {
+          changements.push(c.statut);
+          e.el.className = 'carte ' + c.statut + (c.statut === 'en_attente' ? ' nouvelle' : '');
+          e.el.innerHTML = contenuCarte(c);
+          e.el.style.setProperty('--flash', c.statut === 'prete' ? '#2fbf71' : '#f26a1b');
+          void e.el.offsetWidth; e.el.classList.add('flash');
+        } else if (JSON.stringify(e.data.lignes) !== JSON.stringify(c.lignes) || e.data.livreur_assigne !== c.livreur_assigne) {
+          e.el.innerHTML = contenuCarte(c);
+        }
+        if (e.el.parentNode !== col) {
+          // Insérée à sa place d'ancienneté directement (pas de second déplacement)
+          var suivante = Array.prototype.slice.call(col.querySelectorAll('.carte:not(.sortie)'))
+            .find(function (x) { return Number(x.dataset.id) > c.id; });
+          col.insertBefore(e.el, suivante || null);
+        }
+        e.statut = c.statut; e.data = c;
+      }
+    });
+
+    // Commandes sorties de l'écran (parties en livraison, récupérées, annulées…)
+    Object.keys(etat).forEach(function (id) {
+      if (vus[id]) return;
+      var el = etat[id].el;
+      delete etat[id];
+      el.classList.add('sortie');
+      setTimeout(function () { el.remove(); majVides(); }, 460);
+    });
+
+    // Ordre d'ancienneté dans chaque colonne (la plus ancienne en haut) —
+    // on ne déplace les cartes QUE si l'ordre a changé.
+    ['nouvelles', 'cuisine', 'pretes'].forEach(function (k) {
+      var col = $('col-' + k);
+      var cartes = Array.prototype.slice.call(col.querySelectorAll('.carte:not(.sortie)'));
+      var triees = cartes.slice().sort(function (a, b) { return a.dataset.id - b.dataset.id; });
+      if (triees.some(function (el, i) { return el !== cartes[i]; })) {
+        triees.forEach(function (el) { col.appendChild(el); });
+      }
+    });
+
+    animerDeplacements(avant);
+    majCompteurs(donnees.servies_aujourdhui);
+    majVides();
+
+    if (nouvelles.length) {
+      sonner('nouvelle');
+      montrerBandeau(nouvelles.length === 1 ? 'Nouvelle commande #' + nouvelles[0].id : nouvelles.length + ' nouvelles commandes');
+      dernierRappel = Date.now();
+    } else if (changements.length) {
+      sonner(changements.indexOf('prete') >= 0 ? 'prete' : changements.indexOf('en_preparation') >= 0 ? 'en_preparation' : 'acceptee');
+    }
+    // Rappel sonore tant qu'une commande attend d'être acceptée
+    var enAttente = donnees.commandes.some(function (c) { return c.statut === 'en_attente'; });
+    if (premierChargement) dernierRappel = Date.now();  // premier rappel dans 15 s, pas tout de suite
+    else if (enAttente && Date.now() - dernierRappel > RAPPEL_MS) { sonner('nouvelle'); dernierRappel = Date.now(); }
+    premierChargement = false;
+    tic();
+  }
+
+  var precedents = {};
+  function compteur(id, valeur, carteStat) {
+    var el = $(id);
+    if (precedents[id] !== undefined && precedents[id] !== valeur) {
+      var cible = carteStat ? el : el;
+      cible.classList.add('bump'); setTimeout(function () { cible.classList.remove('bump'); }, 350);
+    }
+    precedents[id] = valeur;
+    if (carteStat) el.querySelector('b').textContent = valeur; else el.textContent = valeur;
+  }
+  function majCompteurs(servies) {
+    var n = { nouvelles: 0, cuisine: 0, pretes: 0 };
+    Object.keys(etat).forEach(function (id) { n[colonneDe(etat[id].statut)]++; });
+    compteur('nbNouvelles', n.nouvelles); compteur('nbCuisine', n.cuisine); compteur('nbPretes', n.pretes);
+    compteur('statNouvelles', n.nouvelles, true); compteur('statCuisine', n.cuisine, true);
+    compteur('statPretes', n.pretes, true); compteur('statServies', servies, true);
+    document.title = (n.nouvelles ? '(' + n.nouvelles + ') ' : '') + 'Écran cuisine — {{ resto.nom|escapejs }}';
+  }
+  var VIDES = { nouvelles: ['🔔', 'Aucune nouvelle commande'], cuisine: ['👨‍🍳', 'Rien en préparation'], pretes: ['✅', 'Aucune commande en attente de départ'] };
+  function majVides() {
+    Object.keys(VIDES).forEach(function (k) {
+      var col = $('col-' + k), vide = col.querySelector('.vide'), a = col.querySelector('.carte:not(.sortie)');
+      if (!a && !vide) { var v = document.createElement('div'); v.className = 'vide'; v.innerHTML = '<div>' + VIDES[k][0] + '</div>' + VIDES[k][1]; col.appendChild(v); }
+      if (a && vide) vide.remove();
+    });
+  }
+
+  var timerBandeau = null;
+  function montrerBandeau(texte) {
+    $('bandeauTxt').textContent = texte;
+    $('bandeau').classList.add('visible');
+    clearTimeout(timerBandeau);
+    timerBandeau = setTimeout(function () { $('bandeau').classList.remove('visible'); }, 4000);
+  }
+
+  // ─── Actions (boutons des cartes) ──────────────────────────
+  document.querySelector('.board').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.action'); if (!btn) return;
+    var carte = btn.closest('.carte'), id = carte.dataset.id;
+    btn.disabled = true; btn.textContent = '…';
+    var corps = new URLSearchParams({ action: btn.dataset.action });
+    fetch(URL_ACTION.replace('__ID__', id), {
+      method: 'POST', body: corps, credentials: 'same-origin',
+      headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+    }).then(function (r) { return r.json(); })
+      .then(function () { charger(); })
+      .catch(function () { btn.disabled = false; btn.textContent = 'Réessayer'; });
+  });
+
+  // ─── Chargement périodique ─────────────────────────────────
+  var enCours = false;
+  function charger() {
+    if (enCours) return; enCours = true;
+    fetch(URL_DONNEES, { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { if (r.redirected || !r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        appliquer(d);
+        $('live').classList.remove('off'); $('liveTxt').textContent = 'En direct';
+        $('erreurReseau').style.display = 'none';
+      })
+      .catch(function () {
+        $('live').classList.add('off'); $('liveTxt').textContent = 'Hors ligne';
+        $('erreurReseau').style.display = 'block';
+      })
+      .finally(function () { enCours = false; });
+  }
+  majBoutonSon();
+  charger();
+  setInterval(charger, POLL_MS);
+})();
+</script>
+</body>
+</html>

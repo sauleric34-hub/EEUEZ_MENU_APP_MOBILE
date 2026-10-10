@@ -11,7 +11,8 @@
   <a href="{% url 'core:resto_plats' %}" class="btn btn-secondary" style="margin-left:auto;">← Retour</a>
 </div>
 
-<form method="post" enctype="multipart/form-data" class="glass-card anim-fade-up" style="padding:28px;max-width:820px;">
+<div class="edition-plat">
+<form method="post" enctype="multipart/form-data" id="formPlat" class="glass-card anim-fade-up" style="padding:28px;min-width:0;">
   {% csrf_token %}
   <div class="grid-2" style="gap:18px;">
     <div class="form-group">
@@ -142,6 +143,128 @@
   </div>
 </form>
 
+{# ── Aperçu en direct : la fiche du plat telle qu'elle apparaîtra dans l'app ── #}
+<aside class="apercu-plat anim-fade-up" aria-label="Aperçu dans l'application">
+  <div class="apercu-titre"><span class="apercu-live"></span> Aperçu dans l'application</div>
+  <div class="telephone">
+    <div class="encoche"></div>
+    <div class="ecran" id="apEcran">
+      <div class="ap-hero" id="apHero">
+        <img id="apImg" alt="" {% if plat.image %}src="{{ plat.image.url }}"{% endif %} style="{% if not plat.image %}display:none;{% endif %}">
+        <div class="ap-hero-vide" id="apHeroVide" style="{% if plat.image %}display:none;{% endif %}">🍲<span>Ajoutez une photo</span></div>
+        <div class="ap-boutons"><span>‹</span><span>♡</span></div>
+        <div class="ap-points" id="apPoints"></div>
+        <div class="ap-kente"><i></i><i></i><i></i></div>
+        <div class="ap-indispo" id="apIndispo">Indisponible</div>
+      </div>
+      <div class="ap-corps">
+        <div class="ap-ligne-titre">
+          <h3 id="apNom" class="ap-vide-txt">Nom du plat</h3>
+          <div class="ap-prix" id="apPrix">— F</div>
+        </div>
+        <div class="ap-badges" id="apBadges"></div>
+        <div class="ap-livraison">🛵 Livraison selon la distance <span>·</span> ⏱ ~{{ resto.temps_livraison_moyen }} min</div>
+        <div class="ap-stats">
+          <div><b style="color:#f7b500;">🔥 0</b><span>commandes</span></div>
+          <div><b style="color:#ff6b70;">♥ 0</b><span>j'aime</span></div>
+          <div><b style="color:#8fd6a8;">★ —</b><span>note</span></div>
+        </div>
+        <div class="ap-resto">
+          {% if resto.logo %}<img src="{{ resto.logo.url }}" alt="">{% else %}<div class="ap-resto-logo">🍽️</div>{% endif %}
+          <div><b>{{ resto.nom }}</b><span>★ Voir le profil</span></div>
+        </div>
+        <div id="apComplements"></div>
+        <div id="apInclus"></div>
+        <div id="apDescriptionBloc"><h4>Description</h4><p id="apDescription" class="ap-vide-txt">Votre description apparaîtra ici.</p></div>
+        <div id="apIngredientsBloc"><h4>Ingrédients</h4><div class="ap-chips" id="apIngredients"></div></div>
+        <div id="apAllergenesBloc"><h4>Allergènes</h4><div class="ap-chips ap-chips-alerte" id="apAllergenes"></div></div>
+      </div>
+      <div class="ap-barre">
+        <div><span>Total</span><b id="apTotal">— F</b></div>
+        <div class="ap-ajouter">🛒 Ajouter au panier</div>
+      </div>
+    </div>
+  </div>
+  <p class="apercu-note">Le prix affiché inclut la majoration plateforme de {{ resto.commission_rate }} %.</p>
+</aside>
+</div>
+
+<style>
+  .edition-plat { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:26px; align-items:start; }
+  /* Fenêtre fixe : reste à l'écran pendant qu'on fait défiler le formulaire */
+  .apercu-plat { position:sticky; top:calc(var(--topbar-height, 64px) + 16px); }
+  .apercu-titre { display:flex; align-items:center; gap:8px; font-weight:700; font-size:.85rem; color:var(--text-muted); margin-bottom:10px; }
+  .apercu-live { width:8px; height:8px; border-radius:50%; background:#2fbf71; animation:apPing 1.6s infinite; }
+  @keyframes apPing { 0%{box-shadow:0 0 0 0 rgba(47,191,113,.6);} 100%{box-shadow:0 0 0 8px rgba(47,191,113,0);} }
+  .apercu-note { font-size:.75rem; color:var(--text-muted); margin-top:10px; text-align:center; }
+  .telephone { position:relative; border-radius:44px; padding:12px; background:linear-gradient(145deg,#2a2f2c,#0d100e);
+               box-shadow:0 30px 70px rgba(0,0,0,.45), inset 0 0 0 1.5px rgba(255,255,255,.08); }
+  .encoche { position:absolute; top:20px; left:50%; transform:translateX(-50%); width:96px; height:24px; border-radius:14px; background:#000; z-index:3; }
+  .ecran { position:relative; border-radius:34px; overflow:hidden; background:#080c09; color:#f4f1ec;
+           height:calc(100vh - var(--topbar-height, 64px) - 120px); max-height:720px; min-height:440px; display:flex; flex-direction:column; }
+  .ecran > .ap-hero, .ecran > .ap-corps { flex-shrink:0; }
+  #apEcran { overflow-y:auto; scrollbar-width:none; }
+  #apEcran::-webkit-scrollbar { display:none; }
+  .ap-hero { position:relative; height:230px; background:linear-gradient(135deg,#f7891b,#0f5132); }
+  .ap-hero img { width:100%; height:100%; object-fit:cover; display:block; animation:apZoom .5s ease; }
+  @keyframes apZoom { from { transform:scale(1.08); opacity:.4; } to { transform:none; opacity:1; } }
+  .ap-hero-vide { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:64px; gap:6px; }
+  .ap-hero-vide span { font-size:.78rem; font-weight:700; color:rgba(255,255,255,.75); }
+  .ap-boutons { position:absolute; top:44px; left:14px; right:14px; display:flex; justify-content:space-between; }
+  .ap-boutons span { width:34px; height:34px; border-radius:50%; background:rgba(11,16,13,.6); display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#fff; }
+  .ap-points { position:absolute; bottom:16px; left:0; right:0; display:flex; justify-content:center; gap:5px; }
+  .ap-points i { width:6px; height:6px; border-radius:3px; background:rgba(255,255,255,.5); }
+  .ap-points i:first-child { width:16px; background:#fff; }
+  .ap-kente { position:absolute; left:0; right:0; bottom:0; height:6px; display:flex; }
+  .ap-kente i { flex:1; } .ap-kente i:nth-child(1){background:#f7b500;} .ap-kente i:nth-child(2){background:#f26a1b;} .ap-kente i:nth-child(3){background:#1f8a4c;}
+  .ap-indispo { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(229,72,77,.92); color:#fff;
+                font-weight:800; font-size:.85rem; padding:7px 14px; border-radius:999px; }
+  .ap-corps { padding:16px 16px 90px; }
+  .ap-ligne-titre { display:flex; align-items:flex-start; gap:10px; }
+  .ap-ligne-titre h3 { flex:1; font-size:1.25rem; font-weight:800; line-height:1.25; word-break:break-word; }
+  .ap-prix { font-size:1.1rem; font-weight:800; color:#f7a03b; white-space:nowrap; }
+  .ap-vide-txt { color:rgba(244,241,236,.35) !important; font-style:italic; }
+  .ap-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .ap-badges span { font-size:.68rem; font-weight:800; padding:4px 9px; border-radius:999px; background:rgba(255,255,255,.07); color:rgba(244,241,236,.75); }
+  .ap-badges .pop { background:rgba(247,181,0,.16); color:#f7b500; }
+  .ap-livraison { margin-top:10px; font-size:.75rem; font-weight:600; color:rgba(244,241,236,.6); }
+  .ap-livraison span { margin:0 4px; }
+  .ap-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:12px; }
+  .ap-stats div { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:9px 4px; text-align:center; }
+  .ap-stats b { display:block; font-size:.88rem; } .ap-stats span { font-size:.62rem; color:rgba(244,241,236,.55); font-weight:600; }
+  .ap-resto { display:flex; align-items:center; gap:10px; margin-top:12px; padding:10px; border-radius:16px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
+  .ap-resto img, .ap-resto-logo { width:38px; height:38px; border-radius:12px; object-fit:cover; background:#1f8a4c; display:flex; align-items:center; justify-content:center; }
+  .ap-resto b { display:block; font-size:.85rem; } .ap-resto span { font-size:.68rem; color:rgba(244,241,236,.55); }
+  .ecran h4 { margin:18px 0 8px; font-size:.95rem; font-weight:800; }
+  .ecran p { font-size:.8rem; line-height:1.5; color:rgba(244,241,236,.7); white-space:pre-line; word-break:break-word; }
+  .ap-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .ap-chips span { font-size:.72rem; font-weight:700; padding:5px 10px; border-radius:999px; background:rgba(247,160,59,.12); color:#f7a03b; }
+  .ap-chips-alerte span { background:rgba(247,181,0,.12); color:#f7b500; }
+  .ap-groupe { margin-top:12px; padding:12px; border-radius:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); }
+  .ap-groupe-tete { display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:.85rem; margin-bottom:6px; }
+  .ap-groupe-tete small { font-size:.62rem; padding:3px 8px; border-radius:999px; background:rgba(242,106,27,.18); color:#f7a03b; font-weight:800; }
+  .ap-groupe-tete small.libre { background:rgba(255,255,255,.08); color:rgba(244,241,236,.6); }
+  .ap-option { display:flex; align-items:center; gap:9px; padding:7px 0; font-size:.8rem; border-top:1px solid rgba(255,255,255,.06); }
+  .ap-option:first-of-type { border-top:none; }
+  .ap-option i { width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,255,255,.3); flex-shrink:0; }
+  .ap-option:nth-child(2) i { border-color:#f26a1b; box-shadow:inset 0 0 0 3px #080c09; background:#f26a1b; }
+  .ap-option span { flex:1; } .ap-option em { font-style:normal; font-weight:800; color:#f7a03b; font-size:.75rem; } .ap-option em.offert { color:rgba(244,241,236,.4); }
+  .ap-inclus { display:flex; align-items:center; gap:8px; font-size:.8rem; padding:4px 0; color:rgba(244,241,236,.8); }
+  .ap-inclus::before { content:'✓'; color:#2fbf71; font-weight:900; }
+  .ap-barre { position:sticky; bottom:0; margin-top:auto; display:flex; align-items:center; gap:10px; padding:12px 14px 18px;
+              background:linear-gradient(180deg,rgba(8,12,9,0),#080c09 30%); }
+  .ap-barre > div:first-child span { display:block; font-size:.62rem; color:rgba(244,241,236,.55); font-weight:700; }
+  .ap-barre b { font-size:1rem; font-weight:900; }
+  .ap-ajouter { margin-left:auto; padding:11px 16px; border-radius:999px; font-size:.8rem; font-weight:800; color:#fff; background:linear-gradient(135deg,#f7891b,#f2611b); }
+  .ap-maj { animation:apMaj .6s ease; }
+  @keyframes apMaj { 0% { background-color:rgba(242,106,27,.25); } 100% { background-color:transparent; } }
+  /* L'aperçu disparaît quand la place manque (tablette portrait, mobile) */
+  @media (max-width: 1200px) {
+    .edition-plat { grid-template-columns:1fr; }
+    .apercu-plat { display:none; }
+  }
+</style>
+
 <script>
 // Les groupes sont indexés par un compteur local : le nom des champs
 // (groupe_nom[3], option_nom[3][]) permet à la vue de reconstituer
@@ -209,5 +332,111 @@ ajouterGroupe(
 );
 {% endfor %}
 {% for e in inclus %}ajouterInclus("{{ e.nom|escapejs }}");{% endfor %}
+
+// ─── Aperçu en direct ─────────────────────────────────────────
+(function () {
+  const form = document.getElementById('formPlat');
+  if (!form || !document.getElementById('apEcran')) return;
+  const TAUX = {{ resto.commission_rate|stringformat:"s" }};
+  const PHOTOS_EXISTANTES = {% if plat %}{{ plat.photos.count }}{% else %}0{% endif %};
+  const $ = id => document.getElementById(id);
+  const champ = nom => form.querySelector(`[name="${nom}"]`);
+  const prixClient = p => Math.round(p * (1 + TAUX / 100));
+  const fcfa = n => n.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ') + ' F';
+  const liste = txt => (txt || '').split(/[,;]/).map(t => t.trim()).filter(Boolean);
+  let precedent = {};
+
+  // Petit surlignage de la zone qui vient de changer
+  function signaler(el, cle, valeur) {
+    if (precedent[cle] !== undefined && precedent[cle] !== valeur) {
+      el.classList.remove('ap-maj'); void el.offsetWidth; el.classList.add('ap-maj');
+    }
+    precedent[cle] = valeur;
+  }
+
+  function texte(el, valeur, defaut) {
+    el.textContent = valeur || defaut;
+    el.classList.toggle('ap-vide-txt', !valeur);
+  }
+
+  function chips(conteneur, bloc, items) {
+    conteneur.innerHTML = items.map(i => `<span>${echapper(i)}</span>`).join('');
+    bloc.style.display = items.length ? '' : 'none';
+  }
+
+  function maj() {
+    const nom = champ('nom').value.trim();
+    texte($('apNom'), nom, 'Nom du plat');
+    signaler($('apNom'), 'nom', nom);
+
+    const prix = parseFloat(champ('prix').value) || 0;
+    const pc = prix ? fcfa(prixClient(prix)) : '— F';
+    $('apPrix').textContent = pc; $('apTotal').textContent = pc;
+    signaler($('apPrix'), 'prix', pc);
+
+    // Badges : catégorie, type, mise en avant
+    const badges = [];
+    const cat = form.querySelector('input[name="categorie"]:checked');
+    if (cat && cat.value) badges.push(cat.closest('.cat-opt').querySelector('.cat-nm').textContent.trim());
+    const type = champ('type_plat');
+    if (type && type.value) badges.push(type.options[type.selectedIndex].text);
+    let html = badges.map(b => `<span>${echapper(b)}</span>`).join('');
+    if (champ('is_popular') && champ('is_popular').checked) html = '<span class="pop">🔥 Populaire</span>' + html;
+    $('apBadges').innerHTML = html;
+    $('apIndispo').style.display = champ('is_available') && !champ('is_available').checked ? 'block' : 'none';
+
+    const desc = champ('description').value.trim();
+    texte($('apDescription'), desc, 'Votre description apparaîtra ici.');
+    signaler($('apDescriptionBloc'), 'desc', desc);
+    chips($('apIngredients'), $('apIngredientsBloc'), liste(champ('ingredients').value));
+    const allergies = champ('allergies');
+    chips($('apAllergenes'), $('apAllergenesBloc'), liste(allergies && allergies.value));
+
+    // Compléments : lus directement dans les blocs dynamiques du formulaire
+    let groupesHtml = '';
+    document.querySelectorAll('#groupes > .glass-card').forEach(bloc => {
+      const nomG = (bloc.querySelector('input[name^="groupe_nom"]').value || '').trim();
+      const options = Array.from(bloc.querySelectorAll('.options > div')).map(l => ({
+        nom: (l.querySelector('input[name^="option_nom"]').value || '').trim(),
+        prix: parseFloat(l.querySelector('input[name^="option_prix"]').value) || 0,
+      })).filter(o => o.nom);
+      if (!nomG && !options.length) return;
+      const obligatoire = bloc.querySelector('input[name^="groupe_obligatoire"]').checked;
+      groupesHtml += `<div class="ap-groupe"><div class="ap-groupe-tete">${echapper(nomG || 'Groupe sans nom')}`
+        + `<small class="${obligatoire ? '' : 'libre'}">${obligatoire ? 'Obligatoire' : 'Facultatif'}</small></div>`
+        + options.map(o => `<div class="ap-option"><i></i><span>${echapper(o.nom)}</span>`
+          + `<em class="${o.prix ? '' : 'offert'}">${o.prix ? '+' + fcfa(prixClient(o.prix)) : 'offert'}</em></div>`).join('')
+        + '</div>';
+    });
+    $('apComplements').innerHTML = groupesHtml ? '<h4>À choisir</h4>' + groupesHtml : '';
+
+    const inclus = Array.from(document.querySelectorAll('input[name="inclus_nom[]"]')).map(i => i.value.trim()).filter(Boolean);
+    $('apInclus').innerHTML = inclus.length ? '<h4>Inclus avec le plat</h4>' + inclus.map(i => `<div class="ap-inclus">${echapper(i)}</div>`).join('') : '';
+
+    // Points de la galerie : photo principale + photos supplémentaires
+    const nouvelles = champ('photos') ? champ('photos').files.length : 0;
+    const total = ($('apImg').style.display !== 'none' ? 1 : 0) + PHOTOS_EXISTANTES + nouvelles;
+    $('apPoints').innerHTML = total > 1 ? '<i></i>'.repeat(Math.min(total, 8)) : '';
+  }
+
+  // Photo principale : affichée dès qu'elle est choisie (avant tout envoi)
+  champ('image').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const img = $('apImg');
+    img.src = URL.createObjectURL(f);
+    img.style.display = 'block'; $('apHeroVide').style.display = 'none';
+    img.style.animation = 'none'; void img.offsetWidth; img.style.animation = '';
+    maj();
+  });
+
+  // Un seul écouteur pour tout le formulaire, y compris les champs ajoutés
+  // dynamiquement (groupes, options, éléments inclus).
+  form.addEventListener('input', maj);
+  form.addEventListener('change', maj);
+  // Ajout / retrait d'un groupe ou d'une option (boutons) → rafraîchir aussi
+  new MutationObserver(maj).observe(form, { childList: true, subtree: true });
+  maj();
+})();
 </script>
 {% endblock %}

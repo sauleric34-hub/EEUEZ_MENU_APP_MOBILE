@@ -84,6 +84,10 @@ export interface CartGroup {
   horsZone: boolean;
   /** Ce groupe est à retirer sur place (pas de livraison, pas d'adresse). */
   emporter: boolean;
+  /** Identifiant du groupe dans le panier : « restoId|L » ou « restoId|E ». */
+  cle: string;
+  /** Coché par le client : fait partie de ce qu'il paie maintenant. */
+  selectionne: boolean;
 }
 
 /** Lieu de livraison choisi pour la commande en cours. */
@@ -183,6 +187,12 @@ interface AppContextValue {
   /** Retire du panier les lignes des restaurants donnés (après un checkout
    *  réussi pour eux) — les autres restaurants restent au panier. */
   removeCartForRestaurants: (restoIds: number[]) => void;
+  /** Retire du panier les groupes (restaurant + mode) effectivement commandés. */
+  removeCartForCommandes: (commandes: { restaurant: number | null; emporter?: boolean }[]) => void;
+  /** Coche / décoche un restaurant du panier (paiement par restaurant). */
+  basculerGroupePanier: (cle: string) => void;
+  /** Tout cocher (true) ou tout décocher (false). */
+  selectionnerTousGroupes: (tous: boolean, cles: string[]) => void;
   cartLines: CartLine[];
   /** Panier groupé par restaurant — un restaurant hors zone y reste visible,
    *  mais son sous-total/frais sont exclus de `subtotal`/`deliveryFee`. */
@@ -668,6 +678,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => Object.values(cart).reduce((a, l) => a + l.qty, 0), [cart],
   );
 
+  /** Retire du panier exactement ce qui a été commandé : même restaurant ET
+   *  même mode (livré / à emporter). Un restaurant dont seule la partie livrée
+   *  a été payée garde ainsi ses plats à emporter, et inversement. */
+  const removeCartForCommandes = (commandes: { restaurant: number | null; emporter?: boolean }[]) => {
+    const payes = new Set(
+      commandes.filter(c => c.restaurant != null).map(c => `${c.restaurant}|${c.emporter ? 'E' : 'L'}`),
+    );
+    if (!payes.size) return;
+    setCart(s => {
+      const next: typeof s = {};
+      for (const [cle, ligne] of Object.entries(s)) {
+        const dish = dishMap.get(ligne.platId);
+        if (dish && payes.has(`${dish.restoId}|${ligne.emporter ? 'E' : 'L'}`)) continue; // commandé → retiré
+        next[cle] = ligne;
+      }
+      return next;
+    });
+  };
+
   const removeCartForRestaurants = (restoIds: number[]) => {
     if (!restoIds.length) return;
     const aRetirer = new Set(restoIds);
@@ -725,6 +754,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { annule = true; clearTimeout(t); };
   }, [cartRestoIdsKey, deliveryAddress, estimLat, estimLon]);
 
+  // ─── Paiement par restaurant ─────────────────────────────────
+  // Groupes DÉCOCHÉS par le client (tout est coché par défaut, y compris un
+  // restaurant ajouté plus tard). Ils restent au panier mais ne sont ni
+  // comptés dans le total, ni envoyés à la commande.
+  const [groupesDecoches, setGroupesDecoches] = useState<Set<string>>(new Set());
+  const basculerGroupePanier = useCallback((cle: string) => {
+    setGroupesDecoches(prev => {
+      const next = new Set(prev);
+      if (next.has(cle)) next.delete(cle); else next.add(cle);
+      return next;
+    });
+  }, []);
+  const selectionnerTousGroupes = useCallback((tous: boolean, cles: string[]) => {
+    setGroupesDecoches(tous ? new Set() : new Set(cles));
+  }, []);
+
   const cartGroups = useMemo<CartGroup[]>(() => {
     // Groupe = (restaurant, mode de retrait) : des plats livrés et des plats à
     // emporter d'un même restaurant forment deux groupes → deux commandes.
@@ -740,7 +785,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const subtotal = lines.reduce((a, l) => a + l.prixUnitaire * l.qty, 0);
       if (emporter) {
         // Retrait sur place : ni frais, ni distance, jamais hors zone.
-        return { restoId, resto, lines, subtotal, deliveryFee: 0, distanceKm: null, horsZone: false, emporter: true };
+        return { restoId, resto, lines, subtotal, deliveryFee: 0, distanceKm: null, horsZone: false, emporter: true, cle: `${restoId}|E`, selectionne: !groupesDecoches.has(`${restoId}|E`) };
       }
       // Repli local, affiché le temps que le serveur réponde (ou s'il échoue).
       const fraisLocal = resto?.paliersLivraison?.length
@@ -754,13 +799,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const deliveryFee = horsZone
         ? 0
         : (estim && estim.frais != null ? estim.frais : fraisLocal);
-      return { restoId, resto, lines, subtotal, deliveryFee, distanceKm: estim?.distanceKm ?? null, horsZone, emporter: false };
+      return { restoId, resto, lines, subtotal, deliveryFee, distanceKm: estim?.distanceKm ?? null, horsZone, emporter: false, cle: `${restoId}|L`, selectionne: !groupesDecoches.has(`${restoId}|L`) };
     });
-  }, [cartLines, restoMap, estimations]);
+  }, [cartLines, restoMap, estimations, groupesDecoches]);
 
   // Agrégats PAYABLES : un restaurant hors zone n'entre dans aucun des deux —
   // ses plats restent visibles au panier mais ne comptent pas dans le total.
-  const groupesPayables = useMemo(() => cartGroups.filter(g => !g.horsZone), [cartGroups]);
+  // Payable = coché par le client ET livrable (pas hors zone)
+  const groupesPayables = useMemo(() => cartGroups.filter(g => g.selectionne && !g.horsZone), [cartGroups]);
   const subtotal = useMemo(
     () => groupesPayables.reduce((a, g) => a + g.subtotal, 0), [groupesPayables],
   );
@@ -768,25 +814,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => groupesPayables.reduce((a, g) => a + g.deliveryFee, 0), [groupesPayables],
   );
   // Groupes livrés uniquement (les groupes à emporter n'ont ni frais ni zone).
-  const groupesLivres = useMemo(() => cartGroups.filter(g => !g.emporter), [cartGroups]);
+  const groupesLivres = useMemo(() => cartGroups.filter(g => g.selectionne && !g.emporter), [cartGroups]);
   // Vrai seulement si TOUS les groupes livrés sont hors zone (et qu'il y en a) —
   // un panier partiellement hors zone, ou 100 % à emporter, reste commandable.
   const deliveryHorsZone = groupesLivres.length > 0 && groupesLivres.every(g => g.horsZone);
-  // Une adresse n'est requise que s'il reste au moins un groupe à livrer.
+  // Une adresse n'est requise que si au moins un groupe COCHÉ est à livrer.
   const besoinAdresse = groupesLivres.length > 0;
 
   // ─── Commandes / suivi ─────────────────────────────────────
   const checkout = async (
     mode: PaymentMode = 'especes', utiliserPoints = false,
   ): Promise<CommandeGroupeDTO> => {
-    if (!cartLines.length) throw new Error('Panier vide');
+    // Seuls les restaurants cochés sont commandés ; les autres restent au panier.
+    const lignesChoisies = groupesPayables.flatMap(g => g.lines);
+    if (!lignesChoisies.length) throw new Error('Sélectionnez au moins un restaurant à payer.');
     if (besoinAdresse && (!deliveryAddress || !deliveryAddress.adresse)) {
       throw new Error('Choisissez un lieu de livraison.');
     }
     // Un item par ligne de panier, TOUS restaurants confondus : le serveur
     // retrouve lui-même le restaurant de chaque plat_id (seule source de
     // vérité) et crée une Commande par restaurant livrable / à emporter.
-    const items = cartLines.map(l => ({
+    const items = lignesChoisies.map(l => ({
       plat_id: l.dish.id,
       quantite: l.qty,
       // On n'envoie QUE les identifiants d'options : le serveur retrouve les
@@ -841,6 +889,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     follows, toggleFollow, isFollowing: (id) => !!follows[id],
     pubLikes, togglePubLike, reloadPubLikes,
     cart, addToCart, cartInc, cartDec, cartRemove, cartSetEmporter, clearCart, removeCartForRestaurants,
+    removeCartForCommandes, basculerGroupePanier, selectionnerTousGroupes,
     cartLines, cartGroups, cartCount, subtotal, deliveryFee, deliveryHorsZone, besoinAdresse,
     total: subtotal + deliveryFee,
     orders, reloadOrders, checkout, activeOrder, trackStep,

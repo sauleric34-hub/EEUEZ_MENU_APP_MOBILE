@@ -186,18 +186,44 @@ function CartLineRow({ line, dimmed }: { line: CartLine; dimmed?: boolean }) {
   );
 }
 
+/** Case à cocher animée (sélection d'un restaurant à payer). */
+function CaseACocher({ coche, desactivee }: { coche: boolean; desactivee?: boolean }) {
+  const { colors } = useApp();
+  const pop = useRef(new Animated.Value(coche ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(pop, { toValue: coche ? 1 : 0, useNativeDriver: true, speed: 40, bounciness: 14 }).start();
+  }, [coche, pop]);
+  return (
+    <View style={[
+      styles.case,
+      coche
+        ? { backgroundColor: Brand.accent, borderColor: Brand.accent }
+        : { borderColor: desactivee ? colors.border : colors.faint, backgroundColor: desactivee ? colors.surface2 : 'transparent' },
+    ]}>
+      <Animated.View style={{ transform: [{ scale: pop }], opacity: pop }}>
+        <Check size={14} color="#fff" strokeWidth={3.2} />
+      </Animated.View>
+    </View>
+  );
+}
+
 /** Un restaurant du panier : ses plats, sa propre distance/frais de livraison
  *  (chaque restaurant a SON barème), et — s'il est hors zone pour l'adresse
  *  choisie — un signalement clair : ses plats restent visibles mais ne
  *  seront PAS commandés (les autres restaurants du panier, eux, le seront). */
-function CartGroupSection({ group }: { group: CartGroup }) {
-  const { colors } = useApp();
-  const { resto, lines, deliveryFee, distanceKm, horsZone, emporter } = group;
+function CartGroupSection({ group, avecCase }: { group: CartGroup; avecCase: boolean }) {
+  const { colors, basculerGroupePanier } = useApp();
+  const { resto, lines, deliveryFee, distanceKm, horsZone, emporter, selectionne } = group;
+  // Un restaurant hors zone ne peut pas être payé : sa case est désactivée.
+  const coche = selectionne && !horsZone;
+  const basculer = () => { if (!horsZone) { animateListChange(); basculerGroupePanier(group.cle); } };
 
   return (
     <View style={{ marginTop: 22 }}>
+      <PressableScale onPress={avecCase ? basculer : undefined} scaleTo={avecCase && !horsZone ? 0.98 : 1}>
       <View style={styles.groupHeader}>
-        <Text numberOfLines={1} style={[displayFont(14.5, '800'), { color: colors.text, flex: 1 }]}>
+        {avecCase && <CaseACocher coche={coche} desactivee={horsZone} />}
+        <Text numberOfLines={1} style={[displayFont(14.5, '800'), { color: coche || !avecCase ? colors.text : colors.muted, flex: 1 }]}>
           {resto?.name ?? 'Restaurant'}
         </Text>
         {emporter ? (
@@ -216,8 +242,15 @@ function CartGroupSection({ group }: { group: CartGroup }) {
           </Text>
         )}
       </View>
+      </PressableScale>
 
-      {lines.map(line => <CartLineRow key={line.cle} line={line} dimmed={horsZone} />)}
+      {lines.map(line => <CartLineRow key={line.cle} line={line} dimmed={horsZone || !selectionne} />)}
+
+      {!selectionne && !horsZone && (
+        <Text style={[bodyFont(12, '600'), { color: colors.muted, marginTop: -4, marginBottom: 4 }]}>
+          Non inclus dans ce paiement — ces plats restent dans votre panier pour plus tard.
+        </Text>
+      )}
 
       {emporter && (
         <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: -4, marginBottom: 4 }]}>
@@ -236,13 +269,17 @@ function CartGroupSection({ group }: { group: CartGroup }) {
 
 export default function PanierScreen() {
   const {
-    colors, cartGroups, removeCartForRestaurants,
+    colors, cartGroups, removeCartForCommandes, selectionnerTousGroupes,
     subtotal, deliveryFee, deliveryHorsZone, besoinAdresse, total, cartCount, checkout, reloadOrders, deliveryAddress, user,
   } = useApp();
   // Restaurants réellement payables (hors zone exclue) — c'est CE périmètre
   // que le paiement porte ; les autres restent visibles mais de côté.
-  const groupesPayables = cartGroups.filter(g => !g.horsZone);
-  const groupesExclus = cartGroups.filter(g => g.horsZone);
+  // Paiement par restaurant : seuls les groupes COCHÉS (et livrables) sont payés.
+  const groupesPayables = cartGroups.filter(g => g.selectionne && !g.horsZone);
+  const groupesExclus = cartGroups.filter(g => g.selectionne && g.horsZone);
+  const groupesCochables = cartGroups.filter(g => !g.horsZone);
+  const toutCoche = groupesCochables.every(g => g.selectionne);
+  const avecCases = cartGroups.length > 1;
   // Groupes livrés payables uniquement (les groupes à emporter n'ont pas de
   // frais / distance à afficher dans le récapitulatif « Livraison »).
   const groupesLivrables = groupesPayables.filter(g => !g.emporter);
@@ -310,10 +347,6 @@ export default function PanierScreen() {
   // peuvent être relancées ou annulées ENSEMBLE.
   const [pendingGroup, setPendingGroup] = useState<CommandeGroupeDTO | null>(null);
 
-  /** Restaurants effectivement commandés dans `groupe` (ceux exclus — hors
-   *  zone, fermés — n'y figurent pas et restent au panier). */
-  const restosCommandes = (groupe: CommandeGroupeDTO) =>
-    groupe.commandes.map(c => c.restaurant).filter((id): id is number => id != null);
 
   /** Où envoyer le client une fois le groupe payé : le suivi habituel pour
    *  une seule commande, la liste « Mes commandes » si plusieurs restaurants
@@ -391,7 +424,7 @@ export default function PanierScreen() {
         // Espèces → commandes confirmées tout de suite : on retire du panier
         // uniquement les restaurants effectivement commandés (les exclus —
         // hors zone — y restent) et on suit la livraison.
-        removeCartForRestaurants(restosCommandes(groupe));
+        removeCartForCommandes(groupe.commandes);
         signalerExclusions(groupe);
         router.push(routeApresPaiement(groupe));
       }
@@ -427,8 +460,23 @@ export default function PanierScreen() {
             <>
               {/* Un restaurant à la fois : chacun garde son propre frais de
                   livraison (son barème, sa distance à l'adresse choisie). */}
+              {avecCases && (
+                <View style={[styles.selectionBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[bodyFont(13.5, '800'), { color: colors.text }]}>Payer par restaurant</Text>
+                    <Text style={[bodyFont(11.5, '600'), { color: colors.muted, marginTop: 1 }]}>
+                      {groupesPayables.length} sur {cartGroups.length} sélectionné{groupesPayables.length > 1 ? 's' : ''} · cochez ce que vous payez maintenant
+                    </Text>
+                  </View>
+                  <PressableScale onPress={() => { animateListChange(); selectionnerTousGroupes(!toutCoche, cartGroups.map(g => g.cle)); }}>
+                    <Text style={[bodyFont(12.5, '800'), { color: Brand.accentLight }]}>
+                      {toutCoche ? 'Tout décocher' : 'Tout cocher'}
+                    </Text>
+                  </PressableScale>
+                </View>
+              )}
               {cartGroups.map(group => (
-                <CartGroupSection key={`${group.restoId}${group.emporter ? 'E' : 'L'}`} group={group} />
+                <CartGroupSection key={group.cle} group={group} avecCase={avecCases} />
               ))}
 
               {/* Lieu de livraison (GPS précis) — inutile si tout est à emporter */}
@@ -645,6 +693,10 @@ export default function PanierScreen() {
                   <View style={[styles.checkout, { backgroundColor: Brand.accent, marginTop: 16 }]}>
                     <ActivityIndicator color="#fff" />
                   </View>
+                ) : groupesPayables.length === 0 ? (
+                  <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
+                    <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Cochez un restaurant à payer</Text>
+                  </View>
                 ) : (besoinAdresse && deliveryHorsZone) ? (
                   <View style={[styles.checkout, { backgroundColor: colors.border, marginTop: 16 }]}>
                     <Text style={[bodyFont(15.5, '800'), { color: colors.muted }]}>Adresse hors zone de livraison</Text>
@@ -652,7 +704,11 @@ export default function PanierScreen() {
                 ) : (
                   <PressableScale onPress={() => bloquer(submit)} style={{ marginTop: 16 }}>
                     <LinearGradient colors={[Brand.accentTop, Brand.accentBot]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.checkout, glow(Brand.accent, 24)]}>
-                      <Text style={[bodyFont(15.5, '800'), { color: '#fff' }]}>Finaliser la commande</Text>
+                      <Text style={[bodyFont(15.5, '800'), { color: '#fff' }]}>
+                        {avecCases && groupesPayables.length < cartGroups.length
+                          ? `Payer ${groupesPayables.length} restaurant${groupesPayables.length > 1 ? 's' : ''}`
+                          : 'Finaliser la commande'}
+                      </Text>
                       <ArrowRight size={19} color="#fff" strokeWidth={2.6} />
                     </LinearGradient>
                   </PressableScale>
@@ -676,7 +732,7 @@ export default function PanierScreen() {
           // Paiement confirmé → ce sont de vraies commandes : on retire du
           // panier les restaurants commandés (les exclus y restent déjà —
           // ils n'ont jamais fait partie de ce groupe).
-          removeCartForRestaurants(restosCommandes(pendingGroup));
+          removeCartForCommandes(pendingGroup.commandes);
           signalerExclusions(pendingGroup);
           const destination = routeApresPaiement(pendingGroup);
           setPendingGroup(null);
@@ -714,6 +770,11 @@ const styles = StyleSheet.create({
   emptyTxt: { textAlign: 'center', maxWidth: 220, marginTop: 6, lineHeight: 19 },
   browseBtn: { paddingHorizontal: 26, paddingVertical: 14, borderRadius: Radius.pill },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  case: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  selectionBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18,
+    padding: 13, borderRadius: 16, borderWidth: 1,
+  },
   zoneBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.pill, borderWidth: 1,

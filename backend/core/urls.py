@@ -1,6 +1,6 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
-from core.views import publications_admin, bannieres, categories_admin
+from core.views import publications_admin, bannieres, categories_admin, cuisine_ws
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
 from core.views import partenaires_admin
@@ -110,6 +110,9 @@ urlpatterns = [
     path('resto/', resto_ws.dashboard, name='resto_dashboard'),
     path('resto/commandes/', resto_ws.commandes, name='resto_commandes'),
     path('resto/commandes/<int:pk>/action/', resto_ws.commande_action, name='resto_commande_action'),
+    path('resto/cuisine/', cuisine_ws.cuisine, name='resto_cuisine'),
+    path('resto/cuisine/donnees/', cuisine_ws.cuisine_donnees, name='resto_cuisine_donnees'),
+    path('resto/cuisine/<int:pk>/action/', cuisine_ws.cuisine_action, name='resto_cuisine_action'),
     path('resto/plats/', resto_ws.plats, name='resto_plats'),
     path('resto/plats/nouveau/', resto_ws.plat_form, name='resto_plat_create'),
     path('resto/plats/<int:pk>/', resto_ws.plat_form, name='resto_plat_edit'),
