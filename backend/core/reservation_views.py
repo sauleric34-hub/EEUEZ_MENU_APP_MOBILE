@@ -10,7 +10,6 @@ from django.http import HttpResponse
 
 from .models import RestaurantProfile, RestaurantMedia, Reservation, Plat, Livraison
 from .serializers import RestaurantMediaSerializer, ReservationSerializer
-from .camerpay import initier_paiement
 from .reservation_pdf import generer_ticket_pdf
 
 
@@ -101,22 +100,27 @@ def reservation_payer(request, id):
         resa.save(update_fields=['statut', 'code', 'updated_at'])
         return Response({'free': True})
 
+    from .api_views import _operateur_demande, _reponse_echec_lancement, _reponse_lancement
+    from .paiements import routeur
+
     phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
     payment_ref = f'RESA-{resa.id}'
-    transaction_uuid, pay_url, error = initier_paiement(
-        amount=int(resa.prix), merchant_invoice_id=payment_ref,
-        customer_phone=phone, customer_email=request.user.email,
-        customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
-        callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
-        return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
+    operateur = _operateur_demande(request)
+    pays_code, ville = routeur.lieu_du_restaurant(resa.restaurant)
+    resultat, agregateur = routeur.lancer(
+        objet='reservation', reference=payment_ref, montant=int(resa.prix),
+        pays_code=pays_code, ville=ville, operateur=operateur, telephone=phone,
+        email=request.user.email, nom_client=f'{request.user.first_name} {request.user.last_name}'.strip(),
+        description=f'Réservation MENU {payment_ref}',
     )
-    if error:
-        code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
-        return Response({'error': error}, status=code)
+    if not resultat.ok:
+        return _reponse_echec_lancement(resultat)
 
-    resa.provider_reference = transaction_uuid
-    resa.save(update_fields=['provider_reference'])
-    return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
+    resa.provider_reference = resultat.provider_reference
+    resa.agregateur = agregateur
+    resa.operateur = operateur
+    resa.save(update_fields=['provider_reference', 'agregateur', 'operateur'])
+    return Response(_reponse_lancement(resultat, payment_ref, agregateur))
 
 
 @api_view(['GET'])

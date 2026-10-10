@@ -56,3 +56,20 @@ def commande_statut_change_notifie_partenaire(sender, instance, created, **kwarg
         return
     from .tasks import notifier_partenaire_async
     notifier_partenaire_async(instance.id)
+
+
+# ─── Paiements : toute modification de la configuration (admin) est prise
+# en compte immédiatement par le routeur, qui garde sinon un cache de 5 min.
+from django.db.models.signals import post_delete as _post_delete, post_save as _post_save  # noqa: E402
+
+from .models_paiement import Agregateur, Operateur, PaysPaiement, RoutePaiement  # noqa: E402
+
+
+def _invalider_config_paiement(sender, **kwargs):
+    from .paiements.routeur import invalider_cache
+    invalider_cache()
+
+
+for _modele in (Agregateur, Operateur, PaysPaiement, RoutePaiement):
+    _post_save.connect(_invalider_config_paiement, sender=_modele, dispatch_uid=f'paiement-cfg-save-{_modele.__name__}')
+    _post_delete.connect(_invalider_config_paiement, sender=_modele, dispatch_uid=f'paiement-cfg-del-{_modele.__name__}')

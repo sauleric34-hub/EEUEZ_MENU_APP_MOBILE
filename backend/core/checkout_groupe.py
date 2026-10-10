@@ -41,7 +41,7 @@ def mode_paiement_app(mode):
     """
     from django.conf import settings
 
-    autorises = {'mtn_money', 'orange_money'}
+    autorises = {'mtn_money', 'orange_money', 'mobile_money'}
     if getattr(settings, 'PAIEMENT_ESPECES_APP', False):
         autorises.add('especes')
     return mode if mode in autorises else None
@@ -325,7 +325,7 @@ def creer_commandes_groupees(*, user, items, adresse_livraison, latitude, longit
         groupe.montant_total = sum(int(c.montant_total) for c in commandes)
         groupe.save(update_fields=['montant_total'])
 
-        if mode_paiement in ('mtn_money', 'orange_money'):
+        if mode_paiement in ('mtn_money', 'orange_money', 'mobile_money'):
             from .models import PaiementGroupe
             PaiementGroupe.objects.create(
                 groupe=groupe, montant=groupe.montant_total, mode_paiement=mode_paiement,

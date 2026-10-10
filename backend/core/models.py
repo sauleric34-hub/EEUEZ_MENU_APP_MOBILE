@@ -607,6 +607,9 @@ MODE_PAIEMENT_CHOICES = [
     ('orange_money', 'Orange Money'),
     ('carte', 'Carte Bancaire'),
     ('especes', 'Espèces'),
+    # Autres opérateurs (Wave, Moov, Airtel…) : l'opérateur exact est dans
+    # le champ `operateur` de la transaction.
+    ('mobile_money', 'Mobile Money'),
 ]
 
 
@@ -632,6 +635,10 @@ class Transaction(models.Model):
     # transaction_uuid CamerPay (renvoyé par /api/payment/initiate), utile pour
     # une vérification de statut complémentaire au webhook (GET /payment/{uuid}/status).
     provider_reference = models.CharField(max_length=100, blank=True)
+    # Agrégateur ayant encaissé (vide = CamerPay, paiements antérieurs) et
+    # opérateur Mobile Money choisi (mtn_momo, orange_money, wave…).
+    agregateur = models.CharField(max_length=20, blank=True)
+    operateur = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -731,6 +738,8 @@ class Reservation(models.Model):
     # transaction_uuid CamerPay (renvoyé par /api/payment/initiate), utile pour
     # une vérification de statut complémentaire au webhook (GET /payment/{uuid}/status).
     provider_reference = models.CharField(max_length=100, blank=True)
+    agregateur = models.CharField(max_length=20, blank=True)
+    operateur = models.CharField(max_length=30, blank=True)
     transaction = models.ForeignKey(
         'Transaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='reservations',
     )
@@ -778,3 +787,8 @@ from .models_partenaire import (  # noqa: E402,F401
 from .models_commande_groupe import CommandeGroupe, PaiementGroupe  # noqa: E402,F401
 
 from .models_otp import CodeVerification  # noqa: E402,F401
+
+from .models_paiement import (  # noqa: E402,F401
+    Agregateur, Operateur, PaysPaiement, RoutePaiement, TentativePaiement,
+    AlerteAdmin, DestinataireAlerte,
+)

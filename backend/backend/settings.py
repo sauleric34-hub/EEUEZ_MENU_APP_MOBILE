@@ -224,6 +224,14 @@ if not DEBUG:
         o.strip() for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
     ]
 
+# ─── Connexion Google / Apple (app mobile) ──────────────────────────────────────
+# Identifiants d'app acceptés comme audience des idTokens (core/social_auth.py).
+# Google : ID client « Application Web » ET ID client iOS (Google Cloud >
+# Identifiants), séparés par une virgule. Apple : bundle ID de l'app iOS.
+# Ce ne sont pas des secrets, mais sans eux la connexion est refusée.
+GOOGLE_CLIENT_IDS = [c.strip() for c in os.environ.get('GOOGLE_CLIENT_IDS', '').split(',') if c.strip()]
+APPLE_CLIENT_IDS = [c.strip() for c in os.environ.get('APPLE_CLIENT_IDS', 'cm.cambus.menu').split(',') if c.strip()]
+
 # ─── CamerPay ─────────────────────────────────────────────────────────────────
 # Passerelle de paiement camerounaise (camerpay.biz) : Orange Money, MTN MoMo,
 # cartes, PayPal. Les clés viennent UNIQUEMENT des variables d'environnement

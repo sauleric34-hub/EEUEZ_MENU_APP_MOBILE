@@ -1,0 +1,41 @@
+{% extends 'emails/base.html' %}
+{% block titre %}{{ titre }}{% endblock %}
+{% block preheader %}{{ message|truncatechars:120 }}{% endblock %}
+
+{% block hero %}
+<tr>
+  <td class="pad" style="padding:26px 34px;background:{% if niveau == 'critique' %}#d93a40{% else %}#f2a20b{% endif %};">
+    <p style="margin:0;font-size:12px;font-weight:800;letter-spacing:1.5px;color:rgba(255,255,255,.85);text-transform:uppercase;">
+      {% if niveau == 'critique' %}🚨 Alerte critique{% else %}⚠️ Avertissement{% endif %} · {{ categorie }}
+    </p>
+    <h1 style="margin:8px 0 0 0;font-size:24px;line-height:30px;font-weight:800;color:#ffffff;">{{ titre }}</h1>
+    <p style="margin:6px 0 0 0;font-size:13px;color:rgba(255,255,255,.9);">{{ date|date:"l d F Y à H:i:s" }}</p>
+  </td>
+</tr>
+{% endblock %}
+
+{% block contenu %}
+{% if message %}<p style="margin:0 0 20px 0;font-size:15px;line-height:24px;color:#17231a;white-space:pre-line;">{{ message }}</p>{% endif %}
+
+{% if details_liste %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #ece6db;border-radius:14px;overflow:hidden;">
+  {% for cle, valeur in details_liste %}
+  <tr>
+    <td style="padding:10px 14px;background:#faf7f2;font-size:13px;font-weight:700;color:#55605a;width:38%;border-bottom:1px solid #ece6db;vertical-align:top;">{{ cle }}</td>
+    <td style="padding:10px 14px;font-size:13px;color:#17231a;border-bottom:1px solid #ece6db;font-family:'SF Mono',Menlo,Consolas,monospace;word-break:break-all;">{{ valeur }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 0 auto;">
+  <tr><td align="center" style="border-radius:999px;background:#17231a;">
+    <a href="{{ lien_admin }}" target="_blank" style="display:inline-block;padding:14px 30px;font-size:14px;font-weight:800;color:#ffffff;border-radius:999px;">
+      Ouvrir la gestion des paiements →
+    </a>
+  </td></tr>
+</table>
+<p style="margin:18px 0 0 0;font-size:12px;color:#7c857e;text-align:center;">
+  Vous recevez cet e-mail car vous êtes inscrit aux alertes « {{ categorie }} » de l'administration MENU.
+</p>
+{% endblock %}

@@ -66,6 +66,8 @@ class PaiementGroupe(models.Model):
     # commande unique (préfixe « EEUEZ- ») ou de réservation (« RESA- »).
     reference = models.CharField(max_length=100, blank=True)
     provider_reference = models.CharField(max_length=100, blank=True)
+    agregateur = models.CharField(max_length=20, blank=True)
+    operateur = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

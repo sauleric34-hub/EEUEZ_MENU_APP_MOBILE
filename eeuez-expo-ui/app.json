@@ -65,7 +65,8 @@
           "color": "#f26a1b"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "router": {},

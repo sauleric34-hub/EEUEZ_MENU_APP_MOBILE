@@ -40,10 +40,9 @@ from .checkout_groupe import (
     construire_commande, enregistrer_transaction_paiement, creer_commandes_groupees,
     RestaurantExclu, mode_paiement_app,
 )
-from .camerpay import (
-    initier_paiement as camerpay_initier_paiement, verifier_signature_webhook, paiement_annulable,
-    STATUT_PAR_CAMERPAY, PAYMENT_METHOD_PAR_MODE,
-)
+from .paiements import routeur as routeur_paiement, traitement as traitement_paiement
+from .paiements.base import WebhookInvalide
+from .paiements.registre import adaptateur as adaptateur_paiement
 from . import fidelite
 from .compte import supprimer_compte_client, SuppressionImpossible
 
@@ -128,6 +127,68 @@ class RegisterView(views.APIView):
         return Response(
             {'token': tokens['access'], 'refresh': tokens['refresh'], 'user': UserSerializer(user).data},
             status=status.HTTP_201_CREATED,
+        )
+
+
+class SocialLoginView(views.APIView):
+    """
+    POST /api/auth/google  ou  /api/auth/apple
+    Body : { "id_token": "...", "first_name"?: "...", "last_name"?: "..." }
+    (Apple ne donne le nom qu'à la toute première connexion, et seulement à
+    l'app : elle nous le transmet à côté du jeton.)
+    Connecte le compte portant l'e-mail vérifié du jeton, ou crée un compte
+    client sans mot de passe. Même réponse que /auth/login.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
+
+    def post(self, request, fournisseur):
+        from .social_auth import verifier_jeton, JetonInvalide
+        try:
+            identite = verifier_jeton(fournisseur, request.data.get('id_token'))
+        except JetonInvalide as e:
+            logger.info('Connexion %s refusée : %s', fournisseur, e)
+            return Response(
+                {'error': 'Connexion refusée par le serveur. Réessayez.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        user = User.objects.filter(email__iexact=identite.email).first()
+        cree = False
+        if user is None:
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=identite.email,
+                        email=identite.email,
+                        password=None,  # mot de passe inutilisable, définissable plus tard par code e-mail
+                        first_name=identite.prenom or str(request.data.get('first_name') or '').strip()[:150],
+                        last_name=identite.nom or str(request.data.get('last_name') or '').strip()[:150],
+                        role='client',
+                    )
+                cree = True
+            except IntegrityError:
+                # Double tap : la requête jumelle vient de créer le compte.
+                user = User.objects.get(username__iexact=identite.email)
+
+        if not user.is_active:
+            return Response({'error': 'Ce compte est désactivé.'}, status=status.HTTP_403_FORBIDDEN)
+        # Livreurs / restaurants / admins : comptes vérifiés à la main, on ne
+        # leur ouvre pas une seconde porte d'entrée.
+        if user.role != 'client':
+            return Response(
+                {'error': 'Ce compte se connecte avec son e-mail et son mot de passe.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if cree:
+            from .emails_client import email_bienvenue
+            email_bienvenue(user)  # best-effort, envoyé en arrière-plan
+
+        tokens = get_tokens_for_user(user)
+        return Response(
+            {'token': tokens['access'], 'refresh': tokens['refresh'], 'user': UserSerializer(user).data},
+            status=status.HTTP_201_CREATED if cree else status.HTTP_200_OK,
         )
 
 # ─── CHANGEMENT DE MOT DE PASSE PAR CODE E-MAIL (OTP) ───────
@@ -473,7 +534,7 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         # Paiement lancé chez CamerPay : on ne supprime (et on ne perd donc la
         # référence attendue par le webhook) que si l'échec est certain.
         for txn in commande.transactions.filter(type='paiement_client').exclude(provider_reference=''):
-            annulable, message = paiement_annulable(txn.provider_reference)
+            annulable, message = traitement_paiement.paiement_annulable(txn.agregateur, txn.provider_reference)
             if not annulable:
                 return Response({'error': message}, status=status.HTTP_409_CONFLICT)
         # Les points engagés sont rendus avant la destruction de la commande.
@@ -498,7 +559,7 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
         # le paiement de la même commande au lieu de devoir tout recommencer.
         transaction = Transaction.objects.filter(
             commande=commande,
-            mode_paiement__in=['mtn_money', 'orange_money'],
+            mode_paiement__in=['mtn_money', 'orange_money', 'mobile_money'],
             statut__in=['en_attente', 'echouee'],
         ).first()
         if not transaction:
@@ -514,23 +575,23 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
             transaction.save(update_fields=['reference'])
 
         phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
+        operateur = _operateur_demande(request, transaction.mode_paiement)
+        pays_code, ville = routeur_paiement.lieu_du_restaurant(commande.restaurant)
 
-        transaction_uuid, pay_url, error = camerpay_initier_paiement(
-            amount=int(commande.montant_total), merchant_invoice_id=payment_ref,
-            payment_method=PAYMENT_METHOD_PAR_MODE.get(transaction.mode_paiement, ''),
-            customer_phone=phone, customer_email=request.user.email,
-            customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
-            callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
-            return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
+        resultat, agregateur = routeur_paiement.lancer(
+            objet='commande', reference=payment_ref, montant=int(commande.montant_total),
+            pays_code=pays_code, ville=ville, operateur=operateur, telephone=phone,
+            email=request.user.email, nom_client=f'{request.user.first_name} {request.user.last_name}'.strip(),
         )
-        if error:
-            code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
-            return Response({'error': error}, status=code)
+        if not resultat.ok:
+            return _reponse_echec_lancement(resultat)
 
-        transaction.provider_reference = transaction_uuid
+        transaction.provider_reference = resultat.provider_reference
+        transaction.agregateur = agregateur
+        transaction.operateur = operateur
         transaction.statut = 'en_attente'
-        transaction.save(update_fields=['provider_reference', 'statut'])
-        return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
+        transaction.save(update_fields=['provider_reference', 'agregateur', 'operateur', 'statut'])
+        return Response(_reponse_lancement(resultat, payment_ref, agregateur))
 
     @action(detail=True, methods=['post'])
     def confirmer_reception(self, request, pk=None):
@@ -556,6 +617,32 @@ class ClientCommandeViewSet(viewsets.ModelViewSet):
 
         finaliser_livraison(livraison, par='client')
         return Response(CommandeSerializer(commande, context={'request': request}).data)
+
+
+# ── Paiement : helpers communs aux parcours (commande, groupe, réservation) ──
+def _operateur_demande(request, mode_paiement=''):
+    """Opérateur choisi dans l'app (`operateur`), sinon déduit de l'ancien
+    `mode_paiement` (versions de l'app antérieures aux agrégateurs)."""
+    from .models import Operateur
+    code = str(request.data.get('operateur') or '').strip()
+    if code and Operateur.objects.filter(code=code, actif=True).exists():
+        return code
+    return routeur_paiement.OPERATEUR_PAR_MODE.get(mode_paiement, '')
+
+
+def _reponse_lancement(resultat, payment_ref, agregateur):
+    return {
+        'payment_url': resultat.payment_url,   # vide pour un flux « push »
+        'payment_ref': payment_ref,
+        'flux': resultat.flux,
+        'message': resultat.message,
+        'agregateur': agregateur,
+    }
+
+
+def _reponse_echec_lancement(resultat):
+    code = status.HTTP_503_SERVICE_UNAVAILABLE if resultat.panne_agregateur else status.HTTP_400_BAD_REQUEST
+    return Response({'error': resultat.erreur}, status=code)
 
 
 # ── Checkout multi-restaurant (panier mélangeant plusieurs restaurants) ─────
@@ -635,27 +722,28 @@ def initier_paiement_groupe(request, groupe_id):
         paiement.save(update_fields=['reference'])
 
     phone = (request.data.get('phone') or '').strip() or getattr(request.user, 'telephone', '') or ''
+    operateur = _operateur_demande(request, paiement.mode_paiement)
+    premiere = groupe.commandes.select_related('restaurant').first()
+    pays_code, ville = routeur_paiement.lieu_du_restaurant(premiere.restaurant if premiere else None)
 
-    transaction_uuid, pay_url, error = camerpay_initier_paiement(
-        amount=int(paiement.montant), merchant_invoice_id=payment_ref,
-        payment_method=PAYMENT_METHOD_PAR_MODE.get(paiement.mode_paiement, ''),
-        customer_phone=phone, customer_email=request.user.email,
-        customer_name=f'{request.user.first_name} {request.user.last_name}'.strip(),
-        callback_url=f'{settings.APP_BASE_URL}/api/camerpay/notify/',
-        return_url=f'{settings.APP_BASE_URL}/payment/success/?ref={payment_ref}',
+    resultat, agregateur = routeur_paiement.lancer(
+        objet='groupe', reference=payment_ref, montant=int(paiement.montant),
+        pays_code=pays_code, ville=ville, operateur=operateur, telephone=phone,
+        email=request.user.email, nom_client=f'{request.user.first_name} {request.user.last_name}'.strip(),
     )
-    if error:
-        code = status.HTTP_502_BAD_GATEWAY if 'contacter' in error else status.HTTP_400_BAD_REQUEST
-        return Response({'error': error}, status=code)
+    if not resultat.ok:
+        return _reponse_echec_lancement(resultat)
 
-    paiement.provider_reference = transaction_uuid
+    paiement.provider_reference = resultat.provider_reference
+    paiement.agregateur = agregateur
+    paiement.operateur = operateur
     paiement.statut = 'en_attente'
-    paiement.save(update_fields=['provider_reference', 'statut'])
+    paiement.save(update_fields=['provider_reference', 'agregateur', 'operateur', 'statut'])
     # Un échec notifié avait aussi basculé les Transaction du groupe.
     Transaction.objects.filter(
         commande__groupe=groupe, type='paiement_client', statut='echouee',
     ).update(statut='en_attente')
-    return Response({'payment_url': pay_url, 'payment_ref': payment_ref})
+    return Response(_reponse_lancement(resultat, payment_ref, agregateur))
 
 
 @api_view(['GET'])
@@ -684,7 +772,7 @@ def annuler_groupe(request, groupe_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
     if paiement and paiement.provider_reference:
-        annulable, message = paiement_annulable(paiement.provider_reference)
+        annulable, message = traitement_paiement.paiement_annulable(paiement.agregateur, paiement.provider_reference)
         if not annulable:
             return Response({'error': message}, status=status.HTTP_409_CONFLICT)
     with transaction.atomic():
@@ -1092,76 +1180,48 @@ def _camerpay_notify_groupe_verrouille(payment_ref, statut_interne, amount_recu,
     return HttpResponse('OK')
 
 
+def _webhook_paiement(request, code):
+    """Webhook commun : l'adaptateur lit et VÉRIFIE la notification (signature),
+    puis le traitement commun l'applique (verrous, montant, idempotence)."""
+    ad = adaptateur_paiement(code)
+    if not ad:
+        return HttpResponse('Agrégateur inconnu', status=404)
+    try:
+        evenement = ad.lire_webhook(request)
+    except WebhookInvalide as exc:
+        logger.warning('Webhook %s refusé : %s', code, exc)
+        return HttpResponse(str(exc), status=exc.code_http)
+    try:
+        reponse = traitement_paiement.appliquer(evenement, code)
+    except Exception:
+        # 500 → l'agrégateur retentera ; la trace est indispensable pour
+        # comprendre un paiement bloqué.
+        logger.exception('Webhook %s : erreur inattendue (%s).', code, evenement.reference)
+        return HttpResponse('Erreur interne', status=500)
+    return reponse if reponse.status_code >= 300 else ad.reponse_webhook()
+
+
 @csrf_exempt
 @require_POST
 def camerpay_notify(request):
     """
     POST /api/camerpay/notify/
-    Webhook serveur-à-serveur envoyé par CamerPay à chaque changement d'état
-    d'une transaction. Met à jour le statut de la Transaction et de la Commande
-    (ou de la Réservation) en base.
-
-    ⚠️ La doc CamerPay est incohérente selon les pages entre un body
-    form-urlencoded (champ `uuid`) et un body JSON (champ `transaction_uuid`) —
-    on accepte donc DÉLIBÉRÉMENT les deux formes plutôt que de parier sur l'une
-    des deux (voir discussion en session : aucune ne peut être écartée avec
-    certitude sans un paiement réel de confirmation).
-
-    Sécurité : la signature HMAC-SHA256 est TOUJOURS vérifiée (pas de bascule
-    dev/prod) — sans elle, une référence devinable (ex. « RESA-<id> ») pourrait
-    être forgée pour marquer un paiement comme réussi sans payer. Le montant
-    reçu est également recontrôlé contre celui attendu en base.
+    Ancienne adresse du webhook CamerPay, conservée pour les transactions
+    déjà lancées et la configuration du dashboard CamerPay. Équivalente à
+    /api/paiements/camerpay/notify/.
     """
-    try:
-        if 'application/json' in (request.content_type or ''):
-            try:
-                params = json.loads(request.body.decode('utf-8') or '{}')
-            except (ValueError, UnicodeDecodeError):
-                return HttpResponse('JSON invalide', status=400)
-        else:
-            params = request.POST
+    return _webhook_paiement(request, 'camerpay')
 
-        def _champ(*noms):
-            for nom in noms:
-                valeur = params.get(nom)
-                if valeur not in (None, ''):
-                    return str(valeur)
-            return ''
 
-        txn_uuid        = _champ('uuid', 'transaction_uuid')
-        invoice_id      = _champ('invoice_id')
-        camerpay_statut = _champ('status')  # pending/processing/completed/failed/cancelled/refunded
-        amount_recu     = _champ('amount')
-        signature       = _champ('signature') or request.headers.get('X-CamerPay-Signature', '')
-
-        if not invoice_id:
-            return HttpResponse('invoice_id manquant', status=400)
-
-        if not verifier_signature_webhook(
-            uuid=txn_uuid, invoice_id=invoice_id, status=camerpay_statut,
-            amount=amount_recu, signature=signature,
-        ):
-            return HttpResponse('Signature invalide ou absente', status=403)
-
-        statut_interne = STATUT_PAR_CAMERPAY.get(camerpay_statut)  # None si pending/processing
-
-        # ── Paiement d'une RÉSERVATION (ref « RESA-<id> ») ──────────────────
-        if invoice_id.startswith('RESA-'):
-            return _camerpay_notify_reservation(invoice_id, statut_interne)
-
-        # ── Paiement d'un GROUPE de commandes (ref « EEUEZG-<id>-... ») ─────
-        # Testé AVANT le chemin commande unique : un groupe utilise
-        # PaiementGroupe, jamais Transaction.reference.
-        if invoice_id.startswith('EEUEZG-'):
-            return _camerpay_notify_groupe(invoice_id, statut_interne, amount_recu, txn_uuid)
-
-        with transaction.atomic():
-            return _camerpay_notify_commande(invoice_id, statut_interne, amount_recu, txn_uuid)
-    except Exception:
-        # 500 → CamerPay retentera ; la trace est indispensable pour comprendre
-        # un paiement bloqué (auparavant avalée sans aucun log).
-        logger.exception('CamerPay : erreur inattendue dans le webhook.')
-        return HttpResponse('Erreur interne', status=500)
+@csrf_exempt
+def paiement_notify(request, code):
+    """
+    /api/paiements/<code>/notify/
+    Webhook serveur-à-serveur de chaque agrégateur (certains notifient en GET).
+    """
+    if request.method not in ('POST', 'GET'):
+        return HttpResponse(status=405)
+    return _webhook_paiement(request, code)
 
 
 def _camerpay_notify_commande(invoice_id, statut_interne, amount_recu, txn_uuid):

@@ -32,14 +32,18 @@ def _absolu(url):
     return url if url.startswith('http') else f"{settings.APP_BASE_URL.rstrip('/')}{url}"
 
 
-def _contexte_commun(user):
+def _logo_url():
     try:
         logo = static('logo.png')
     except ValueError:  # manifeste WhiteNoise absent (dev sans collectstatic)
         logo = '/static/logo.png'
+    return _absolu(logo)
+
+
+def _contexte_commun(user):
     return {
         'base_url': settings.APP_BASE_URL,
-        'logo_url': _absolu(logo),
+        'logo_url': _logo_url(),
         'support_email': SUPPORT_EMAIL,
         'prenom': (user.first_name or '').strip() or 'à vous',
         'email': user.email,
@@ -166,3 +170,43 @@ def email_mot_de_passe_modifie(user):
         f"Si vous n'êtes pas à l'origine de ce changement, écrivez-nous vite à {SUPPORT_EMAIL}.\n\n— L'équipe MENU"
     )
     return _envoyer(user.email, 'Votre mot de passe MENU a été modifié', 'emails/mot_de_passe_modifie.html', contexte, texte)
+
+
+# ─── Alertes administrateurs ─────────────────────────────────
+def envoyer_email_admin(*, destinataires, sujet, contexte):
+    """E-mail d'urgence aux administrateurs (un envoi groupé, en copie cachée :
+    les destinataires ne voient pas les adresses des autres)."""
+    if not destinataires:
+        return False
+    contexte = {
+        **contexte,
+        'base_url': settings.APP_BASE_URL,
+        'logo_url': _logo_url(),
+        'support_email': SUPPORT_EMAIL,
+        'details_liste': [(str(k).replace('_', ' ').capitalize(), v) for k, v in (contexte.get('details') or {}).items()],
+    }
+    lignes = '\n'.join(f'- {k} : {v}' for k, v in contexte['details_liste'])
+    texte = f"{contexte['titre']}\n\n{contexte.get('message', '')}\n\n{lignes}\n\nAdministration : {contexte['lien_admin']}"
+    try:
+        html = render_to_string('emails/alerte_admin.html', contexte)
+        message = EmailMultiAlternatives(
+            subject=sujet, body=texte, from_email=f'MENU Alertes <{settings.DEFAULT_FROM_EMAIL}>',
+            to=[settings.DEFAULT_FROM_EMAIL], bcc=list(destinataires),
+        )
+        message.attach_alternative(html, 'text/html')
+    except Exception:
+        logger.exception("Préparation de l'e-mail d'alerte « %s » impossible", sujet)
+        return False
+
+    def envoi():
+        try:
+            message.send(fail_silently=False)
+            return True
+        except Exception:
+            logger.exception("Échec d'envoi de l'alerte « %s »", sujet)
+            return False
+
+    if getattr(settings, 'EMAIL_ASYNC', False):
+        threading.Thread(target=envoi, daemon=True).start()
+        return True
+    return envoi()

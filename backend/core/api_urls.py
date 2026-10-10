@@ -99,6 +99,7 @@ urlpatterns = [
     # Note : le routeur DRF enregistre automatiquement l'action initier_paiement
     # sous POST /api/client/commandes/{id}/initier_paiement/
     path('camerpay/notify/', api_views.camerpay_notify, name='api-camerpay-notify'),
+    path('paiements/<str:code>/notify/', api_views.paiement_notify, name='api-paiement-notify'),
 
     # Restaurant
     path('restaurant/workspace', api_views.RestaurantWorkspaceView.as_view(), name='api-restaurant-workspace'),
