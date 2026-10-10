@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -291,6 +292,9 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', True)   # port 465 = SSL direct
 EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', False)  # port 587 = STARTTLS (l'un OU l'autre, jamais les deux)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+# Envoi SMTP des e-mails clients en arrière-plan (bienvenue, code OTP…) :
+# une boîte mail lente ne doit pas faire attendre la requête. Désactivé en test.
+EMAIL_ASYNC = _env_bool('EMAIL_ASYNC', 'test' not in sys.argv)
 EMAIL_BACKEND = (
     'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST_PASSWORD
     else 'django.core.mail.backends.console.EmailBackend'

@@ -23,6 +23,9 @@ urlpatterns = [
     # Client — profil
     path('client/profile', api_views.ClientProfileView.as_view(), name='api-client-profile'),
     path('client/compte/supprimer', api_views.supprimer_compte, name='api-client-compte-supprimer'),
+    path('client/compte/mot-de-passe/code', api_views.mot_de_passe_demander_code, name='api-client-mdp-code'),
+    path('client/compte/mot-de-passe/verifier', api_views.mot_de_passe_verifier_code, name='api-client-mdp-verifier'),
+    path('client/compte/mot-de-passe', api_views.mot_de_passe_changer, name='api-client-mdp-changer'),
     path('client/restaurants/nearby', api_views.nearby_restaurants, name='api-client-nearby'),
     path('client/livraison/estimer', api_views.estimer_frais_livraison, name='api-client-livraison-estimer'),
 

@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 import json
 import logging
 import uuid
+from datetime import timedelta
 import requests as http_requests
 
 from .models import (
@@ -28,6 +29,7 @@ from .serializers import (
     LivraisonCourseSerializer, MissionPoolSerializer,
 )
 from .utils import geo
+from .models_otp import CodeVerification
 from .delivery import (
     finaliser_livraison, prendre_commande_libre, PriseImpossible, TransitionInvalide,
     est_livreur_independant, demarrer_course, recuperer_commande,
@@ -119,11 +121,120 @@ class RegisterView(views.APIView):
             role=role
         )
         
+        from .emails_client import email_bienvenue
+        email_bienvenue(user)  # best-effort, envoyé en arrière-plan
+
         tokens = get_tokens_for_user(user)
         return Response(
             {'token': tokens['access'], 'refresh': tokens['refresh'], 'user': UserSerializer(user).data},
             status=status.HTTP_201_CREATED,
         )
+
+# ─── CHANGEMENT DE MOT DE PASSE PAR CODE E-MAIL (OTP) ───────
+RENVOI_CODE_SECONDES = 60
+CODES_MAX_PAR_HEURE = 5
+
+
+def _masquer_email(email):
+    nom, _, domaine = (email or '').partition('@')
+    if not domaine:
+        return email
+    visible = nom[:2] if len(nom) > 2 else nom[:1]
+    return f"{visible}{'•' * max(3, len(nom) - len(visible))}@{domaine}"
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mot_de_passe_demander_code(request):
+    """
+    POST /api/client/compte/mot-de-passe/code
+    Envoie un code à 6 chiffres à l'adresse du compte (valable 10 min).
+    Un nouvel envoi invalide le code précédent ; envois limités.
+    """
+    from .emails_client import email_code_mot_de_passe
+    user = request.user
+    objet = CodeVerification.OBJET_CHANGEMENT_MDP
+    maintenant = timezone.now()
+    dernier = CodeVerification.objects.filter(user=user, objet=objet).first()
+    if dernier:
+        ecoule = (maintenant - dernier.created_at).total_seconds()
+        if ecoule < RENVOI_CODE_SECONDES:
+            attente = int(RENVOI_CODE_SECONDES - ecoule) + 1
+            return Response(
+                {'error': f'Un code vient d\'être envoyé. Patientez {attente} s avant d\'en demander un autre.', 'attente': attente},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    recents = CodeVerification.objects.filter(
+        user=user, objet=objet, created_at__gte=maintenant - timedelta(hours=1),
+    ).count()
+    if recents >= CODES_MAX_PAR_HEURE:
+        return Response(
+            {'error': 'Trop de codes demandés. Réessayez dans une heure.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not user.email:
+        return Response({'error': 'Aucune adresse e-mail sur ce compte.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    _, code = CodeVerification.emettre(user, objet)
+    email_code_mot_de_passe(user, code)
+    return Response({
+        'email': _masquer_email(user.email),
+        'expire_dans': 600,
+        'renvoi_dans': RENVOI_CODE_SECONDES,
+    })
+
+
+def _verifier_code(user, code):
+    """Renvoie None si le code est bon, sinon une Response d'erreur."""
+    actif = CodeVerification.actif(user, CodeVerification.OBJET_CHANGEMENT_MDP)
+    if not actif:
+        return Response({'error': 'Ce code a expiré. Demandez-en un nouveau.'}, status=status.HTTP_400_BAD_REQUEST)
+    if actif.epuise:
+        return Response({'error': 'Trop d\'essais. Demandez un nouveau code.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not actif.verifier(code):
+        restants = actif.essais_restants
+        msg = (f'Code incorrect. Il vous reste {restants} essai{"s" if restants > 1 else ""}.'
+               if restants else 'Code incorrect. Demandez un nouveau code.')
+        return Response({'error': msg, 'essais_restants': restants}, status=status.HTTP_400_BAD_REQUEST)
+    return None
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mot_de_passe_verifier_code(request):
+    """POST /api/client/compte/mot-de-passe/verifier  Body : { "code": "123456" }
+    Vérifie le code sans le consommer (passage à l'étape « nouveau mot de passe »)."""
+    erreur = _verifier_code(request.user, request.data.get('code'))
+    return erreur or Response({'valide': True})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mot_de_passe_changer(request):
+    """POST /api/client/compte/mot-de-passe  Body : { "code": "123456", "nouveau": "..." }"""
+    from .emails_client import email_mot_de_passe_modifie
+    user = request.user
+    nouveau = str(request.data.get('nouveau') or '')
+    if len(nouveau) < 6:
+        return Response({'error': 'Le mot de passe doit faire au moins 6 caractères.'}, status=status.HTTP_400_BAD_REQUEST)
+    if user.check_password(nouveau):
+        return Response({'error': 'Choisissez un mot de passe différent de l\'actuel.'}, status=status.HTTP_400_BAD_REQUEST)
+    erreur = _verifier_code(user, request.data.get('code'))
+    if erreur:
+        return erreur
+
+    user.set_password(nouveau)
+    user.save(update_fields=['password'])
+    CodeVerification.objects.filter(user=user, objet=CodeVerification.OBJET_CHANGEMENT_MDP).update(utilise=True)
+    email_mot_de_passe_modifie(user)
+    tokens = get_tokens_for_user(user)
+    return Response({'token': tokens['access'], 'refresh': tokens['refresh']})
+
+
+# Anti force brute : même quota que le login sur ces trois points d'entrée.
+for _vue in (mot_de_passe_demander_code, mot_de_passe_verifier_code, mot_de_passe_changer):
+    _vue.cls.throttle_scope = 'auth'
+
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
@@ -144,6 +255,8 @@ class ClientProfileView(views.APIView):
                 setattr(user, field, request.data.get(field) or '')
         if 'avatar' in request.FILES:
             user.avatar = request.FILES['avatar']
+        elif str(request.data.get('avatar_supprimer') or '') in ('1', 'true'):
+            user.avatar = None
         user.save()
         return Response(UserSerializer(user).data)
 

@@ -130,6 +130,8 @@ export interface FideliteApercuDTO {
   points_par_unite: number;
   valeur_unite: number;
   reduction_max_pourcentage: number;
+  /** Seuils des badges (absents sur un ancien serveur). */
+  seuils?: { bronze: number; argent: number; or: number };
   points_utilisables: number;
   reduction: number;
 }

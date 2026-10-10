@@ -227,6 +227,7 @@ class ConversionPaiementTests(TestCase):
         self.assertEqual(data['reduction'], 1000)
         self.assertEqual(data['points_utilisables'], 200)
         self.assertEqual(data['seuil_minimum'], self.config.seuil_minimum_conversion)
+        self.assertEqual(data['seuils']['or'], self.config.seuil_or)
 
     def test_apercu_respecte_le_plafond_du_panier(self):
         self._crediter(10000)

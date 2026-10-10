@@ -79,10 +79,12 @@ export default function RootLayout() {
           <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="register" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="edit-profile" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="change-password" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="location-picker" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="gallery/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="publication/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="reservations" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="commandes" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </AppProvider>
       </ToastProvider>

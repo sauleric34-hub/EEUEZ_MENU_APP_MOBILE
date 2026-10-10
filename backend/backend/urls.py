@@ -6,7 +6,7 @@ from django.views.decorators.cache import cache_page
 from django.views.generic import TemplateView
 from core.views.landing import landing_view
 from core.api_views import camerpay_return, camerpay_failed
-from core.views.publication_views import publication_rebond
+from core.views.publication_views import publication_rebond, plat_rebond
 from core.views.partner_public import documentation as partenaire_documentation, partenaire_candidature
 
 urlpatterns = [
@@ -34,6 +34,7 @@ urlpatterns = [
     path('payment/failed/', camerpay_failed, name='camerpay-failed'),
     # Lien partagé d'une publication → rebond vers l'application
     path('publication/<int:id>/', publication_rebond, name='publication-rebond'),
+    path('plat/<int:id>/', plat_rebond, name='plat-rebond'),
     # Sert les fichiers média (logos, plats, avatars…) même en production (DEBUG=False),
     # car django.conf.urls.static.static() ne sert rien hors DEBUG et WhiteNoise ne couvre
     # que le static. Idéalement Apache/cPanel sert /media/, cette route garantit le fallback.

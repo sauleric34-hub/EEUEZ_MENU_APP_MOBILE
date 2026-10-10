@@ -2,28 +2,40 @@
 //  Suivi de livraison en direct
 // ═══════════════════════════════════════════════════════════
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, View, Text, StyleSheet, ScrollView, Linking, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { ChevronLeft, Bike, Phone, Check, MapPin, Star, PackageSearch, QrCode, ShoppingBag } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, Bike, Phone, Check, MapPin, Star, PackageSearch, QrCode, ShoppingBag, Receipt } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
-import { TRACK_STEPS, TRACK_ETA } from '../data/menuData';
+import { TRACK_ETA, formatPrice } from '../data/menuData';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, CenterMessage, displayFont, bodyFont } from '../components/ui';
 import { ConfirmReception } from '../components/ConfirmReception';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import { useToast } from '../context/ToastContext';
+import { EtapesBar, PointDirect, etapesDe, estEnCours, statutAffiche, useResumeCommande } from '../components/orders';
+import { animateListChange } from '../lib/layoutAnimation';
+import type { CommandeDTO } from '../services/dto';
 
 export default function TrackingScreen() {
-  const { colors, mode, trackStep, activeOrder, reloadOrders } = useApp();
+  const { colors, mode, orders, activeOrder: commandeParDefaut, reloadOrders } = useApp();
   const toast = useToast();
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [details, setDetails] = useState(false);
+
+  // Commande suivie : celle demandée (?id=), sinon la plus récente en cours.
+  // Plusieurs commandes en cours (panier multi-restaurants) → sélecteur.
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const [choisie, setChoisie] = useState<number | null>(id ? Number(id) : null);
+  const enCours = useMemo(() => orders.filter(estEnCours), [orders]);
+  const activeOrder = (choisie != null ? orders.find(o => o.id === choisie) : undefined) ?? commandeParDefaut;
+  const trackStep = activeOrder ? etapesDe(activeOrder).index : 0;
   const enLivraison = activeOrder?.livraison_statut === 'en_livraison';
   const suivi = activeOrder?.suivi ?? null;
   const etaLabel = enLivraison && suivi?.eta_minutes
@@ -92,17 +104,7 @@ export default function TrackingScreen() {
   const orderRef = `#MENU-${activeOrder.id}`;
   const restoName = activeOrder.restaurant_details?.nom ?? 'Restaurant';
   const emporter = !!activeOrder.emporter;
-  // Étapes adaptées au retrait sur place (pas de livreur, pas de trajet).
-  const emporterSteps = [
-    { title: 'Commande confirmée', desc: 'Le restaurant a reçu votre commande', statuts: ['en_attente', 'acceptee'] },
-    { title: 'En préparation', desc: 'Vos plats sont en cuisine', statuts: ['en_preparation'] },
-    { title: 'Prête', desc: 'Venez la récupérer avec votre code', statuts: ['prete'] },
-    { title: 'Récupérée', desc: 'Bon appétit !', statuts: ['recuperee'] },
-  ];
-  const steps = emporter ? emporterSteps : TRACK_STEPS;
-  const stepIndex = emporter
-    ? Math.max(0, emporterSteps.findIndex(s => s.statuts.includes(activeOrder.statut)))
-    : trackStep;
+  const { steps, index: stepIndex } = etapesDe(activeOrder);
 
   return (
     <ScreenBg>
@@ -121,13 +123,28 @@ export default function TrackingScreen() {
                 <ChevronLeft size={20} color={colors.text} />
               </View>
             </PressableScale>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[displayFont(22, '800'), { color: colors.text }]}>
-                {emporter ? 'Commande à emporter' : 'Suivi en direct'}
+                {emporter ? 'Commande à emporter' : 'Suivi de commande'}
               </Text>
               <Text style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 2 }]}>{orderRef} · {restoName}</Text>
             </View>
           </View>
+
+          {/* Plusieurs commandes en cours : on choisit celle à suivre */}
+          {enCours.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14, marginHorizontal: -20 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+              {enCours.map(o => (
+                <ChoixCommande
+                  key={o.id} order={o} actif={o.id === activeOrder.id}
+                  onPress={() => { animateListChange(); setChoisie(o.id); setDetails(false); }}
+                />
+              ))}
+            </ScrollView>
+          )}
+
+          {/* État actuel, en grand */}
+          <EtatCommande order={activeOrder} etaLabel={etaLabel} total={steps.length} index={stepIndex} />
 
           {/* ─── Commande à emporter : code de retrait à présenter au restaurant ─── */}
           {emporter && (
@@ -229,11 +246,53 @@ export default function TrackingScreen() {
             </PressableScale>
           )}
 
+          {/* Détail de la commande (repliable) */}
+          <View style={[styles.detailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <PressableScale scaleTo={0.99} onPress={() => { animateListChange(); setDetails(d => !d); }}>
+              <View style={styles.row}>
+                <Receipt size={18} color={Brand.accentLight} strokeWidth={2.3} />
+                <Text style={[displayFont(15.5, '700'), { color: colors.text, flex: 1, marginLeft: 10 }]}>Détail de la commande</Text>
+                <Text style={[displayFont(14.5, '800'), { color: colors.text, marginRight: 8 }]}>{formatPrice(Number(activeOrder.montant_total))}</Text>
+                <View style={{ transform: [{ rotate: details ? '180deg' : '0deg' }] }}>
+                  <ChevronDown size={18} color={colors.muted} strokeWidth={2.4} />
+                </View>
+              </View>
+            </PressableScale>
+            {details && (
+              <View style={{ marginTop: 12, gap: 8 }}>
+                {(activeOrder.lignes ?? []).map(l => (
+                  <View key={l.id} style={styles.row}>
+                    <Text style={[bodyFont(13, '800'), { color: Brand.accentLight, width: 30 }]}>{l.quantite}×</Text>
+                    <Text numberOfLines={1} style={[bodyFont(13, '600'), { color: colors.text, flex: 1 }]}>{l.plat_details?.nom ?? 'Plat'}</Text>
+                    <Text style={[bodyFont(13, '700'), { color: colors.muted }]}>{formatPrice(Number(l.prix_unitaire) * l.quantite)}</Text>
+                  </View>
+                ))}
+                {!emporter && Number(activeOrder.frais_livraison ?? 0) > 0 && (
+                  <View style={styles.row}>
+                    <Bike size={14} color={colors.faint} strokeWidth={2.3} style={{ width: 30 }} />
+                    <Text style={[bodyFont(13, '600'), { color: colors.muted, flex: 1 }]}>Livraison</Text>
+                    <Text style={[bodyFont(13, '700'), { color: colors.muted }]}>{formatPrice(Number(activeOrder.frais_livraison))}</Text>
+                  </View>
+                )}
+                <View style={[styles.sep, { backgroundColor: colors.border }]} />
+                {!emporter && !!activeOrder.adresse_livraison && (
+                  <View style={[styles.row, { alignItems: 'flex-start' }]}>
+                    <MapPin size={14} color={Brand.green} strokeWidth={2.4} style={{ width: 30, marginTop: 2 }} />
+                    <Text style={[bodyFont(12.5, '600'), { color: colors.muted, flex: 1 }]}>{activeOrder.adresse_livraison}</Text>
+                  </View>
+                )}
+                {!!activeOrder.notes && (
+                  <Text style={[bodyFont(12.5, '500'), { color: colors.faint, fontStyle: 'italic' }]}>« {activeOrder.notes} »</Text>
+                )}
+              </View>
+            )}
+          </View>
+
           {/* Progression */}
           <View style={[styles.progress, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.row}>
               <Text style={[displayFont(16, '700'), { color: colors.text, flex: 1 }]}>Progression</Text>
-              <Text style={[bodyFont(13, '800'), { color: Brand.accentLight }]}>{etaLabel}</Text>
+              <Text style={[bodyFont(12.5, '700'), { color: colors.muted }]}>Étape {Math.min(stepIndex + 1, steps.length)} / {steps.length}</Text>
             </View>
 
             <View style={{ marginTop: 16 }}>
@@ -278,6 +337,54 @@ export default function TrackingScreen() {
         />
       )}
     </ScreenBg>
+  );
+}
+
+/** Pastille de choix quand plusieurs commandes sont en cours. */
+function ChoixCommande({ order, actif, onPress }: { order: CommandeDTO; actif: boolean; onPress: () => void }) {
+  const { colors } = useApp();
+  const r = useResumeCommande(order);
+  const st = statutAffiche(order);
+  return (
+    <PressableScale onPress={onPress} scaleTo={0.95}>
+      <View style={[
+        styles.choix,
+        actif ? { backgroundColor: Brand.accent + '1f', borderColor: Brand.accent } : { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}>
+        <Text numberOfLines={1} style={[bodyFont(12.5, '800'), { color: colors.text, maxWidth: 140 }]}>{r.restoName}</Text>
+        <Text style={[bodyFont(11, '700'), { color: st.color }]}>{st.label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+/** Grande carte d'état : étape actuelle, délai estimé, progression. */
+function EtatCommande({ order, etaLabel, total, index }: { order: CommandeDTO; etaLabel: string; total: number; index: number }) {
+  const { colors } = useApp();
+  const st = statutAffiche(order);
+  const termine = !estEnCours(order);
+  return (
+    <LinearGradient
+      colors={[st.color + '30', colors.surface as string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      style={[styles.etat, { borderColor: st.color + '55' }]}
+    >
+      <View style={styles.row}>
+        {!termine && <PointDirect />}
+        <Text style={[bodyFont(11, '800'), { color: termine ? colors.muted : Brand.green, letterSpacing: 0.6, marginLeft: termine ? 0 : 8 }]}>
+          {termine ? 'COMMANDE TERMINÉE' : 'EN DIRECT'}
+        </Text>
+      </View>
+      <View style={[styles.row, { gap: 12, marginTop: 12 }]}>
+        <View style={[styles.etatIcon, { backgroundColor: st.color + '26' }]}>
+          <st.Icon size={26} color={st.color} strokeWidth={2.3} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[displayFont(22, '800'), { color: colors.text }]}>{st.label}</Text>
+          <Text style={[bodyFont(13, '700'), { color: Brand.accentLight, marginTop: 2 }]}>{etaLabel}</Text>
+        </View>
+      </View>
+      <View style={{ marginTop: 16 }}><EtapesBar total={total} index={termine ? total : index} /></View>
+    </LinearGradient>
   );
 }
 
@@ -353,6 +460,11 @@ const styles = StyleSheet.create({
   courierAvatar: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   contactBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   confirmCta: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15, paddingHorizontal: 18, borderRadius: Radius.pill },
+  choix: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 16, borderWidth: 1.5, gap: 2 },
+  etat: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
+  etatIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  detailCard: { padding: 16, borderRadius: 22, borderWidth: 1, marginTop: 16 },
+  sep: { height: 1, marginVertical: 4 },
   pickupCard: { padding: 18, borderRadius: 22, borderWidth: 1, marginTop: 18 },
   progress: { padding: 18, borderRadius: 24, borderWidth: 1, marginTop: 16 },
   stepRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },

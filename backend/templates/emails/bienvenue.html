@@ -1,0 +1,114 @@
+{% extends 'emails/base.html' %}
+{% block titre %}Bienvenue sur MENU, {{ prenom }} !{% endblock %}
+{% block preheader %}Votre compte est prêt. Découvrez les plats qui font saliver près de chez vous 🍽️{% endblock %}
+
+{% block hero %}
+<tr>
+  <td align="center" style="background:#f26a1b;background-image:linear-gradient(135deg,#f7891b 0%,#f2611b 55%,#0f5132 100%);padding:44px 34px 40px 34px;" class="pad">
+    <p style="margin:0;font-size:13px;font-weight:800;letter-spacing:2px;color:#ffe2cc;">BIENVENUE DANS LA FAMILLE</p>
+    <h1 class="titre-hero" style="margin:10px 0 0 0;font-size:34px;line-height:40px;font-weight:800;color:#ffffff;letter-spacing:-0.6px;">
+      Akwaba, {{ prenom }} ! 🎉
+    </h1>
+    <p style="margin:14px auto 0 auto;max-width:420px;font-size:16px;line-height:24px;color:#fff3e9;">
+      Votre compte MENU est prêt. Les meilleurs plats africains n'attendent plus que vous.
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 0 auto;">
+      <tr>
+        <td align="center" style="border-radius:999px;background:#ffffff;">
+          <a href="{{ base_url }}" target="_blank"
+             style="display:inline-block;padding:15px 34px;font-size:15px;font-weight:800;color:#f2611b;border-radius:999px;">
+            Commander mon premier plat →
+          </a>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+{% endblock %}
+
+{% block contenu %}
+{% if plats %}
+<h2 style="margin:0;font-size:21px;line-height:28px;font-weight:800;color:#17231a;letter-spacing:-0.3px;">
+  {% if ville %}Les incontournables à {{ ville }}{% else %}Nos plats les plus appréciés{% endif %}
+</h2>
+<p style="margin:4px 0 20px 0;color:#7c857e;font-size:14px;">Une sélection pour bien commencer — touchez un plat pour l'ouvrir dans l'app.</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  {% for paire in plats %}
+  <tr>
+    {% for p in paire %}
+    <td class="col col-pad" width="50%" valign="top" style="width:50%;padding:0 {% if forloop.first %}7px{% else %}0{% endif %} 14px {% if forloop.last and not forloop.first %}7px{% else %}0{% endif %};">
+      <a href="{{ p.lien }}" target="_blank" style="display:block;color:#17231a;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #efe9de;border-radius:18px;overflow:hidden;">
+          <tr>
+            <td style="background:#f6efe4;">
+              {% if p.image %}
+              <img src="{{ p.image }}" width="260" alt="{{ p.nom }}" style="width:100%;max-width:100%;height:160px;object-fit:cover;border-radius:18px 18px 0 0;">
+              {% else %}
+              <div style="height:160px;line-height:160px;text-align:center;font-size:52px;background:#f26a1b;background-image:linear-gradient(135deg,#f7891b,#0f5132);border-radius:18px 18px 0 0;">🍲</div>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:13px 14px 15px 14px;">
+              <p style="margin:0;font-size:15px;line-height:20px;font-weight:800;color:#17231a;">{{ p.nom }}</p>
+              <p style="margin:3px 0 0 0;font-size:12.5px;line-height:18px;color:#7c857e;">{{ p.restaurant }}{% if p.note %} · ★ {{ p.note }}{% endif %}</p>
+              <p style="margin:9px 0 0 0;font-size:16px;font-weight:800;color:#f26a1b;">{{ p.prix }}</p>
+            </td>
+          </tr>
+        </table>
+      </a>
+    </td>
+    {% endfor %}
+    {% if paire|length == 1 %}<td class="col" width="50%" style="width:50%;"></td>{% endif %}
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{# Comment ça marche #}
+<h2 style="margin:18px 0 14px 0;font-size:19px;line-height:26px;font-weight:800;color:#17231a;">Comment ça marche ?</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  {% for etape in etapes %}
+  <tr>
+    <td width="52" valign="top" style="padding:0 0 14px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td align="center" width="40" height="40" style="width:40px;height:40px;border-radius:13px;background:#fff1e7;font-size:20px;line-height:40px;">{{ etape.0 }}</td>
+      </tr></table>
+    </td>
+    <td valign="top" style="padding:0 0 14px 0;">
+      <p style="margin:0;font-size:15px;font-weight:800;color:#17231a;">{{ etape.1 }}</p>
+      <p style="margin:2px 0 0 0;font-size:13.5px;line-height:20px;color:#55605a;">{{ etape.2 }}</p>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{# Fidélité #}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+  <tr>
+    <td style="background:#0f5132;background-image:linear-gradient(135deg,#1f8a4c,#0f5132);border-radius:18px;padding:20px 22px;color:#ffffff;">
+      <p style="margin:0;font-size:12px;font-weight:800;letter-spacing:1.5px;color:#bfe8cf;">PROGRAMME FIDÉLITÉ</p>
+      <p style="margin:6px 0 0 0;font-size:17px;line-height:24px;font-weight:800;">Gagnez des points à chaque partage</p>
+      <p style="margin:4px 0 0 0;font-size:13.5px;line-height:20px;color:#dff3e7;">
+        Publiez vos plats préférés, recevez des likes et des commentaires : vos points se
+        transforment en réductions sur vos prochaines commandes. Bronze, Argent, Or… à vous de jouer !
+      </p>
+    </td>
+  </tr>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:28px auto 0 auto;">
+  <tr>
+    <td align="center" style="border-radius:999px;background:#f26a1b;background-image:linear-gradient(135deg,#f7891b,#f2611b);">
+      <a href="{{ base_url }}" target="_blank" style="display:inline-block;padding:15px 36px;font-size:15px;font-weight:800;color:#ffffff;border-radius:999px;">
+        Découvrir le menu
+      </a>
+    </td>
+  </tr>
+</table>
+{% endblock %}
+
+{% block pied %}
+Vous recevez cet e-mail car vous venez de créer un compte MENU avec l'adresse {{ email }}.
+{% endblock %}

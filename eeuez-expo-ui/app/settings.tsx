@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft, ChevronRight, Moon, Bell, Tag, User, Mail, Phone,
-  TriangleAlert, ShieldCheck, CircleHelp, Info, LogOut, Pencil, MapPin, Trash2, type LucideIcon,
+  TriangleAlert, ShieldCheck, CircleHelp, Info, LogOut, Pencil, MapPin, Trash2, KeyRound, type LucideIcon,
 } from 'lucide-react-native';
 import { Brand, Radius } from '../constants/theme';
 import { useApp } from '../context/AppContext';
@@ -140,6 +140,14 @@ export default function SettingsScreen() {
             <Row Icon={TriangleAlert} iconColor={Brand.yellow} label="Allergies" value={user?.allergies || 'Aucune enregistrée'} colors={colors} />
             <Row Icon={Pencil} label="Modifier mes informations" colors={colors} onPress={() => router.push('/edit-profile')} />
             <Row Icon={MapPin} label="Mes lieux de livraison" colors={colors} onPress={() => router.push('/location-picker')} last />
+          </Section>
+
+          <Section title="Sécurité" colors={colors}>
+            <Row
+              Icon={KeyRound} iconColor={Brand.green} label="Changer mon mot de passe"
+              value="Vérification par code envoyé par e-mail" colors={colors} last
+              onPress={() => router.push('/change-password')}
+            />
           </Section>
 
           <Section title="Préférences" colors={colors}>

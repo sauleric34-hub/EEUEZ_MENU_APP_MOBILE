@@ -139,6 +139,32 @@ def publications_likees(request):
 
 
 # ─── PAGE DE REBOND (lien partagé) ───────────────────────────
+def plat_rebond(request, id):
+    """
+    GET /plat/<id>/ — lien d'un plat (e-mail de bienvenue, partage) : page
+    web qui rouvre la fiche du plat dans l'application, avec aperçu soigné.
+    """
+    from core.models import Plat
+    plat = Plat.objects.filter(pk=id, is_visible=True).select_related('restaurant').first()
+    lien_app = f'menu://dish/{id}'
+    if not plat:
+        contexte = {
+            'titre': 'Plat indisponible',
+            'description': "Ce plat n'est plus proposé. Découvrez les autres plats du menu.",
+            'image': None,
+        }
+        statut = 404
+    else:
+        contexte = {
+            'titre': f'{plat.nom} — {plat.restaurant.nom}',
+            'description': (plat.description or f'À commander sur MENU chez {plat.restaurant.nom}.')[:200],
+            'image': request.build_absolute_uri(plat.image.url) if plat.image else None,
+        }
+        statut = 200
+    contexte.update({'lien_app': lien_app, 'lien_app_json': json_pour_script(lien_app)})
+    return render(request, 'publication_rebond.html', contexte, status=statut)
+
+
 def publication_rebond(request, id):
     """
     GET /publication/<id>/  — page web ouverte depuis un lien partagé.
@@ -209,6 +235,12 @@ def fidelite_apercu(request):
         'points_par_unite': reglages.points_par_unite,
         'valeur_unite': reglages.valeur_unite,
         'reduction_max_pourcentage': reglages.reduction_max_pourcentage,
+        # Seuils des badges (carte de fidélité du profil : jauge vers le niveau suivant)
+        'seuils': {
+            'bronze': reglages.seuil_bronze,
+            'argent': reglages.seuil_argent,
+            'or': reglages.seuil_or,
+        },
         # Applicable ici et maintenant, tous plafonds appliqués :
         'points_utilisables': points,
         'reduction': reduction,

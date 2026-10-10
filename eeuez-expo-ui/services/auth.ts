@@ -43,6 +43,31 @@ export async function deleteAccount(password: string): Promise<void> {
   await logout();
 }
 
+// ─── Changement de mot de passe par code e-mail (OTP) ────────
+export interface CodeEnvoyeDTO {
+  /** Adresse masquée où le code a été envoyé (ex. « aw•••@gmail.com »). */
+  email: string;
+  expire_dans: number;
+  renvoi_dans: number;
+}
+
+/** Envoie un code à 6 chiffres à l'adresse du compte. */
+export const demanderCodeMotDePasse = () =>
+  apiPost<CodeEnvoyeDTO>('/client/compte/mot-de-passe/code', {}, { auth: true });
+
+/** Vérifie le code (sans le consommer) avant de saisir le nouveau mot de passe. */
+export const verifierCodeMotDePasse = (code: string) =>
+  apiPost<{ valide: boolean }>('/client/compte/mot-de-passe/verifier', { code }, { auth: true });
+
+/** Change le mot de passe ; le serveur renvoie de nouveaux jetons, qu'on garde. */
+export async function changerMotDePasse(code: string, nouveau: string): Promise<void> {
+  const res = await apiPost<{ token: string; refresh: string }>(
+    '/client/compte/mot-de-passe', { code, nouveau }, { auth: true },
+  );
+  await AsyncStorage.setItem(AUTH_TOKEN_KEY, res.token);
+  await AsyncStorage.setItem(REFRESH_TOKEN_KEY, res.refresh);
+}
+
 export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
 }
@@ -95,7 +120,12 @@ export interface ProfileUpdate {
   last_name?: string;
   telephone?: string;
   allergies?: string;
+  pays?: string;
+  pays_code?: string;
+  ville?: string;
   avatarUri?: string;  // uri locale d'une image à téléverser
+  /** Retire la photo de profil actuelle. */
+  supprimerAvatar?: boolean;
 }
 
 /** Met à jour le profil (champs texte + photo). Persiste l'utilisateur mis à jour. */
@@ -105,6 +135,10 @@ export async function updateProfile(data: ProfileUpdate): Promise<UserDTO> {
   if (data.last_name != null) form.append('last_name', data.last_name);
   if (data.telephone != null) form.append('telephone', data.telephone);
   if (data.allergies != null) form.append('allergies', data.allergies);
+  if (data.pays != null) form.append('pays', data.pays);
+  if (data.pays_code != null) form.append('pays_code', data.pays_code);
+  if (data.ville != null) form.append('ville', data.ville);
+  if (data.supprimerAvatar) form.append('avatar_supprimer', '1');
   if (data.avatarUri) {
     const name = data.avatarUri.split('/').pop() || `avatar_${Date.now()}.jpg`;
     const ext = (name.split('.').pop() || 'jpg').toLowerCase();

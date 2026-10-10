@@ -776,3 +776,5 @@ from .models_partenaire import (  # noqa: E402,F401
 
 # ─── Panier multi-restaurant (checkout groupé) ────────────────
 from .models_commande_groupe import CommandeGroupe, PaiementGroupe  # noqa: E402,F401
+
+from .models_otp import CodeVerification  # noqa: E402,F401

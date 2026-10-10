@@ -1,0 +1,35 @@
+{% extends 'emails/base.html' %}
+{% block titre %}Votre mot de passe a été modifié{% endblock %}
+{% block preheader %}Le mot de passe de votre compte MENU vient d'être changé.{% endblock %}
+
+{% block hero %}
+<tr>
+  <td align="center" class="pad" style="padding:36px 40px 0 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td align="center" width="68" height="68" style="width:68px;height:68px;border-radius:34px;background:#e6f5ec;font-size:32px;line-height:68px;color:#1f8a4c;">✓</td>
+    </tr></table>
+    <h1 class="titre-hero" style="margin:18px 0 0 0;font-size:28px;line-height:34px;font-weight:800;color:#17231a;letter-spacing:-0.5px;">
+      Mot de passe modifié
+    </h1>
+  </td>
+</tr>
+{% endblock %}
+
+{% block contenu %}
+<p style="margin:0 0 6px 0;text-align:center;">Bonjour {{ prenom }},</p>
+<p style="margin:0 0 24px 0;text-align:center;color:#55605a;">
+  Le mot de passe de votre compte MENU a bien été changé le
+  <strong style="color:#17231a;">{{ date|date:"d/m/Y à H:i" }}</strong>.
+  Utilisez-le désormais pour vous connecter.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="background:#fdeeee;border:1px solid #f6caca;border-radius:16px;padding:16px 18px;font-size:13px;line-height:20px;color:#7a2a2c;">
+      <strong>Vous n'êtes pas à l'origine de ce changement ?</strong><br>
+      Contactez-nous immédiatement à
+      <a href="mailto:{{ support_email }}" style="color:#e5484d;font-weight:700;">{{ support_email }}</a>
+      pour sécuriser votre compte.
+    </td>
+  </tr>
+</table>
+{% endblock %}
