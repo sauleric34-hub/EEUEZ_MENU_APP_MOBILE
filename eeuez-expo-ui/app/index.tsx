@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { ScanFace } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
@@ -83,13 +84,24 @@ export default function SplashScreen() {
     ).start();
   }, [float]);
 
-  // Session déjà active → on entre directement, selon le rôle
+  // Session déjà active → on entre directement, selon le rôle.
+  // Uniquement quand CET écran est affiché, et une seule fois par compte :
+  // s'il reste monté sous les onglets (ex. après une inscription), chaque
+  // rafraîchissement de l'utilisateur (ouverture du Profil…) renvoyait sinon
+  // l'app sur l'Accueil.
+  const focused = useIsFocused();
+  const dejaRedirige = useRef<number | null>(null);
+  const userId = user?.id ?? null;
+  const role = user?.role;
   useEffect(() => {
-    if (!authReady || !user) return;
-    const dest = homeFor(user.role);
+    if (!authReady || userId == null) { dejaRedirige.current = null; return; }
+    if (!focused || dejaRedirige.current === userId) return;
+    dejaRedirige.current = userId;
+    const dest = homeFor(role);
     if (dest) router.replace(dest);
     else { setError(UNSUPPORTED); signOut(); }
-  }, [authReady, user, router, signOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, userId, role, focused]);
 
   const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 

@@ -484,7 +484,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Hors ligne ou session expirée : on garde la copie locale.
     }
   }, []);
-  const signOut = async () => {
+  // Stable (useCallback) : des écrans s'en servent dans leurs dépendances d'effet.
+  const signOut = useCallback(async () => {
     // L'état mémoire est vidé quoi qu'il arrive : si l'effacement du stockage
     // échouait, l'écran de connexion verrait encore un utilisateur et
     // renverrait aussitôt dans l'app.
@@ -498,7 +499,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setOrders([]);
     setAddresses([]);
     setDeliveryAddress(null);
-  };
+  }, []);
 
   // Session périmée (token invalidé / refresh échoué) : le client HTTP a déjà
   // effacé les jetons, on remet l'app dans l'état déconnecté.

@@ -185,7 +185,12 @@ export default function RegisterScreen() {
           Animated.spring(checkPop, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }),
         ]),
       ]).start();
-      setTimeout(() => router.replace('/(client)'), 900);
+      // On retire aussi l'écran de connexion resté dessous : il ne doit pas
+      // rester monté sous les onglets une fois connecté.
+      setTimeout(() => {
+        if (router.canDismiss()) router.dismissAll();
+        router.replace('/(client)');
+      }, 900);
     } catch (e) {
       setError(describeError(e, 'L\'inscription a échoué. Réessayez.'));
       setBusy(false);

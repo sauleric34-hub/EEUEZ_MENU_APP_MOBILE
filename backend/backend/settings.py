@@ -296,7 +296,8 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 # une boîte mail lente ne doit pas faire attendre la requête. Désactivé en test.
 EMAIL_ASYNC = _env_bool('EMAIL_ASYNC', 'test' not in sys.argv)
 EMAIL_BACKEND = (
-    'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST_PASSWORD
+    # SMTP avec vérification SSL via certifi (cf. core/mail_backend.py)
+    'core.mail_backend.EmailBackend' if EMAIL_HOST_PASSWORD
     else 'django.core.mail.backends.console.EmailBackend'
 )
 

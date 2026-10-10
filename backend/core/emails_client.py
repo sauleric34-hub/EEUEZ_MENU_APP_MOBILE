@@ -64,14 +64,15 @@ def _envoyer(destinataire, sujet, gabarit, contexte, texte):
     def envoi():
         try:
             message.send(fail_silently=False)
+            return True
         except Exception:
             logger.exception("Échec d'envoi de l'e-mail « %s » à %s", sujet, destinataire)
+            return False
 
     if getattr(settings, 'EMAIL_ASYNC', False):
         threading.Thread(target=envoi, daemon=True).start()
-    else:
-        envoi()
-    return True
+        return True  # mis en file : le résultat réel est journalisé
+    return envoi()
 
 
 # ─── Bienvenue ───────────────────────────────────────────────

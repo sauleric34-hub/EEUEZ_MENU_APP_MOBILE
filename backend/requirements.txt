@@ -12,6 +12,7 @@ daphne
 cbor2>=5.2,<6
 psycopg2-binary
 requests
+certifi
 reportlab
 qrcode
 python-dotenv
