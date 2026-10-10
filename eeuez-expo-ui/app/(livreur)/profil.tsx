@@ -14,11 +14,12 @@ import { PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { fetchLivreurProfile, updateLivreurProfile } from '../../services/livreur';
 import { friendlyMessage } from '../../services/errors';
+import { useDeconnexion } from '../../hooks/useDeconnexion';
 
 type Operateur = '' | 'mtn_money' | 'orange_money';
 
 export default function LivreurProfilScreen() {
-  const { colors, user, signOut } = useApp();
+  const { colors, user } = useApp();
   const toast = useToast();
   const router = useRouter();
 
@@ -54,10 +55,7 @@ export default function LivreurProfilScreen() {
     }
   }, [prenom, nom, tel, numero, operateur, toast]);
 
-  const deconnexion = useCallback(async () => {
-    await signOut();
-    router.replace('/');
-  }, [signOut, router]);
+  const deconnexion = useDeconnexion();
 
   const field = (label: string, value: string, setter: (v: string) => void, keyboard?: 'phone-pad') => (
     <View style={{ marginBottom: 12 }}>

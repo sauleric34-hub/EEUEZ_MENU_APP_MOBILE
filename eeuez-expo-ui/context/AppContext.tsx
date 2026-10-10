@@ -485,7 +485,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const signOut = async () => {
-    await authService.logout();
+    // L'état mémoire est vidé quoi qu'il arrive : si l'effacement du stockage
+    // échouait, l'écran de connexion verrait encore un utilisateur et
+    // renverrait aussitôt dans l'app.
+    try { await authService.logout(); } catch { /* best-effort */ }
     resetPushRegistration();
     setUser(null);
     setLikes({});

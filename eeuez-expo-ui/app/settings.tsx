@@ -21,6 +21,7 @@ import { useGardeDemo } from '../hooks/useGardeDemo';
 import { deleteAccount } from '../services/auth';
 import { WEB_BASE_URL } from '../constants/api';
 import { friendlyMessage } from '../services/errors';
+import { useDeconnexion } from '../hooks/useDeconnexion';
 
 const APP_VERSION = '1.0.0';
 const SUPPORT_EMAIL = 'menu@cambus.cm';
@@ -61,12 +62,13 @@ function Row({ Icon, iconColor, label, value, onPress, right, colors, last }: {
 
 export default function SettingsScreen() {
   const {
-    colors, mode, toggleTheme, user, signOut,
+    colors, mode, toggleTheme, user,
     notifsEnabled, setNotifsEnabled, promoEnabled, setPromoEnabled,
   } = useApp();
   const toast = useToast();
   const router = useRouter();
   const { bloquer } = useGardeDemo();
+  const deconnecter = useDeconnexion();
 
   // ─── Suppression de compte (exigence Google Play) ─────────
   const [suppressionOuverte, setSuppressionOuverte] = useState(false);
@@ -88,9 +90,8 @@ export default function SettingsScreen() {
     try {
       await deleteAccount(motDePasse);
       setSuppressionOuverte(false);
-      await signOut();
+      await deconnecter();
       toast.success('Votre compte a été supprimé.');
-      router.replace('/');
     } catch (e) {
       setErreurSuppression(friendlyMessage(e, 'La suppression a échoué.'));
     } finally {
@@ -114,7 +115,7 @@ export default function SettingsScreen() {
         {
           text: 'Se déconnecter',
           style: 'destructive',
-          onPress: async () => { await signOut(); router.replace('/'); },
+          onPress: deconnecter,
         },
       ],
     );

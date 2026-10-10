@@ -34,13 +34,15 @@ import { FideliteCard } from '../../components/FideliteCard';
 import { LiveOrderCard, OrderHistoryCard, estEnCours } from '../../components/orders';
 import { animateListChange } from '../../lib/layoutAnimation';
 import { alertError } from '../../services/errors';
+import { useDeconnexion } from '../../hooks/useDeconnexion';
 
 const COVER_H = 150;
 const AVATAR = 96;
 const HISTORIQUE_MAX = 3;
 
 export default function ProfilScreen() {
-  const { colors, mode, toggleTheme, user, favList, orders, signOut, refreshUser, reloadOrders } = useApp();
+  const { colors, mode, toggleTheme, user, favList, orders, refreshUser, reloadOrders } = useApp();
+  const deconnecter = useDeconnexion();
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -128,7 +130,7 @@ export default function ProfilScreen() {
   const logout = () => {
     Alert.alert('Se déconnecter ?', 'Vous devrez vous reconnecter pour commander.', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: async () => { await signOut(); router.replace('/'); } },
+      { text: 'Se déconnecter', style: 'destructive', onPress: deconnecter },
     ]);
   };
 
