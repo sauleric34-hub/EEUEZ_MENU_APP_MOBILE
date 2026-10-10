@@ -67,6 +67,15 @@ def publications_view(request):
             com.save(update_fields=['supprime_par', 'supprime_le'])
             messages.success(request, 'Commentaire masqué partout dans l\'application.')
 
+        elif action == 'masquer':
+            # Modération réversible : masquée partout, conservée en base, restaurable.
+            pub = get_object_or_404(Publication, pk=request.POST.get('publication_id'))
+            pub.supprime_par = 'admin'
+            pub.supprime_le = timezone.now()
+            pub.save(update_fields=['supprime_par', 'supprime_le'])
+            _journaliser(request, 'PUBLICATION_MASQUEE_ADMIN', pub, {'statut': pub.statut})
+            messages.success(request, 'Publication masquée dans l\'application — restaurable à tout moment.')
+
         elif action == 'restaurer':
             pub = get_object_or_404(Publication, pk=request.POST.get('publication_id'))
             pub.supprime_par = ''
@@ -77,6 +86,11 @@ def publications_view(request):
 
         else:
             messages.error(request, 'Action inconnue.')
+        # Retour à la page d'origine (liste filtrée ou fiche), sauf après une
+        # destruction : la fiche n'existe plus.
+        suite = request.POST.get('next', '')
+        if suite.startswith('/admin-panel/publications') and action != 'supprimer_definitivement':
+            return redirect(suite)
         return redirect('core:admin_publications')
 
     qs = Publication.objects.all().select_related(
@@ -102,14 +116,29 @@ def publications_view(request):
             | Q(auteur__username__icontains=recherche),
         )
 
-    page = Paginator(qs.order_by('-created_at'), 20).get_page(request.GET.get('page'))
+    tri = request.GET.get('tri', 'recentes')
+    ordre = {
+        'engagement': ('-nb_likes', '-nb_commentaires', '-created_at'),
+        'commentaires': ('-nb_commentaires', '-created_at'),
+    }.get(tri, ('-created_at',))
+    page = Paginator(qs.order_by(*ordre), 24).get_page(request.GET.get('page'))
+
+    toutes = Publication.objects.all()
+    compteurs = {
+        'tous': toutes.count(),
+        'visibles': toutes.filter(statut='publiee', supprime_par='').count(),
+        'attente': toutes.filter(statut='en_attente', supprime_par='').count(),
+        'supprimees': toutes.exclude(supprime_par='').count(),
+    }
 
     return render(request, 'admin_panel/publications/index.html', {
         'page_obj': page,
         'etat': etat,
         'q': recherche,
-        'total': Publication.objects.count(),
-        'nb_supprimees': Publication.objects.exclude(supprime_par='').count(),
+        'tri': tri,
+        'compteurs': compteurs,
+        'total': compteurs['tous'],
+        'nb_supprimees': compteurs['supprimees'],
         'active_page': 'publications',
     })
 
@@ -124,6 +153,8 @@ def publication_detail(request, pk):
         'pub': pub,
         'medias': pub.medias.all(),
         'commentaires': pub.commentaires.select_related('auteur').order_by('created_at'),
+        'nb_likes': pub.likes.count(),
+        'nb_commentaires_actifs': pub.commentaires.filter(supprime_par='').count(),
         'active_page': 'publications',
     })
 

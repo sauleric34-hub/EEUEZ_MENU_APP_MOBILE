@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Sum, Count, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import (
@@ -123,7 +124,7 @@ def commandes(request):
     resto = request.resto
     statut = request.GET.get('statut', '')
     base = resto.commandes.filter(paiement_confirme=True)
-    qs = base.select_related('client', 'livraison', 'livraison__livreur').prefetch_related('lignes__plat')
+    qs = base.select_related('client', 'livraison', 'livraison__livreur').prefetch_related('lignes__plat', 'lignes__choix')
     if statut:
         qs = qs.filter(statut=statut)
     livreurs = User.objects.filter(role='livreur', restaurant_attache=resto, is_active=True)
@@ -131,8 +132,19 @@ def commandes(request):
     statut_tabs = [
         (code, label, counts.get(code, 0)) for code, label in Commande.STATUT_CHOICES
     ]
+    # Indicateurs du jour (en-tête de la page)
+    debut_jour = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    du_jour = base.filter(created_at__gte=debut_jour).exclude(statut__in=('refusee', 'annulee'))
+    kpis = {
+        'a_traiter': counts.get('en_attente', 0),
+        'en_cuisine': counts.get('acceptee', 0) + counts.get('en_preparation', 0),
+        'pretes': counts.get('prete', 0),
+        'commandes_jour': du_jour.count(),
+        'revenus_jour': du_jour.aggregate(t=Sum('montant_restaurant'))['t'] or 0,
+    }
     return render(request, 'resto/commandes.html', {
         'resto': resto,
+        'kpis': kpis,
         'commandes': qs.order_by('-created_at')[:60],
         'statut': statut,
         'livreurs': livreurs,
@@ -176,7 +188,10 @@ def commande_action(request, pk):
         messages.success(request, f'Commande #{commande.pk} acceptée.')
     elif action == 'refuser' and commande.statut == 'en_attente':
         commande.statut = 'refusee'
-        commande.notes = request.POST.get('raison', commande.notes)
+        # Motif de refus (facultatif) : un motif vide ne doit pas effacer les notes du client
+        raison = (request.POST.get('raison') or '').strip()
+        if raison:
+            commande.notes = raison
         # Commande refusée : le client récupère les points qu'il avait engagés.
         if fidelite.rembourser_points(commande):
             commande.points_utilises = 0
@@ -279,54 +294,59 @@ def plat_du_jour(request, pk):
     return redirect('core:resto_plats')
 
 
-@resto_required
-def plat_form(request, pk=None):
-    resto = request.resto
-    plat = get_object_or_404(Plat, pk=pk, restaurant=resto) if pk else None
+def enregistrer_plat(request, plat, resto, admin=False):
+    """Valide et enregistre le formulaire de plat (espace restaurant ET admin).
+    Renvoie le plat enregistré, ou None si le formulaire est invalide (les
+    erreurs sont déjà posées dans `messages`)."""
+    nom = request.POST.get('nom', '').strip()
+    prix = request.POST.get('prix', '0')
+    type_plat = request.POST.get('type_plat', '')
+    if not nom or not prix.isdigit() or int(prix) <= 0:
+        messages.error(request, 'Nom et prix (nombre positif) sont obligatoires.')
+        return None
+    if type_plat not in dict(Plat.TYPE_PLAT_CHOICES):
+        messages.error(request, 'Veuillez choisir le type de plat.')
+        return None
 
-    if request.method == 'POST':
-        nom = request.POST.get('nom', '').strip()
-        prix = request.POST.get('prix', '0')
-        type_plat = request.POST.get('type_plat', '')
-        if not nom or not prix.isdigit() or int(prix) <= 0:
-            messages.error(request, 'Nom et prix (nombre positif) sont obligatoires.')
-        elif type_plat not in dict(Plat.TYPE_PLAT_CHOICES):
-            messages.error(request, 'Veuillez choisir le type de plat.')
-        else:
-            if plat is None:
-                plat = Plat(restaurant=resto)
-            plat.nom = nom
-            plat.prix = int(prix)
-            # Frais de livraison : le barème par distance du restaurant (Profil)
-            # a remplacé le frais par plat. On garde le champ (repli historique)
-            # mais on ne l'édite plus ici — encore accepté si un ancien
-            # formulaire l'envoie.
-            frais = request.POST.get('frais_livraison', '')
-            if str(frais).isdigit():
-                plat.frais_livraison = int(frais)
-            plat.description = request.POST.get('description', '')
-            plat.ingredients = request.POST.get('ingredients', '')
-            plat.allergies = request.POST.get('allergies', '')
-            cat = request.POST.get('categorie')
-            plat.categorie = Categorie.objects.filter(pk=cat).first() if cat else None
-            plat.type_plat = type_plat
-            plat.is_available = request.POST.get('is_available') == 'on'
-            plat.is_popular = request.POST.get('is_popular') == 'on'
-            plat.is_visible = True
-            if 'image' in request.FILES:
-                plat.image = request.FILES['image']
-            plat.save()
-            # Photos supplémentaires (galerie)
-            for f in request.FILES.getlist('photos'):
-                PlatImage.objects.create(plat=plat, image=f)
+    if plat is None:
+        plat = Plat(restaurant=resto)
+    plat.nom = nom
+    plat.prix = int(prix)
+    # Frais de livraison : le barème par distance du restaurant (Profil)
+    # a remplacé le frais par plat. On garde le champ (repli historique)
+    # mais on ne l'édite plus ici — encore accepté si un ancien
+    # formulaire l'envoie.
+    frais = request.POST.get('frais_livraison', '')
+    if str(frais).isdigit():
+        plat.frais_livraison = int(frais)
+    plat.description = request.POST.get('description', '')
+    plat.ingredients = request.POST.get('ingredients', '')
+    plat.allergies = request.POST.get('allergies', '')
+    cat = request.POST.get('categorie')
+    plat.categorie = Categorie.objects.filter(pk=cat).first() if cat else None
+    plat.type_plat = type_plat
+    plat.is_available = request.POST.get('is_available') == 'on'
+    plat.is_popular = request.POST.get('is_popular') == 'on'
+    if admin:
+        # Seul l'admin décide de la visibilité (modération)
+        plat.is_visible = request.POST.get('is_visible') == 'on'
+    elif plat.pk is None:
+        plat.is_visible = True  # un nouveau plat est visible ; un plat masqué par l'admin le reste
+    if 'image' in request.FILES:
+        plat.image = request.FILES['image']
+    plat.save()
+    # Photos supplémentaires (galerie)
+    for f in request.FILES.getlist('photos'):
+        PlatImage.objects.create(plat=plat, image=f)
 
-            _enregistrer_complements(plat, request.POST)
-            _enregistrer_inclus(plat, request.POST)
+    _enregistrer_complements(plat, request.POST)
+    _enregistrer_inclus(plat, request.POST)
+    return plat
 
-            messages.success(request, f'Plat « {plat.nom} » enregistré.')
-            return redirect('core:resto_plats')
 
-    return render(request, 'resto/plat_form.html', {
+def contexte_formulaire_plat(plat, resto):
+    """Contexte du gabarit partials/plat_form_corps.html."""
+    return {
         'resto': resto, 'plat': plat,
         # Catégories visibles (+ celle du plat, même masquée, pour ne pas la perdre)
         'categories': Categorie.objects.filter(
@@ -337,6 +357,23 @@ def plat_form(request, pk=None):
             plat.groupes_complements.prefetch_related('options') if plat else []
         ),
         'inclus': plat.elements_inclus.all() if plat else [],
+    }
+
+
+@resto_required
+def plat_form(request, pk=None):
+    resto = request.resto
+    plat = get_object_or_404(Plat, pk=pk, restaurant=resto) if pk else None
+
+    if request.method == 'POST':
+        enregistre = enregistrer_plat(request, plat, resto)
+        if enregistre:
+            messages.success(request, f'Plat « {enregistre.nom} » enregistré.')
+            return redirect('core:resto_plats')
+
+    return render(request, 'resto/plat_form.html', {
+        **contexte_formulaire_plat(plat, resto),
+        'url_retour': reverse('core:resto_plats'),
         'active_page': 'plats',
     })
 

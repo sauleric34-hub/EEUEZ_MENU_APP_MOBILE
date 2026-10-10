@@ -54,6 +54,35 @@ def dish_detail(request, pk):
 
 
 @admin_required
+def dish_edit(request, pk):
+    """L'admin modifie toutes les informations d'un plat, avec le même
+    formulaire (et le même aperçu en direct) que l'espace restaurant."""
+    from django.urls import reverse
+    from .resto_ws import contexte_formulaire_plat, enregistrer_plat
+
+    plat = get_object_or_404(Plat.objects.select_related('restaurant'), pk=pk)
+    if request.method == 'POST':
+        avant = {'nom': plat.nom, 'prix': int(plat.prix), 'visible': plat.is_visible}
+        enregistre = enregistrer_plat(request, plat, plat.restaurant, admin=True)
+        if enregistre:
+            AuditLog.objects.create(
+                user=request.user, action='ADMIN_EDIT_DISH',
+                model_name='Plat', object_id=str(pk),
+                description={'avant': avant, 'apres': {'nom': enregistre.nom, 'prix': int(enregistre.prix), 'visible': enregistre.is_visible}},
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+            messages.success(request, f'Plat « {enregistre.nom} » mis à jour.')
+            return redirect('core:dish_detail', pk=pk)
+
+    return render(request, 'admin_panel/dishes/form.html', {
+        **contexte_formulaire_plat(plat, plat.restaurant),
+        'mode_admin': True,
+        'url_retour': reverse('core:dish_detail', args=[pk]),
+        'active_page': 'dishes',
+    })
+
+
+@admin_required
 def dish_toggle(request, pk):
     plat = get_object_or_404(Plat, pk=pk)
     plat.is_visible = not plat.is_visible

@@ -2,68 +2,131 @@
 {% block title %}Bannières — Menu Admin{% endblock %}
 {% block topbar_title %}Bannières{% endblock %}
 
+{% block extra_css %}
+{% include 'admin_panel/bannieres/_rendu_css.html' %}
+<style>
+  .bl-grille { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:18px; }
+  .bl-carte { padding:14px; display:flex; flex-direction:column; gap:12px; transition:transform .2s, border-color .2s; animation:blIn .35s ease both; }
+  .bl-carte:hover { transform:translateY(-3px); border-color:var(--border-hover); }
+  @keyframes blIn { from { opacity:0; transform:translateY(10px); } }
+  .bl-carte.inactive .bn-rendu { filter:grayscale(.85); opacity:.55; }
+  .bl-tete { display:flex; align-items:center; gap:8px; }
+  .bl-ordre { width:28px; height:28px; border-radius:9px; background:var(--accent-orange-dim, rgba(232,89,28,.15)); color:var(--accent-orange, #E8591C);
+              display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.8rem; flex-shrink:0; }
+  .bl-nom { font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .bl-statut { font-size:.72rem; font-weight:700; display:inline-flex; align-items:center; gap:5px; }
+  .bl-statut::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .bl-meta { display:flex; flex-wrap:wrap; gap:5px; }
+  .bl-meta .badge { font-size:.7rem; }
+  .bl-actions { display:flex; gap:6px; align-items:center; border-top:1px solid var(--border); padding-top:12px; }
+  .bl-actions form { display:inline; }
+  .bl-actions .bl-droite { margin-left:auto; display:flex; gap:6px; }
+  .bl-icone { width:32px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  .bl-vide { text-align:center; padding:56px 20px; }
+  .bl-vide .ico { font-size:2.4rem; margin-bottom:10px; }
+  .bl-modal { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; padding:20px; }
+  .bl-modal.ouvert { display:flex; }
+  .bl-modal .glass-card { max-width:400px; width:100%; padding:24px; text-align:center; animation:blBoite .25s cubic-bezier(.2,1.2,.4,1); }
+  @keyframes blBoite { from { transform:scale(.92); opacity:0; } }
+  .bl-modal h3 { color:var(--text-primary); } .bl-modal p { color:var(--text-secondary); font-size:.86rem; margin-top:6px; }
+  .bl-modal .boutons { display:flex; gap:10px; margin-top:18px; } .bl-modal .boutons .btn { flex:1; justify-content:center; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title">Bannières</h1>
-    <p class="page-subtitle">Carrousel promo affiché en haut de l'accueil client — {{ bannieres|length }} bannière{{ bannieres|length|pluralize }}</p>
+    <p class="page-subtitle">Carrousel promo de l'accueil client — {{ bannieres|length }} bannière{{ bannieres|length|pluralize }}, affichées dans cet ordre</p>
   </div>
-  <div style="margin-left:auto;display:flex;gap:10px;">
+  <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;">
     <a href="{% url 'core:zone_list' %}" class="btn btn-secondary">◎ Zones de ciblage ({{ nb_zones }})</a>
     <a href="{% url 'core:banniere_create' %}" class="btn btn-primary">+ Nouvelle bannière</a>
   </div>
 </div>
 
-<div class="table-wrapper">
-  {% if bannieres %}
-  <table>
-    <thead><tr><th>Aperçu</th><th>Nom interne</th><th>Fond</th><th>Ciblage</th><th>Bouton « Commander »</th><th>Ordre</th><th>Statut</th><th></th></tr></thead>
-    <tbody>
-      {% for b in bannieres %}
-      <tr class="anim-fade-up" style="animation-delay:{{ forloop.counter0 }}0ms;">
-        <td>
-          <div style="display:flex;align-items:center;gap:8px;">
-            {% if b.fond_type == 'image' and b.fond_image %}
-              <img src="{{ b.fond_image.url }}" style="width:52px;height:36px;border-radius:8px;object-fit:cover;">
-            {% elif b.fond_type == 'couleur' %}
-              <div style="width:52px;height:36px;border-radius:8px;background:{{ b.fond_couleur }};"></div>
-            {% else %}
-              <div style="width:52px;height:36px;border-radius:8px;background:linear-gradient(135deg,{{ b.fond_degrade_debut }},{{ b.fond_degrade_fin }});"></div>
-            {% endif %}
-            {% if b.image_droite %}<img src="{{ b.image_droite.url }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;">{% endif %}
-          </div>
-        </td>
-        <td>
-          <div style="color:var(--text-primary);font-weight:500;">{{ b.nom_interne }}</div>
-          <div style="color:var(--text-muted);font-size:0.75rem;max-width:220px;white-space:pre-line;">{{ b.titre|truncatechars:50 }}</div>
-        </td>
-        <td>{{ b.get_fond_type_display }}</td>
-        <td style="max-width:240px;">
-          {% for c in b.resume_ciblage %}<span class="badge badge-blue" style="margin:0 4px 4px 0;display:inline-block;">{{ c }}</span>{% empty %}<span class="badge badge-gray">Partout</span>{% endfor %}
-        </td>
-        <td>{% if b.plat %}<span class="badge badge-blue">→ {{ b.plat.nom }}</span>{% else %}<span class="badge badge-gray">Masqué (aucun plat)</span>{% endif %}</td>
-        <td>
-          <div style="display:flex;gap:4px;">
-            <form method="post" action="{% url 'core:banniere_up' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Monter">↑</button></form>
-            <form method="post" action="{% url 'core:banniere_down' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Descendre">↓</button></form>
-          </div>
-        </td>
-        <td>{% if b.is_active %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-gray">Inactive</span>{% endif %}</td>
-        <td style="display:flex;gap:6px;">
-          <a href="{% url 'core:banniere_edit' b.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
-          <form method="post" action="{% url 'core:banniere_toggle' b.pk %}">{% csrf_token %}
-            <button class="btn {% if b.is_active %}btn-amber{% else %}btn-secondary{% endif %} btn-sm">{% if b.is_active %}Désactiver{% else %}Activer{% endif %}</button>
-          </form>
-          <form method="post" action="{% url 'core:banniere_delete' b.pk %}" onsubmit="return confirm('Supprimer cette bannière ?');">{% csrf_token %}
-            <button class="btn btn-danger btn-sm">Supprimer</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="12" rx="2"/></svg><p>Aucune bannière — créez-en une pour l'accueil client</p></div>
-  {% endif %}
+{% if bannieres %}
+<div class="bl-grille">
+  {% for b in bannieres %}
+  <div class="glass-card bl-carte {% if not b.is_active %}inactive{% endif %}" style="animation-delay:{{ forloop.counter0|stringformat:'d' }}0ms;">
+    <div class="bl-tete">
+      <span class="bl-ordre" title="Position dans le carrousel">{{ forloop.counter }}</span>
+      <span class="bl-nom" title="{{ b.nom_interne }}">{{ b.nom_interne }}</span>
+      <span class="bl-statut" style="color:{% if b.is_active %}var(--accent-green){% else %}var(--text-muted){% endif %};">{% if b.is_active %}Active{% else %}Inactive{% endif %}</span>
+    </div>
+
+    {# Miniature fidèle au rendu de l'app #}
+    <a href="{% url 'core:banniere_edit' b.pk %}" style="display:block;">
+      <div class="bn-rendu">
+        <div class="bn-fond" style="{% if b.fond_type == 'couleur' %}background:{{ b.fond_couleur }};{% elif b.fond_type == 'degrade' %}background:linear-gradient(135deg,{{ b.fond_degrade_debut }},{{ b.fond_degrade_fin }});{% elif b.fond_image %}background-image:url('{{ b.fond_image.url }}');{% endif %}"></div>
+        {% if b.image_droite %}<div class="bn-droite" style="background-image:url('{{ b.image_droite.url }}');"></div>{% endif %}
+        <div class="bn-voile"></div>
+        {% if b.badge %}<div class="bn-badge">{{ b.badge }}</div>{% endif %}
+        <div class="bn-contenu">
+          <div class="bn-titre" style="color:{{ b.texte_couleur }};">{{ b.titre }}</div>
+          {% if b.sous_titre %}<div class="bn-sous" style="color:{{ b.texte_couleur }};">{{ b.sous_titre }}</div>{% endif %}
+          {% if b.plat %}<span class="bn-cta" style="background:{{ b.bouton_fond_couleur }};color:{{ b.bouton_texte_couleur }};">Commander</span>{% endif %}
+        </div>
+      </div>
+    </a>
+
+    <div class="bl-meta">
+      {% for c in b.resume_ciblage %}<span class="badge badge-blue">{{ c }}</span>{% empty %}<span class="badge badge-gray">🌍 Visible partout</span>{% endfor %}
+      {% if b.plat %}<span class="badge badge-green">→ {{ b.plat.nom }}</span>{% else %}<span class="badge badge-gray">Sans bouton</span>{% endif %}
+    </div>
+
+    <div class="bl-actions">
+      <form method="post" action="{% url 'core:banniere_up' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm bl-icone" title="Avancer dans le carrousel" {% if forloop.first %}disabled{% endif %}>↑</button></form>
+      <form method="post" action="{% url 'core:banniere_down' b.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm bl-icone" title="Reculer dans le carrousel" {% if forloop.last %}disabled{% endif %}>↓</button></form>
+      <div class="bl-droite">
+        <form method="post" action="{% url 'core:banniere_toggle' b.pk %}">{% csrf_token %}
+          <button class="btn {% if b.is_active %}btn-amber{% else %}btn-secondary{% endif %} btn-sm">{% if b.is_active %}Désactiver{% else %}Activer{% endif %}</button>
+        </form>
+        <a href="{% url 'core:banniere_edit' b.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
+        <form method="post" action="{% url 'core:banniere_delete' b.pk %}" data-confirmer="{{ b.nom_interne }}">{% csrf_token %}
+          <button class="btn btn-danger btn-sm bl-icone" title="Supprimer">✕</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 </div>
+{% else %}
+<div class="glass-card bl-vide">
+  <div class="ico">🖼️</div>
+  <p style="color:var(--text-primary);font-weight:700;">Aucune bannière pour l'instant</p>
+  <p style="color:var(--text-muted);margin-top:4px;">Créez une bannière pour mettre en avant un plat ou une offre en haut de l'accueil client.</p>
+  <a href="{% url 'core:banniere_create' %}" class="btn btn-primary" style="margin-top:16px;">+ Créer une bannière</a>
+</div>
+{% endif %}
+
+<div class="bl-modal" id="blModal">
+  <div class="glass-card">
+    <h3>Supprimer « <span id="blNom"></span> » ?</h3>
+    <p>La bannière disparaîtra du carrousel de l'application. Cette action est définitive.</p>
+    <div class="boutons">
+      <button type="button" class="btn btn-secondary" id="blNon">Annuler</button>
+      <button type="button" class="btn btn-danger" id="blOui">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById('blModal'), cible = null;
+  document.querySelectorAll('form[data-confirmer]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f._ok) return;
+      e.preventDefault(); cible = f;
+      document.getElementById('blNom').textContent = f.dataset.confirmer;
+      modal.classList.add('ouvert');
+    });
+  });
+  function fermer() { modal.classList.remove('ouvert'); cible = null; }
+  document.getElementById('blNon').onclick = fermer;
+  modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fermer(); });
+  document.getElementById('blOui').onclick = function () { if (cible) { cible._ok = true; cible.submit(); } };
+})();
+</script>
 {% endblock %}

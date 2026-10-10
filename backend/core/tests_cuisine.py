@@ -72,3 +72,29 @@ class EcranCuisineTests(TestCase):
         web = Client()
         web.force_login(self.client_user)
         self.assertNotEqual(web.get('/admin-panel/resto/cuisine/donnees/').status_code, 200)
+
+
+class PageCommandesRestoTests(EcranCuisineTests):
+    """Page Commandes de l'espace restaurant (réutilise les fixtures ci-dessus)."""
+
+    def test_page_avec_livraison_sans_livreur_et_client_supprime(self):
+        from .models import Livraison
+        c = self._commande(statut='prete')
+        Livraison.objects.create(commande=c, livreur=None, statut='en_attente')
+        c2 = self._commande()
+        Commande.objects.filter(pk=c2.pk).update(client=None)
+        r = self.web.get('/admin-panel/resto/commandes/')
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Livreur à confirmer')
+        self.assertContains(r, 'Client supprimé')
+        self.assertEqual(r.context['kpis']['a_traiter'], 1)
+
+    def test_refus_sans_motif_garde_la_note_du_client(self):
+        c = self._commande()
+        self.web.post(f'/admin-panel/resto/commandes/{c.pk}/action/', {'action': 'refuser', 'raison': ''})
+        c.refresh_from_db()
+        self.assertEqual((c.statut, c.notes), ('refusee', 'Sans piment'))
+        c2 = self._commande()
+        self.web.post(f'/admin-panel/resto/commandes/{c2.pk}/action/', {'action': 'refuser', 'raison': 'Rupture de stock'})
+        c2.refresh_from_db()
+        self.assertEqual(c2.notes, 'Rupture de stock')

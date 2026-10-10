@@ -35,6 +35,7 @@ urlpatterns = [
     # Dishes
     path('dishes/', dishes.dish_list, name='dish_list'),
     path('dishes/<int:pk>/', dishes.dish_detail, name='dish_detail'),
+    path('dishes/<int:pk>/modifier/', dishes.dish_edit, name='dish_edit'),
     path('dishes/<int:pk>/toggle/', dishes.dish_toggle, name='dish_toggle'),
 
     # Bannières (accueil client)

@@ -108,11 +108,12 @@
   .pb-tri select { padding: 8px 12px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font: inherit; font-weight: 600; }
 
   /* ─── Cartes de publication ─── */
-  .pb-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+  .pb-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
   .pb-pub { overflow: hidden; display: flex; flex-direction: column; animation: pbIn .4s ease both; transition: transform .2s, box-shadow .2s, border-color .2s; }
   .pb-pub:hover { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 16px 40px rgba(0,0,0,.18); }
   .pb-pub.attente { border-color: rgba(245,166,35,.45); }
-  .pb-media { position: relative; aspect-ratio: 4/5; background: #000; }
+  /* Média compact : carré, plafonné en hauteur (la carte reste de taille normale) */
+  .pb-media { position: relative; aspect-ratio: 1; max-height: 230px; width: 100%; background: #000; }
   .pb-media-piste { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; scroll-behavior: smooth; }
   .pb-media-piste::-webkit-scrollbar { display: none; }
   .pb-media-piste > * { flex: 0 0 100%; height: 100%; object-fit: cover; scroll-snap-align: start; }
@@ -124,18 +125,18 @@
   .pb-media:hover .pb-fleche { opacity: 1; }
   .pb-media .pb-fleche.g { left: 10px; } .pb-media .pb-fleche.d { right: 10px; }
   .pb-media .pb-jouer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-  .pb-media .pb-jouer span { width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
-  .pb-media-vide { aspect-ratio: auto; height: 120px; background: linear-gradient(135deg, var(--accent-orange), #0f5132); display: flex; align-items: center;
+  .pb-media .pb-jouer span { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+  .pb-media-vide { aspect-ratio: auto; height: 84px; background: linear-gradient(135deg, var(--accent-orange), #0f5132); display: flex; align-items: center;
                    justify-content: center; color: rgba(255,255,255,.85); font-size: 2rem; }
-  .pb-corps { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .pb-corps { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
   .pb-badges { display: flex; gap: 6px; flex-wrap: wrap; }
   .pb-badge { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 700; padding: 4px 9px; border-radius: 8px; }
   .pb-badge .pb-av { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: .6rem; font-weight: 800;
                      display: flex; align-items: center; justify-content: center; }
   .pb-badge.bleu { background: var(--accent-blue-dim); color: var(--accent-blue); }
   .pb-badge.ambre { background: var(--accent-amber-dim); color: var(--accent-amber); }
-  .pb-texte-pub { font-size: .88rem; line-height: 1.55; color: var(--text-secondary); white-space: pre-line; word-break: break-word;
-                  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pb-texte-pub { font-size: .84rem; line-height: 1.55; color: var(--text-secondary); white-space: pre-line; word-break: break-word;
+                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .pb-texte-pub.ouvert { -webkit-line-clamp: unset; display: block; }
   .pb-plus { background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-size: .8rem; font-weight: 700; color: var(--accent-orange); align-self: flex-start; }
   .pb-plat-chip { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; padding: 5px 10px 5px 5px; border-radius: 999px;

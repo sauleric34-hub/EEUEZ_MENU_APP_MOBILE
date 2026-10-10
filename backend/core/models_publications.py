@@ -40,6 +40,7 @@ class Publication(models.Model):
         ('', 'Active'),
         ('client', 'Supprimée par le client'),
         ('restaurant', 'Supprimée par le restaurant'),
+        ('admin', "Masquée par l'administrateur"),
     ]
 
     # Le restaurant est TOUJOURS renseigné : c'est lui qui possède le fil.

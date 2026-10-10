@@ -79,6 +79,7 @@
       </div>
     </div>
     <div style="margin-top:16px;">
+      <a href="{% url 'core:dish_edit' plat.pk %}" class="btn btn-primary">✎ Modifier le plat</a>
       <a href="{% url 'core:restaurant_detail' plat.restaurant.pk %}" class="btn btn-secondary">Voir le restaurant →</a>
     </div>
   </div>

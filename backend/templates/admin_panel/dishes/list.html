@@ -53,6 +53,7 @@
         <td>{% if plat.is_visible %}<span class="badge badge-blue">Visible</span>{% else %}<span class="badge badge-gray">Masqué</span>{% endif %}</td>
         <td style="display:flex;gap:6px;">
           <a href="{% url 'core:dish_detail' plat.pk %}" class="btn btn-secondary btn-sm">Voir</a>
+          <a href="{% url 'core:dish_edit' plat.pk %}" class="btn btn-primary btn-sm">Modifier</a>
           <form method="post" action="{% url 'core:dish_toggle' plat.pk %}">{% csrf_token %}
             <button class="btn {% if plat.is_visible %}btn-danger{% else %}btn-amber{% endif %} btn-sm">{% if plat.is_visible %}Masquer{% else %}Afficher{% endif %}</button>
           </form>

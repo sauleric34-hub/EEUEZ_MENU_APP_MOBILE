@@ -2,153 +2,135 @@
 {% block title %}Publications — Administration{% endblock %}
 {% block topbar_title %}Modération des publications{% endblock %}
 
+{% block extra_css %}
+{% include 'admin_panel/publications/_moderation_css.html' %}
+<style>
+  .md-onglets { display:inline-flex; padding:4px; border-radius:14px; background:var(--bg-card); border:1px solid var(--border); flex-wrap:wrap; }
+  .md-onglets a { display:flex; align-items:center; gap:8px; padding:9px 15px; border-radius:10px; font-size:.85rem; font-weight:700; color:var(--text-secondary); text-decoration:none; }
+  .md-onglets a:hover { color:var(--text-primary); }
+  .md-onglets a.actif { background:var(--accent-orange); color:#fff; }
+  .md-onglets a span { min-width:22px; height:22px; padding:0 6px; border-radius:7px; background:var(--bg-tertiary); font-size:.72rem;
+                       display:flex; align-items:center; justify-content:center; }
+  .md-onglets a.actif span { background:rgba(255,255,255,.2); }
+  .md-onglets a span.chaud { background:var(--accent-amber); color:#1a1200; }
+  .md-outils { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+  .md-recherche { margin-left:auto; display:flex; gap:8px; }
+  .md-recherche input, .md-recherche select { padding:10px 13px; border-radius:12px; border:1px solid var(--input-border); background:var(--input-bg);
+                                               color:var(--text-primary); font:inherit; font-size:.85rem; }
+  .md-recherche input { width:240px; }
+  .md-grille { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:16px; }
+  .md-carte { overflow:hidden; display:flex; flex-direction:column; transition:transform .2s, border-color .2s; animation:mdIn .35s ease both; }
+  .md-carte:hover { transform:translateY(-3px); border-color:var(--border-hover); }
+  @keyframes mdIn { from { opacity:0; transform:translateY(10px); } }
+  .md-carte.masquee { opacity:.72; }
+  .md-carte.masquee .md-vignette { filter:grayscale(.8); }
+  .md-vignette { position:relative; display:block; aspect-ratio:16/11; background:var(--bg-tertiary); overflow:hidden; }
+  .md-vignette img { width:100%; height:100%; object-fit:cover; transition:transform .35s; }
+  .md-carte:hover .md-vignette img { transform:scale(1.04); }
+  .md-vignette .md-sans { height:100%; display:flex; align-items:center; justify-content:center; padding:16px; text-align:center; font-size:.85rem;
+                          color:var(--text-secondary); font-style:italic; line-height:1.45; }
+  .md-vignette .md-nb { position:absolute; top:8px; right:8px; font-size:.7rem; font-weight:800; color:#fff; padding:3px 8px; border-radius:999px; background:rgba(0,0,0,.55); }
+  .md-vignette .md-etat { position:absolute; top:8px; left:8px; }
+  .md-vignette .md-video { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .md-vignette .md-video span { width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center; }
+  .md-corps { padding:12px 14px 14px; display:flex; flex-direction:column; gap:8px; flex:1; }
+  .md-resto { font-weight:700; color:var(--text-primary); font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .md-texte { font-size:.82rem; color:var(--text-secondary); line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .md-pied { display:flex; align-items:center; gap:10px; font-size:.76rem; color:var(--text-muted); margin-top:auto; padding-top:4px; }
+  .md-pied b { color:var(--text-secondary); }
+  .md-actions { display:flex; gap:6px; border-top:1px solid var(--border); padding-top:10px; }
+  .md-actions form { display:flex; }
+  .md-actions .btn { display:inline-flex; align-items:center; gap:5px; }
+  .md-actions .md-voir { flex:1; justify-content:center; }
+  @media (max-width: 900px) { .md-recherche { margin-left:0; width:100%; } .md-recherche input { flex:1; width:auto; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title gradient-text">Publications</h1>
-    <p class="page-subtitle">
-      {{ total }} publication{{ total|pluralize }} au total ·
-      {{ nb_supprimees }} supprimée{{ nb_supprimees|pluralize }} (conservée{{ nb_supprimees|pluralize }} en base)
-    </p>
+    <p class="page-subtitle">Modérez les publications des restaurants et les contributions des clients</p>
   </div>
   <a href="{% url 'core:admin_fidelite' %}" class="btn btn-secondary" style="margin-left:auto;">Paramétrage fidélité</a>
 </div>
 
-<div class="glass-card anim-fade-up" style="padding:16px;margin-bottom:18px;">
-  <form method="get" class="filter-bar" style="margin:0;">
-    <div class="input-search-wrapper">
-      <input type="text" name="q" value="{{ q }}" placeholder="Texte, restaurant ou auteur…" class="input-search">
-    </div>
-    <select name="etat" class="input-select" onchange="this.form.submit()">
-      <option value="">Tous les états</option>
-      <option value="visibles" {% if etat == 'visibles' %}selected{% endif %}>Visibles</option>
-      <option value="attente" {% if etat == 'attente' %}selected{% endif %}>En attente</option>
-      <option value="supprimees" {% if etat == 'supprimees' %}selected{% endif %}>Supprimées</option>
+<div class="md-outils anim-fade-up">
+  <div class="md-onglets">
+    <a href="?tri={{ tri }}&q={{ q|urlencode }}" class="{% if not etat %}actif{% endif %}">Toutes <span>{{ compteurs.tous }}</span></a>
+    <a href="?etat=visibles&tri={{ tri }}&q={{ q|urlencode }}" class="{% if etat == 'visibles' %}actif{% endif %}">Visibles <span>{{ compteurs.visibles }}</span></a>
+    <a href="?etat=attente&tri={{ tri }}&q={{ q|urlencode }}" class="{% if etat == 'attente' %}actif{% endif %}">En attente <span class="{% if compteurs.attente and etat != 'attente' %}chaud{% endif %}">{{ compteurs.attente }}</span></a>
+    <a href="?etat=supprimees&tri={{ tri }}&q={{ q|urlencode }}" class="{% if etat == 'supprimees' %}actif{% endif %}">Masquées / supprimées <span>{{ compteurs.supprimees }}</span></a>
+  </div>
+  <form method="get" class="md-recherche">
+    <input type="hidden" name="etat" value="{{ etat }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Texte, restaurant ou auteur…">
+    <select name="tri" onchange="this.form.submit()">
+      <option value="recentes" {% if tri == 'recentes' %}selected{% endif %}>Plus récentes</option>
+      <option value="engagement" {% if tri == 'engagement' %}selected{% endif %}>Plus d'engagement</option>
+      <option value="commentaires" {% if tri == 'commentaires' %}selected{% endif %}>Plus commentées</option>
     </select>
-    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
-    {% if q or etat %}
-      <a href="{% url 'core:admin_publications' %}" class="btn btn-secondary btn-sm">Réinitialiser</a>
-    {% endif %}
   </form>
 </div>
 
-<div class="glass-card anim-fade-up" style="padding:0;">
-  <div class="table-wrapper">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Publication</th>
-          <th>Médias</th>
-          <th>Restaurant</th>
-          <th>Auteur</th>
-          <th>État</th>
-          <th>Engagement</th>
-          <th>Date</th>
-          <th style="text-align:right;">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in page_obj %}
-        <tr style="animation-delay:{{ forloop.counter0 }}0ms;">
-          <td style="max-width:280px;">
-            <a href="{% url 'core:admin_publication_detail' p.pk %}" style="color:var(--accent-orange);font-weight:600;">
-              #{{ p.pk }}
-            </a>
-            <div style="color:var(--text-muted);font-size:0.8rem;margin-top:3px;">
-              {{ p.texte|truncatechars:70|default:"—" }}
-            </div>
-          </td>
-          {# Aperçu des médias : permet de repérer un contenu à modérer sans
-             ouvrir chaque publication une par une. Les vidéos sont signalées
-             par un chevron ; leur lecture se fait sur la page de détail. #}
-          <td>
-            {% if p.medias.all %}
-              <div style="display:flex;gap:5px;align-items:center;">
-                {% for m in p.medias.all|slice:":3" %}
-                  <a href="{% url 'core:admin_publication_detail' p.pk %}"
-                     style="position:relative;display:block;width:46px;height:46px;border-radius:8px;overflow:hidden;background:var(--bg-tertiary);flex:none;">
-                    {% if m.type == 'video' %}
-                      <span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:0.9rem;">▶</span>
-                    {% else %}
-                      <img src="{{ m.url_affichage }}" alt="" style="width:100%;height:100%;object-fit:cover;">
-                    {% endif %}
-                  </a>
-                {% endfor %}
-                {% if p.medias.all|length > 3 %}
-                  <span style="color:var(--text-muted);font-size:0.78rem;">+{{ p.medias.all|length|add:"-3" }}</span>
-                {% endif %}
-              </div>
-            {% else %}
-              <span style="color:var(--text-muted);font-size:0.8rem;">—</span>
-            {% endif %}
-          </td>
-          <td>{{ p.restaurant.nom|default:"—" }}</td>
-          <td>
-            {% if p.auteur %}
-              <span style="color:var(--accent-blue);">@{{ p.auteur.get_full_name|default:p.auteur.username }}</span>
-              <div style="color:var(--text-muted);font-size:0.75rem;">{{ p.auteur.points_solde }} pts</div>
-            {% else %}
-              <span style="color:var(--text-muted);">Restaurant</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if p.supprime_par %}
-              <span class="badge badge-red">Supprimée ({{ p.get_supprime_par_display|default:p.supprime_par }})</span>
-            {% elif p.statut == 'publiee' %}
-              <span class="badge badge-green">Visible</span>
-            {% elif p.statut == 'en_attente' %}
-              <span class="badge badge-amber">En attente</span>
-            {% else %}
-              <span class="badge badge-gray">{{ p.get_statut_display }}</span>
-            {% endif %}
-          </td>
-          <td style="white-space:nowrap;">
-            ♥ {{ p.nb_likes }} · 💬 {{ p.nb_commentaires }}
-          </td>
-          <td style="white-space:nowrap;color:var(--text-muted);font-size:0.82rem;">
-            {{ p.created_at|date:"d/m/Y H:i" }}
-          </td>
-          <td>
-            <div class="btn-group" style="justify-content:flex-end;flex-wrap:wrap;gap:6px;">
-              <a href="{% url 'core:admin_publication_detail' p.pk %}" class="btn btn-secondary btn-sm">Voir</a>
-              {% if p.supprime_par %}
-                <form method="post" style="display:inline;">{% csrf_token %}
-                  <input type="hidden" name="publication_id" value="{{ p.pk }}">
-                  <input type="hidden" name="action" value="restaurer">
-                  <button class="btn btn-amber btn-sm">Restaurer</button>
-                </form>
-              {% endif %}
-              <form method="post" style="display:inline;"
-                    onsubmit="return confirm('Supprimer DÉFINITIVEMENT la publication #{{ p.pk }} ? Cette action est irréversible et retire les points gagnés.');">
-                {% csrf_token %}
-                <input type="hidden" name="publication_id" value="{{ p.pk }}">
-                <input type="hidden" name="action" value="supprimer_definitivement">
-                <button class="btn btn-danger btn-sm">Détruire</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8">
-            <div class="empty-state">Aucune publication ne correspond à ces critères.</div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+{% if page_obj %}
+<div class="md-grille">
+  {% for p in page_obj %}
+  <article class="glass-card md-carte {% if p.supprime_par %}masquee{% endif %}" style="animation-delay:{{ forloop.counter0|stringformat:'d' }}0ms;">
+    <a class="md-vignette" href="{% url 'core:admin_publication_detail' p.pk %}">
+      {% with premier=p.medias.all.0 %}
+        {% if premier %}
+          {% if premier.type == 'video' %}
+            <div class="md-video"><span>▶</span></div>
+          {% else %}
+            <img src="{{ premier.url_affichage }}" alt="" loading="lazy">
+          {% endif %}
+          {% if p.medias.all|length > 1 %}<span class="md-nb">{{ p.medias.all|length }} médias</span>{% endif %}
+        {% else %}
+          <div class="md-sans">« {{ p.texte|truncatechars:110|default:'Publication sans texte' }} »</div>
+        {% endif %}
+      {% endwith %}
+      <span class="md-etat">{% include 'admin_panel/publications/_etat.html' with pub=p %}</span>
+    </a>
+    <div class="md-corps">
+      <div class="md-resto">#{{ p.pk }} · {{ p.restaurant.nom|default:'Restaurant supprimé' }}</div>
+      <div class="md-auteur-ligne">
+        {% if p.auteur %}
+          <span class="md-auteur"><span class="md-av">{{ p.auteur.first_name|default:p.auteur.username|first|upper }}</span>
+          {% firstof p.auteur.get_full_name p.auteur.username %} · {{ p.auteur.points_solde }} pts</span>
+        {% else %}
+          <span class="md-auteur md-auteur-resto">Publication du restaurant</span>
+        {% endif %}
+      </div>
+      {% if p.texte and p.medias.all %}<div class="md-texte">{{ p.texte }}</div>{% endif %}
+      <div class="md-pied">
+        <span>♥ <b>{{ p.nb_likes }}</b></span>
+        <span>💬 <b>{{ p.nb_commentaires }}</b></span>
+        <span style="margin-left:auto;" title="{{ p.created_at|date:'d/m/Y H:i' }}">il y a {{ p.created_at|timesince }}</span>
+      </div>
+      <div class="md-actions">
+        <a href="{% url 'core:admin_publication_detail' p.pk %}" class="btn btn-secondary btn-sm md-voir">Examiner</a>
+        {% include 'admin_panel/publications/_actions.html' with pub=p compact=True %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
 </div>
+{% else %}
+<div class="glass-card md-vide anim-fade-up">
+  <div class="ico">🗂️</div>
+  <b>Aucune publication ne correspond à ces critères</b>
+  {% if q or etat %}<a href="{% url 'core:admin_publications' %}" class="btn btn-secondary btn-sm" style="margin-top:14px;">Réinitialiser les filtres</a>{% endif %}
+</div>
+{% endif %}
 
 {% if page_obj.has_other_pages %}
 <div class="pagination">
-  {% if page_obj.has_previous %}
-    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&etat={{ etat }}&q={{ q }}">‹</a>
-  {% endif %}
+  {% if page_obj.has_previous %}<a class="page-link" href="?page={{ page_obj.previous_page_number }}&etat={{ etat }}&q={{ q|urlencode }}&tri={{ tri }}">‹</a>{% endif %}
   <span class="page-link" style="pointer-events:none;">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-  {% if page_obj.has_next %}
-    <a class="page-link" href="?page={{ page_obj.next_page_number }}&etat={{ etat }}&q={{ q }}">›</a>
-  {% endif %}
+  {% if page_obj.has_next %}<a class="page-link" href="?page={{ page_obj.next_page_number }}&etat={{ etat }}&q={{ q|urlencode }}&tri={{ tri }}">›</a>{% endif %}
 </div>
 {% endif %}
+
+{% include 'admin_panel/publications/_confirmation.html' %}
 {% endblock %}

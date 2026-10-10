@@ -2,126 +2,416 @@
 {% block title %}Commandes — {{ resto.nom }}{% endblock %}
 {% block topbar_title %}Commandes{% endblock %}
 
+{% block extra_css %}
+<style>
+  .cm svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .cm-carte { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--card-shadow); }
+
+  /* ─── Indicateurs ─── */
+  .cm-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .cm-kpi { display: flex; align-items: center; gap: 14px; padding: 16px 18px; text-decoration: none; color: inherit; transition: var(--transition); }
+  a.cm-kpi:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+  .cm-kpi-ico { width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+  .cm-kpi b { display: block; font-size: 1.45rem; font-weight: 800; line-height: 1.1; color: var(--text-primary); }
+  .cm-kpi span { font-size: .78rem; color: var(--text-secondary); font-weight: 600; }
+  .cm-kpi.chaud { border-color: rgba(245,166,35,.5); background: linear-gradient(135deg, var(--accent-amber-dim), transparent); }
+  .cm-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-amber); margin-left: 6px; vertical-align: middle; animation: cmPing 1.6s infinite; }
+  @keyframes cmPing { 0% { box-shadow: 0 0 0 0 rgba(245,166,35,.6); } 100% { box-shadow: 0 0 0 8px rgba(245,166,35,0); } }
+
+  /* ─── Barre d'outils ─── */
+  .cm-outils { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .cm-filtres { display: flex; gap: 6px; flex-wrap: wrap; padding: 5px; }
+  .cm-filtres a { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 10px; font-size: .82rem; font-weight: 700;
+                  color: var(--text-secondary); text-decoration: none; transition: var(--transition); white-space: nowrap; }
+  .cm-filtres a:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+  .cm-filtres a.actif { background: var(--accent-orange); color: #fff; }
+  .cm-filtres a i { width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--text-muted)); }
+  .cm-filtres a.actif i { background: #fff; }
+  .cm-filtres a small { font-size: .72rem; opacity: .8; }
+  .cm-recherche { margin-left: auto; position: relative; }
+  .cm-recherche input { padding: 10px 14px 10px 36px; border-radius: 12px; border: 1px solid var(--input-border); background: var(--input-bg);
+                        color: var(--text-primary); font: inherit; font-size: .86rem; width: 240px; }
+  .cm-recherche input:focus { outline: none; border-color: var(--input-border-focus); box-shadow: 0 0 0 4px var(--input-focus-ring); }
+  .cm-recherche svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+  .cm-kds { display: inline-flex; align-items: center; gap: 7px; }
+
+  /* ─── Cartes de commande ─── */
+  .cm-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+  .cm-cmd { display: flex; flex-direction: column; overflow: hidden; position: relative; animation: cmIn .35s ease both; }
+  @keyframes cmIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .cm-cmd::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--etat, var(--text-muted)); }
+  .cm-cmd[data-statut="en_attente"] { --etat: var(--accent-amber); border-color: rgba(245,166,35,.45); }
+  .cm-cmd[data-statut="acceptee"] { --etat: var(--accent-blue); }
+  .cm-cmd[data-statut="en_preparation"] { --etat: var(--accent-orange); }
+  .cm-cmd[data-statut="prete"], .cm-cmd[data-statut="livree"], .cm-cmd[data-statut="recuperee"] { --etat: var(--accent-green); }
+  .cm-cmd[data-statut="en_livraison"] { --etat: var(--accent-purple); }
+  .cm-cmd[data-statut="refusee"], .cm-cmd[data-statut="annulee"] { --etat: var(--accent-red); opacity: .8; }
+
+  .cm-tete { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px 12px 20px; }
+  .cm-num { font-size: 1.35rem; font-weight: 800; color: var(--text-primary); line-height: 1.1; }
+  .cm-quand { font-size: .74rem; color: var(--text-secondary); font-weight: 600; margin-top: 3px; display: flex; align-items: center; gap: 5px; }
+  .cm-tags { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .cm-tag { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; font-weight: 700; padding: 4px 9px; border-radius: 8px; }
+  .cm-tag.livraison { background: var(--accent-blue-dim); color: var(--accent-blue); }
+  .cm-tag.emporter { background: var(--accent-green-dim); color: var(--accent-green); }
+
+  .cm-etapes { display: flex; gap: 4px; padding: 0 18px 12px 20px; }
+  .cm-etapes i { flex: 1; height: 4px; border-radius: 2px; background: var(--border); }
+  .cm-etapes i.ok { background: var(--etat); }
+
+  .cm-client { display: flex; align-items: center; gap: 11px; padding: 10px 18px 10px 20px; border-top: 1px solid var(--border); }
+  .cm-av { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-orange-dim); color: var(--accent-orange); font-weight: 800;
+           display: flex; align-items: center; justify-content: center; font-size: .9rem; flex-shrink: 0; }
+  .cm-client b { display: block; font-size: .9rem; color: var(--text-primary); }
+  .cm-client a { font-size: .78rem; color: var(--text-secondary); text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+  .cm-client a:hover { color: var(--accent-orange); }
+  .cm-montant { margin-left: auto; text-align: right; }
+  .cm-montant b { font-size: 1.1rem; color: var(--accent-green); }
+  .cm-montant small { display: block; font-size: .7rem; color: var(--text-muted); font-weight: 600; }
+
+  .cm-plats { padding: 4px 18px 6px 20px; border-top: 1px solid var(--border); }
+  .cm-plat { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+  .cm-plat + .cm-plat { border-top: 1px dashed var(--border); }
+  .cm-plat img, .cm-plat .cm-plat-vide { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--bg-tertiary);
+                                         display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .cm-qte { font-weight: 800; color: var(--accent-orange); min-width: 26px; }
+  .cm-plat-nom { font-size: .88rem; font-weight: 700; color: var(--text-primary); }
+  .cm-plat-nom.supprime { color: var(--text-muted); font-style: italic; }
+  .cm-choix { font-size: .72rem; color: var(--text-secondary); margin-top: 1px; }
+
+  .cm-info { margin: 4px 18px 0 20px; padding: 8px 11px; border-radius: 10px; font-size: .8rem; display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+  .cm-info.note { background: var(--accent-amber-dim); color: var(--accent-amber); font-weight: 600; }
+  .cm-info.adresse { background: var(--bg-card-hover); color: var(--text-secondary); }
+  .cm-info.livreur { background: var(--accent-purple-dim); color: var(--accent-purple); font-weight: 600; }
+  .cm-info svg { margin-top: 2px; }
+
+  .cm-actions { margin-top: auto; padding: 14px 18px 16px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cm-actions form { display: flex; gap: 6px; align-items: center; }
+  .cm-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+  .cm-actions .cm-principal { flex: 1; }
+  .cm-actions .cm-principal .btn { width: 100%; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
+  .cm-actions select, .cm-actions input[type=text] { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--input-border); background: var(--input-bg);
+                                                     color: var(--text-primary); font: inherit; font-size: .8rem; }
+  .cm-actions input[name=code] { width: 120px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .cm-sep { flex-basis: 100%; height: 0; }
+  .cm-libre { font-size: .74rem; font-weight: 700; color: var(--accent-amber); display: inline-flex; align-items: center; gap: 5px; }
+
+  .cm-vide { text-align: center; padding: 56px 20px; }
+  .cm-vide .ico { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+                  font-size: 1.9rem; color: var(--accent-orange); background: var(--accent-orange-dim); }
+  .cm-vide b { display: block; color: var(--text-primary); font-size: 1rem; }
+  .cm-vide p { margin-top: 6px; font-size: .86rem; color: var(--text-secondary); }
+  .cm-aucun { display: none; grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-secondary); font-size: .9rem; }
+
+  /* Refus : fenêtre avec motif */
+  .cm-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 20px; }
+  .cm-modal.ouvert { display: flex; }
+  .cm-modal-boite { width: 100%; max-width: 420px; padding: 24px; background: var(--bg-secondary); animation: cmBoite .25s cubic-bezier(.2,1.2,.4,1); }
+  @keyframes cmBoite { from { transform: scale(.92); opacity: 0; } }
+  .cm-modal-boite h3 { color: var(--text-primary); font-size: 1.05rem; }
+  .cm-modal-boite p { margin-top: 6px; font-size: .85rem; color: var(--text-secondary); }
+  .cm-motifs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .cm-motifs button { padding: 7px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+                      font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; }
+  .cm-motifs button:hover, .cm-motifs button.choisi { border-color: var(--accent-red); color: var(--accent-red); background: var(--accent-red-dim); }
+  .cm-modal textarea { width: 100%; margin-top: 12px; min-height: 70px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--input-border);
+                       background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: .86rem; resize: vertical; }
+  .cm-modal-boutons { display: flex; gap: 10px; margin-top: 16px; }
+  .cm-modal-boutons .btn { flex: 1; justify-content: center; }
+
+  @media (max-width: 1000px) { .cm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cm-recherche { margin-left: 0; } .cm-recherche input { width: 100%; } }
+  @media (max-width: 560px) { .cm-liste { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="cm">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="c-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="c-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="c-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="c-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="c-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="c-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="c-bike" viewBox="0 0 24 24"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></symbol>
+  <symbol id="c-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="c-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="c-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="c-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="c-note" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="c-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="c-utensils" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></symbol>
+  <symbol id="c-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="c-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="c-chef" viewBox="0 0 24 24"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 9.18 0A4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" x2="18" y1="17" y2="17"/></symbol>
+  <symbol id="c-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="c-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+</svg>
+
 <div class="page-header anim-fade-up">
   <div>
     <h1 class="page-title gradient-text">Commandes</h1>
-    <p class="page-subtitle">Acceptez, préparez et déléguez vos livraisons</p>
+    <p class="page-subtitle">Acceptez, préparez et organisez la livraison de vos commandes</p>
+  </div>
+  <a href="{% url 'core:resto_cuisine' %}" target="_blank" rel="noopener" class="btn btn-secondary cm-kds" style="margin-left:auto;">
+    <svg class="i"><use href="#c-chef"/></svg> Ouvrir l'écran cuisine
+  </a>
+</div>
+
+{# ─── Indicateurs ─── #}
+<div class="cm-kpis anim-fade-up">
+  <a class="cm-carte cm-kpi {% if kpis.a_traiter %}chaud{% endif %}" href="?statut=en_attente">
+    <span class="cm-kpi-ico" style="background:var(--accent-amber-dim);color:var(--accent-amber);"><svg class="i"><use href="#c-bell"/></svg></span>
+    <div><b>{{ kpis.a_traiter }}{% if kpis.a_traiter %}<span class="cm-pulse"></span>{% endif %}</b><span>À accepter</span></div>
+  </a>
+  <a class="cm-carte cm-kpi" href="?statut=en_preparation">
+    <span class="cm-kpi-ico" style="background:var(--accent-orange-dim);color:var(--accent-orange);"><svg class="i"><use href="#c-flame"/></svg></span>
+    <div><b>{{ kpis.en_cuisine }}</b><span>En cuisine</span></div>
+  </a>
+  <a class="cm-carte cm-kpi" href="?statut=prete">
+    <span class="cm-kpi-ico" style="background:var(--accent-green-dim);color:var(--accent-green);"><svg class="i"><use href="#c-check-circle"/></svg></span>
+    <div><b>{{ kpis.pretes }}</b><span>Prêtes à partir</span></div>
+  </a>
+  <div class="cm-carte cm-kpi">
+    <span class="cm-kpi-ico" style="background:var(--accent-blue-dim);color:var(--accent-blue);"><svg class="i"><use href="#c-wallet"/></svg></span>
+    <div><b>{{ kpis.revenus_jour|floatformat:0 }} F</b><span>Revenus du jour · {{ kpis.commandes_jour }} commande{{ kpis.commandes_jour|pluralize }}</span></div>
   </div>
 </div>
 
-<!-- Filtres par statut -->
-<div class="glass-card anim-fade-up" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
-  <a href="{% url 'core:resto_commandes' %}" class="btn btn-sm {% if not statut %}btn-primary{% else %}btn-secondary{% endif %}">Toutes ({{ total_count }})</a>
-  {% for code, label, count in statut_tabs %}
-  <a href="?statut={{ code }}" class="btn btn-sm {% if statut == code %}btn-primary{% else %}btn-secondary{% endif %}">
-    {{ label }}{% if count %} ({{ count }}){% endif %}
-  </a>
-  {% endfor %}
+{# ─── Filtres + recherche ─── #}
+<div class="cm-outils anim-fade-up">
+  <div class="cm-carte cm-filtres">
+    <a href="{% url 'core:resto_commandes' %}" class="{% if not statut %}actif{% endif %}">Toutes <small>{{ total_count }}</small></a>
+    {% for code, label, count in statut_tabs %}
+    <a href="?statut={{ code }}" class="{% if statut == code %}actif{% endif %}"
+       style="--dot:{% if code == 'en_attente' %}var(--accent-amber){% elif code == 'acceptee' %}var(--accent-blue){% elif code == 'en_preparation' %}var(--accent-orange){% elif code == 'en_livraison' %}var(--accent-purple){% elif code == 'refusee' or code == 'annulee' %}var(--accent-red){% else %}var(--accent-green){% endif %};">
+      <i></i>{{ label }}{% if count %} <small>{{ count }}</small>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  <label class="cm-recherche">
+    <svg class="i"><use href="#c-search"/></svg>
+    <input type="search" id="cmRecherche" placeholder="N° de commande, client, plat…">
+  </label>
 </div>
 
-<div class="glass-card anim-fade-up" style="padding:0;overflow-x:auto;">
-  <table class="data-table">
-    <thead>
-      <tr><th>#</th><th>Client</th><th>Contenu</th><th>Montant</th><th>Adresse</th><th>Statut</th><th>Livreur</th><th style="min-width:260px;">Actions</th></tr>
-    </thead>
-    <tbody>
-      {% for c in commandes %}
-      <tr>
-        <td style="font-weight:700;">#{{ c.pk }}</td>
-        <td>
-          {{ c.client.get_full_name|default:c.client.username|default:'—' }}
-          {% if c.client.telephone %}<div style="font-size:0.75rem;color:var(--text-muted);">{{ c.client.telephone }}</div>{% endif %}
-        </td>
-        <td style="max-width:220px;">
-          {% for l in c.lignes.all %}
-          <div style="font-size:0.8rem;">{{ l.quantite }}× {{ l.plat.nom|default:'Plat supprimé' }}</div>
-          {% endfor %}
-          {% if c.notes %}<div style="font-size:0.72rem;color:var(--accent-amber);">📝 {{ c.notes|truncatechars:60 }}</div>{% endif %}
-        </td>
-        <td style="font-weight:700;color:var(--accent-green);">{{ c.montant_total }} F</td>
-        <td style="max-width:150px;font-size:0.8rem;">
-          {% if c.emporter %}<span class="badge badge-amber">🥡 À emporter</span>{% else %}{{ c.adresse_livraison|default:'—'|truncatechars:40 }}{% endif %}
-        </td>
-        <td><span class="badge badge-{{ c.statut }}">{{ c.get_statut_display }}</span></td>
-        <td>
-          {% if c.livraison %}
-            <div style="font-size:0.8rem;">{{ c.livraison.livreur.get_full_name|default:c.livraison.livreur.username|default:'—' }}</div>
-            <span class="badge badge-{{ c.livraison.statut }}" style="font-size:0.68rem;">{{ c.livraison.get_statut_display }}</span>
-          {% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
-        </td>
-        <td>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-            {% if c.statut == 'en_attente' %}
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                <input type="hidden" name="action" value="accepter">
-                <button class="btn btn-primary btn-sm">✓ Accepter</button>
-              </form>
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                <input type="hidden" name="action" value="refuser">
-                <button class="btn btn-danger btn-sm">✕ Refuser</button>
-              </form>
-            {% elif c.statut == 'acceptee' %}
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                <input type="hidden" name="action" value="preparation">
-                <button class="btn btn-amber btn-sm">🔥 En cuisine</button>
-              </form>
-            {% elif c.statut == 'en_preparation' %}
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                <input type="hidden" name="action" value="prete">
-                <button class="btn btn-primary btn-sm">✓ Prête</button>
-              </form>
-            {% endif %}
-            {% if c.emporter %}
-              {% if c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
-              <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="valider_retrait">
-                <input type="text" name="code" required maxlength="8" placeholder="Code du client" class="input-field" style="padding:6px 10px;font-size:0.78rem;width:130px;text-transform:uppercase;">
-                <button class="btn btn-primary btn-sm" title="Le client donne le code affiché dans son app">✓ Valider le retrait</button>
-              </form>
-              {% endif %}
-            {% elif c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
-              {% if not c.livraison %}
-                {% if livreurs %}
-                <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" style="display:flex;gap:6px;align-items:center;">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="assigner">
-                  <select name="livreur" required class="input-field" style="padding:6px 10px;font-size:0.78rem;min-width:120px;">
-                    <option value="">Livreur…</option>
-                    {% for l in livreurs %}<option value="{{ l.pk }}">{{ l.get_full_name|default:l.username }}</option>{% endfor %}
-                  </select>
-                  <button class="btn btn-secondary btn-sm">🛵 Déléguer</button>
-                </form>
-                {% endif %}
-                {# Confier au pool de livreurs indépendants (toujours possible). #}
-                {% if c.livraison_libre %}
-                  <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                    <input type="hidden" name="action" value="reprendre_libre">
-                    <button class="btn btn-secondary btn-sm" title="Retirer du pool des livreurs indépendants">↩ Retirer du pool</button>
-                  </form>
-                  <span class="badge badge-amber" style="align-self:center;">En livraison libre</span>
-                {% else %}
-                  <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
-                    <input type="hidden" name="action" value="liberer">
-                    <button class="btn btn-secondary btn-sm" title="Rendre la commande disponible pour les livreurs indépendants">🌍 Livreur libre</button>
-                  </form>
-                {% endif %}
-              {% endif %}
-            {% endif %}
-          </div>
-        </td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Aucune commande {% if statut %}avec ce statut{% endif %}.</td></tr>
+{% if commandes %}
+<div class="cm-liste" id="cmListe">
+  {% for c in commandes %}
+  {% if c.client %}{% firstof c.client.get_full_name c.client.username as nom_client %}{% else %}{% firstof 'Client supprimé' as nom_client %}{% endif %}
+  {% with nom=nom_client %}
+  <article class="cm-carte cm-cmd" data-statut="{{ c.statut }}" style="animation-delay:{{ forloop.counter0|stringformat:'d' }}0ms;"
+           data-recherche="#{{ c.pk }} {{ nom|lower }} {% for l in c.lignes.all %}{{ l.plat.nom|default:''|lower }} {% endfor %}">
+    <div class="cm-tete">
+      <div>
+        <div class="cm-num">#{{ c.pk }}</div>
+        <div class="cm-quand" title="{{ c.created_at|date:'d/m/Y à H:i' }}"><svg class="i"><use href="#c-clock"/></svg>{{ c.created_at|date:'H:i' }} · il y a {{ c.created_at|timesince }}</div>
+      </div>
+      <div class="cm-tags">
+        <span class="badge badge-{{ c.statut }}">{{ c.get_statut_display }}</span>
+        {% if c.emporter %}<span class="cm-tag emporter"><svg class="i"><use href="#c-bag"/></svg> À emporter</span>
+        {% else %}<span class="cm-tag livraison"><svg class="i"><use href="#c-bike"/></svg> Livraison</span>{% endif %}
+      </div>
+    </div>
+
+    {# Progression : reçue → acceptée → en cuisine → prête → partie/servie #}
+    <div class="cm-etapes">
+      {% with s=c.statut %}
+      <i class="{% if s != 'refusee' and s != 'annulee' %}ok{% endif %}"></i>
+      <i class="{% if s == 'acceptee' or s == 'en_preparation' or s == 'prete' or s == 'en_livraison' or s == 'livree' or s == 'recuperee' %}ok{% endif %}"></i>
+      <i class="{% if s == 'en_preparation' or s == 'prete' or s == 'en_livraison' or s == 'livree' or s == 'recuperee' %}ok{% endif %}"></i>
+      <i class="{% if s == 'prete' or s == 'en_livraison' or s == 'livree' or s == 'recuperee' %}ok{% endif %}"></i>
+      <i class="{% if s == 'livree' or s == 'recuperee' %}ok{% endif %}"></i>
+      {% endwith %}
+    </div>
+
+    <div class="cm-client">
+      <span class="cm-av">{{ nom|first|upper }}</span>
+      <div>
+        <b>{{ nom }}</b>
+        {% if c.client.telephone %}<a href="tel:{{ c.client.telephone }}"><svg class="i"><use href="#c-phone"/></svg>{{ c.client.telephone }}</a>{% endif %}
+      </div>
+      <div class="cm-montant">
+        <b>{{ c.montant_total|floatformat:0 }} F</b>
+        <small>vous revenez {{ c.montant_restaurant|floatformat:0 }} F</small>
+      </div>
+    </div>
+
+    <div class="cm-plats">
+      {% for l in c.lignes.all %}
+      <div class="cm-plat">
+        {% if l.plat and l.plat.image %}<img src="{{ l.plat.url_affichage }}" alt="" loading="lazy">{% else %}<div class="cm-plat-vide"><svg class="i"><use href="#c-utensils"/></svg></div>{% endif %}
+        <span class="cm-qte">{{ l.quantite }}×</span>
+        <div style="min-width:0;">
+          <div class="cm-plat-nom {% if not l.plat %}supprime{% endif %}">{{ l.plat.nom|default:'Plat retiré du menu' }}</div>
+          {% if l.choix.all %}<div class="cm-choix">{% for ch in l.choix.all %}{{ ch.option_nom }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+        </div>
+      </div>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+
+    {% if c.client.allergies %}<div class="cm-info note" style="background:var(--accent-red-dim);color:var(--accent-red);"><svg class="i"><use href="#c-bell"/></svg>Allergies : {{ c.client.allergies }}</div>{% endif %}
+    {% if c.notes %}<div class="cm-info note"><svg class="i"><use href="#c-note"/></svg>{{ c.notes }}</div>{% endif %}
+    {% if not c.emporter and c.adresse_livraison %}<div class="cm-info adresse"><svg class="i"><use href="#c-pin"/></svg>{{ c.adresse_livraison }}</div>{% endif %}
+    {% if c.livraison %}
+    <div class="cm-info livreur"><svg class="i"><use href="#c-bike"/></svg>
+      {% if c.livraison.livreur %}{% firstof c.livraison.livreur.get_full_name c.livraison.livreur.username %}{% else %}Livreur à confirmer{% endif %} · {{ c.livraison.get_statut_display }}</div>
+    {% endif %}
+
+    <div class="cm-actions">
+      {% if c.statut == 'en_attente' %}
+        <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" class="cm-principal">{% csrf_token %}
+          <input type="hidden" name="action" value="accepter">
+          <button class="btn btn-primary btn-sm"><svg class="i"><use href="#c-check"/></svg> Accepter</button>
+        </form>
+        <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" data-refus="{{ c.pk }}">{% csrf_token %}
+          <input type="hidden" name="action" value="refuser">
+          <input type="hidden" name="raison" value="">
+          <button class="btn btn-danger btn-sm"><svg class="i"><use href="#c-x"/></svg> Refuser</button>
+        </form>
+      {% elif c.statut == 'acceptee' %}
+        <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" class="cm-principal">{% csrf_token %}
+          <input type="hidden" name="action" value="preparation">
+          <button class="btn btn-amber btn-sm"><svg class="i"><use href="#c-flame"/></svg> Lancer la préparation</button>
+        </form>
+      {% elif c.statut == 'en_preparation' %}
+        <form method="post" action="{% url 'core:resto_commande_action' c.pk %}" class="cm-principal">{% csrf_token %}
+          <input type="hidden" name="action" value="prete">
+          <button class="btn btn-primary btn-sm"><svg class="i"><use href="#c-check-circle"/></svg> Marquer prête</button>
+        </form>
+      {% endif %}
+
+      {% if c.emporter %}
+        {% if c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
+        <span class="cm-sep"></span>
+        <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+          <input type="hidden" name="action" value="valider_retrait">
+          <input type="text" name="code" required maxlength="8" placeholder="Code client" autocomplete="off">
+          <button class="btn btn-secondary btn-sm" title="Le client présente le code affiché dans son application"><svg class="i"><use href="#c-key"/></svg> Valider le retrait</button>
+        </form>
+        {% endif %}
+      {% elif c.statut == 'acceptee' or c.statut == 'en_preparation' or c.statut == 'prete' %}
+        {% if not c.livraison %}
+          <span class="cm-sep"></span>
+          {% if livreurs %}
+          <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+            <input type="hidden" name="action" value="assigner">
+            <select name="livreur" required>
+              <option value="">Choisir un livreur…</option>
+              {% for l in livreurs %}<option value="{{ l.pk }}">{{ l.get_full_name|default:l.username }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-secondary btn-sm"><svg class="i"><use href="#c-bike"/></svg> Confier</button>
+          </form>
+          {% endif %}
+          {% if c.livraison_libre %}
+            <span class="cm-libre"><svg class="i"><use href="#c-globe"/></svg> Proposée aux livreurs indépendants</span>
+            <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+              <input type="hidden" name="action" value="reprendre_libre">
+              <button class="btn btn-secondary btn-sm" title="Retirer du pool des livreurs indépendants"><svg class="i"><use href="#c-undo"/></svg> Retirer</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'core:resto_commande_action' c.pk %}">{% csrf_token %}
+              <input type="hidden" name="action" value="liberer">
+              <button class="btn btn-secondary btn-sm" title="Rendre la commande disponible pour les livreurs indépendants"><svg class="i"><use href="#c-globe"/></svg> Livreur indépendant</button>
+            </form>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    </div>
+  </article>
+  {% endwith %}
+  {% endfor %}
+  <div class="cm-aucun" id="cmAucun">Aucune commande ne correspond à votre recherche.</div>
 </div>
+{% else %}
+<div class="cm-carte cm-vide anim-fade-up">
+  <div class="ico"><svg class="i"><use href="#c-inbox"/></svg></div>
+  <b>Aucune commande {% if statut %}avec ce statut{% else %}pour l'instant{% endif %}</b>
+  <p>Les nouvelles commandes payées apparaissent ici — et en direct sur l'écran cuisine.</p>
+</div>
+{% endif %}
 
 {% if not livreurs %}
 <div class="alert alert-warning" style="margin-top:16px;">
-  Aucun livreur rattaché — <a href="{% url 'core:resto_livreurs' %}" style="color:var(--accent-amber);font-weight:600;">créez un compte livreur</a> pour déléguer vos livraisons.
+  Aucun livreur rattaché — <a href="{% url 'core:resto_livreurs' %}" style="color:var(--accent-amber);font-weight:600;">créez un compte livreur</a> pour confier vos livraisons, ou proposez-les aux livreurs indépendants.
 </div>
 {% endif %}
+
+{# Refus avec motif (transmis au client) #}
+<div class="cm-modal" id="cmModal" role="dialog" aria-modal="true">
+  <div class="cm-carte cm-modal-boite">
+    <h3>Refuser la commande <span id="cmModalNum"></span> ?</h3>
+    <p>Le client sera prévenu et ses points éventuels lui seront rendus. Indiquez un motif :</p>
+    <div class="cm-motifs">
+      <button type="button">Rupture de stock</button>
+      <button type="button">Cuisine fermée</button>
+      <button type="button">Trop de commandes en cours</button>
+      <button type="button">Adresse hors zone</button>
+    </div>
+    <textarea id="cmMotif" placeholder="Motif (facultatif)…"></textarea>
+    <div class="cm-modal-boutons">
+      <button type="button" class="btn btn-secondary" id="cmNon">Annuler</button>
+      <button type="button" class="btn btn-danger" id="cmOui">Refuser la commande</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ─── Recherche instantanée ───
+  var champ = $('cmRecherche');
+  if (champ && $('cmListe')) {
+    champ.addEventListener('input', function () {
+      var q = champ.value.trim().toLowerCase().replace(/^#/, '');
+      var visibles = 0;
+      document.querySelectorAll('.cm-cmd').forEach(function (c) {
+        var ok = !q || c.dataset.recherche.indexOf(q) !== -1;
+        c.style.display = ok ? '' : 'none';
+        if (ok) visibles++;
+      });
+      $('cmAucun').style.display = visibles ? 'none' : 'block';
+    });
+  }
+
+  // ─── Refus avec motif ───
+  var modal = $('cmModal'), cible = null;
+  document.querySelectorAll('form[data-refus]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f._ok) return;
+      e.preventDefault(); cible = f;
+      $('cmModalNum').textContent = '#' + f.dataset.refus;
+      $('cmMotif').value = '';
+      modal.querySelectorAll('.cm-motifs button').forEach(function (b) { b.classList.remove('choisi'); });
+      modal.classList.add('ouvert'); $('cmMotif').focus();
+    });
+  });
+  modal.querySelectorAll('.cm-motifs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      modal.querySelectorAll('.cm-motifs button').forEach(function (x) { x.classList.remove('choisi'); });
+      b.classList.add('choisi'); $('cmMotif').value = b.textContent;
+    });
+  });
+  function fermer() { modal.classList.remove('ouvert'); cible = null; }
+  $('cmNon').addEventListener('click', fermer);
+  modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal.classList.contains('ouvert')) fermer(); });
+  $('cmOui').addEventListener('click', function () {
+    if (!cible) return;
+    cible.querySelector('input[name=raison]').value = $('cmMotif').value.trim();
+    cible._ok = true; cible.submit();
+  });
+
+  // ─── Actualisation douce : toutes les 45 s, seulement si l'onglet est
+  // visible et qu'aucun champ n'est en cours de saisie ───
+  setInterval(function () {
+    var a = document.activeElement;
+    var saisie = a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
+    if (document.visibilityState === 'visible' && !saisie && !modal.classList.contains('ouvert')) location.reload();
+  }, 45000);
+})();
+</script>
 {% endblock %}

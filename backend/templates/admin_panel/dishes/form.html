@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Modifier {{ plat.nom }} — Menu Admin{% endblock %}
+{% block topbar_title %}Modifier un plat{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:dish_list' %}">Plats</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{% url 'core:dish_detail' plat.pk %}">{{ plat.nom }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">Modifier</span>
+</div>
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Modifier « {{ plat.nom }} »</h1>
+    <p class="page-subtitle">Plat de <strong>{{ resto.nom }}</strong> — les modifications sont visibles immédiatement dans l'application et journalisées.</p>
+  </div>
+  <a href="{{ url_retour }}" class="btn btn-secondary" style="margin-left:auto;">← Retour</a>
+</div>
+
+{% include 'partials/plat_form_corps.html' %}
+{% endblock %}

@@ -4,6 +4,36 @@
 {% block topbar_title %}{% if banniere %}Modifier la bannière{% else %}Nouvelle bannière{% endif %}{% endblock %}
 
 {% block extra_css %}
+{% include 'admin_panel/bannieres/_rendu_css.html' %}
+<style>
+  .bn-edition { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:24px; align-items:start; }
+  .bn-edition .charts-grid-2 { grid-template-columns:1fr; }
+  @media (min-width: 1650px) { .bn-edition .charts-grid-2 { grid-template-columns:1fr 1fr; } }
+  .bn-apercu { position:sticky; top:calc(var(--topbar-height, 64px) + 16px); }
+  .bn-apercu-titre { display:flex; align-items:center; gap:8px; font-size:.82rem; font-weight:700; color:var(--text-secondary); margin-bottom:10px; }
+  .bn-apercu-titre i { width:8px; height:8px; border-radius:50%; background:var(--accent-green); animation:bnPing 1.6s infinite; }
+  @keyframes bnPing { 0% { box-shadow:0 0 0 0 rgba(56,161,105,.6); } 100% { box-shadow:0 0 0 8px rgba(56,161,105,0); } }
+  .bn-apercu-titre button { margin-left:auto; background:none; border:1px solid var(--border); color:var(--text-secondary); border-radius:8px;
+                            padding:5px 9px; font:inherit; font-size:.74rem; font-weight:700; cursor:pointer; }
+  .bn-apercu-titre button:hover { color:var(--text-primary); border-color:var(--border-hover); }
+  .bn-tel { border-radius:40px; padding:10px; background:linear-gradient(145deg,#2a2f2c,#0d100e); box-shadow:0 26px 60px rgba(0,0,0,.35); }
+  .bn-ecran { border-radius:32px; overflow:hidden; background:#080c09; color:#f4f1ec; padding:34px 16px 22px; }
+  .bn-app-tete { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .bn-app-tete .rond { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#f7891b,#1f8a4c); }
+  .bn-app-tete b { display:block; font-size:.86rem; } .bn-app-tete span { font-size:.68rem; color:rgba(244,241,236,.55); }
+  .bn-app-recherche { height:38px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); margin-bottom:14px;
+                      display:flex; align-items:center; padding:0 14px; font-size:.72rem; color:rgba(244,241,236,.4); }
+  .bn-points { display:flex; justify-content:center; gap:5px; margin-top:10px; }
+  .bn-points i { width:6px; height:6px; border-radius:3px; background:rgba(120,120,120,.35); } .bn-points i:first-child { width:18px; background:#f26a1b; }
+  .bn-app-cats { display:flex; gap:8px; margin-top:16px; }
+  .bn-app-cats i { flex:1; height:58px; border-radius:16px; background:rgba(255,255,255,.05); }
+  .bn-etat { margin-top:14px; padding:12px 14px; border-radius:14px; background:var(--bg-card); border:1px solid var(--border); font-size:.8rem; color:var(--text-secondary); }
+  .bn-etat b { color:var(--text-primary); }
+  .bn-etat .lig { display:flex; justify-content:space-between; gap:10px; padding:3px 0; }
+  .bn-pastille { display:inline-flex; align-items:center; gap:5px; font-weight:700; }
+  .bn-pastille::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  @media (max-width: 1200px) { .bn-edition { grid-template-columns:1fr; } .bn-apercu { display:none; } }
+</style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   .cible-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:22px; }
@@ -28,7 +58,8 @@
   <h1 class="page-title">{% if banniere %}Modifier « {{ banniere.nom_interne }} »{% else %}Nouvelle bannière{% endif %}</h1>
 </div>
 
-<form method="post" enctype="multipart/form-data">
+<div class="bn-edition">
+<form method="post" enctype="multipart/form-data" id="bnForm" style="min-width:0;">
   {% csrf_token %}
   <div class="charts-grid charts-grid-2">
 
@@ -226,6 +257,36 @@
   </div>
 </form>
 
+{# ─── Aperçu en direct : la bannière telle qu'elle apparaît sur l'accueil de l'app ─── #}
+<aside class="bn-apercu" aria-label="Aperçu dans l'application">
+  <div class="bn-apercu-titre"><i></i> Aperçu dans l'application <button type="button" id="bnRejouer">↻ Rejouer l'animation</button></div>
+  <div class="bn-tel"><div class="bn-ecran">
+    <div class="bn-app-tete"><span class="rond"></span><div><b>Bonjour 👋</b><span>Qu'est-ce qui vous ferait plaisir ?</span></div></div>
+    <div class="bn-app-recherche">Rechercher un plat, un restaurant…</div>
+    <div class="bn-rendu anime" id="bnRendu"
+         data-fond-image="{% if banniere.fond_image %}{{ banniere.fond_image.url }}{% endif %}"
+         data-droite-image="{% if banniere.image_droite %}{{ banniere.image_droite.url }}{% endif %}">
+      <div class="bn-fond" id="bnFond"></div>
+      <div class="bn-droite" id="bnDroite"></div>
+      <div class="bn-voile"></div>
+      <div class="bn-badge" id="bnBadge"></div>
+      <div class="bn-contenu">
+        <div class="bn-titre" id="bnTitre"></div>
+        <div class="bn-sous" id="bnSous"></div>
+        <span class="bn-cta" id="bnCta">Commander</span>
+      </div>
+    </div>
+    <div class="bn-points"><i></i><i></i><i></i></div>
+    <div class="bn-app-cats"><i></i><i></i><i></i><i></i></div>
+  </div></div>
+  <div class="bn-etat">
+    <div class="lig"><span>Statut</span><b id="bnStatut"></b></div>
+    <div class="lig"><span>Bouton « Commander »</span><b id="bnBouton"></b></div>
+    <div class="lig"><span>Visible pour</span><b id="bnCible" style="text-align:right;"></b></div>
+  </div>
+</aside>
+</div>
+
 <script>
 function toggleFond() {
   var type = document.getElementById('fond_type').value;
@@ -234,6 +295,89 @@ function toggleFond() {
   document.getElementById('fond-degrade-group').style.display = type === 'degrade' ? '' : 'none';
 }
 toggleFond();
+
+// ─── Aperçu en direct ─────────────────────────────────────
+(function () {
+  var form = document.getElementById('bnForm'), rendu = document.getElementById('bnRendu');
+  if (!form || !rendu) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var champ = function (n) { return form.querySelector('[name="' + n + '"]'); };
+  var urls = { fond: rendu.dataset.fondImage || '', droite: rendu.dataset.droiteImage || '' };
+  var dernierTexte = '';
+
+  function hexRgba(hex, a) {
+    var v = parseInt((hex || '#ffffff').slice(1), 16);
+    return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + a + ')';
+  }
+  function rejouer() { rendu.classList.remove('anime'); void rendu.offsetWidth; rendu.classList.add('anime'); }
+
+  function maj() {
+    var type = champ('fond_type').value;
+    var fond = $('bnFond');
+    fond.style.backgroundImage = '';
+    fond.style.background = '';
+    if (type === 'couleur') fond.style.background = champ('fond_couleur').value;
+    else if (type === 'degrade') fond.style.background = 'linear-gradient(135deg,' + champ('fond_degrade_debut').value + ',' + champ('fond_degrade_fin').value + ')';
+    else if (urls.fond) { fond.style.backgroundImage = 'url("' + urls.fond + '")'; fond.style.backgroundSize = 'cover'; fond.style.backgroundPosition = 'center'; }
+    else fond.style.background = '#1a1a1a';
+    $('bnDroite').style.backgroundImage = urls.droite ? 'url("' + urls.droite + '")' : '';
+
+    var couleur = champ('texte_couleur').value || '#ffffff';
+    var titre = champ('titre').value.trim();
+    $('bnTitre').textContent = titre || 'Votre texte\nici';
+    $('bnTitre').classList.toggle('bn-vide', !titre);
+    $('bnTitre').style.color = couleur;
+    var sous = champ('sous_titre').value.trim();
+    $('bnSous').textContent = sous; $('bnSous').style.display = sous ? '' : 'none';
+    $('bnSous').style.color = hexRgba(couleur, .75); $('bnSous').style.opacity = 1;
+    var badge = champ('badge').value.trim();
+    $('bnBadge').textContent = badge; $('bnBadge').style.display = badge ? '' : 'none';
+
+    var plat = champ('plat');
+    var avecBouton = !!plat.value;
+    $('bnCta').style.display = avecBouton ? '' : 'none';
+    $('bnCta').style.background = champ('bouton_fond_couleur').value;
+    $('bnCta').style.color = champ('bouton_texte_couleur').value;
+    $('bnBouton').textContent = avecBouton ? '→ ' + plat.options[plat.selectedIndex].text.split(' — ')[0] : 'Masqué (aucun plat)';
+
+    var actif = champ('is_active').checked;
+    $('bnStatut').innerHTML = '<span class="bn-pastille" style="color:' + (actif ? 'var(--accent-green)' : 'var(--text-muted)') + '">' + (actif ? 'Active' : 'Inactive') + '</span>';
+    rendu.style.opacity = actif ? 1 : .55;
+
+    // Ciblage (résumé)
+    var pays = form.querySelectorAll('input[name="cible_pays"]:checked').length;
+    var villes = form.querySelectorAll('input[name="cible_villes"]').length;
+    var zones = form.querySelectorAll('input[name="cible_zones"]:checked').length;
+    var cercle = champ('cercle_rayon_km') && champ('cercle_rayon_km').value && champ('cercle_lat') && champ('cercle_lat').value;
+    var parts = [];
+    if (pays) parts.push(pays + ' pays');
+    if (villes) parts.push(villes + ' ville' + (villes > 1 ? 's' : ''));
+    if (zones) parts.push(zones + ' zone' + (zones > 1 ? 's' : ''));
+    if (cercle) parts.push('1 cercle');
+    $('bnCible').textContent = parts.length ? parts.join(' · ') : 'Tout le monde';
+
+    // Les textes qui changent rejouent l'animation (comme à l'ouverture de l'app)
+    var cle = titre + '|' + sous + '|' + badge;
+    if (cle !== dernierTexte && dernierTexte !== '') { clearTimeout(maj._t); maj._t = setTimeout(rejouer, 500); }
+    dernierTexte = cle;
+  }
+
+  ['fond_image', 'image_droite'].forEach(function (nom) {
+    var input = champ(nom);
+    if (!input) return;
+    input.addEventListener('change', function () {
+      if (!input.files[0]) return;
+      urls[nom === 'fond_image' ? 'fond' : 'droite'] = URL.createObjectURL(input.files[0]);
+      maj(); rejouer();
+    });
+  });
+  form.addEventListener('input', maj);
+  form.addEventListener('change', maj);
+  new MutationObserver(maj).observe(form, { childList: true, subtree: true });
+  $('bnRejouer').addEventListener('click', rejouer);
+  dernierTexte = '';
+  maj();
+})();
 </script>
 {% endblock %}
 
