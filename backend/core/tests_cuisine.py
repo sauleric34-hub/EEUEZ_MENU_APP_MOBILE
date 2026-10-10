@@ -42,6 +42,15 @@ class EcranCuisineTests(TestCase):
         self.assertEqual(c['lignes'][0]['choix'], ['Accompagnement : Plantain'])
         self.assertEqual(data['servies_aujourdhui'], 1)
 
+    def test_commandes_oubliees_de_plus_de_24h_masquees(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        vieille = self._commande(statut='prete')
+        Commande.objects.filter(pk=vieille.pk).update(created_at=timezone.now() - timedelta(days=3))
+        recente = self._commande()
+        ids = [c['id'] for c in self.web.get('/admin-panel/resto/cuisine/donnees/').json()['commandes']]
+        self.assertEqual(ids, [recente.pk])
+
     def test_parcours_des_actions(self):
         c = self._commande()
         url = f'/admin-panel/resto/cuisine/{c.pk}/action/'
