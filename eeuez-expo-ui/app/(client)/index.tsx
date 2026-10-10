@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, SlidersHorizontal, Bell, Sun, Moon } from 'lucide-react-native';
 import { Brand, Radius, hexToRgba } from '../../constants/theme';
@@ -21,7 +20,7 @@ import {
   AccentButton, displayFont, bodyFont,
 } from '../../components/ui';
 import { SkeletonBlock } from '../../components/Skeleton';
-import { DishCarousel, RestoFloatCard } from '../../components/cards';
+import { CategoryTile, DishCarousel, RestoFloatCard } from '../../components/cards';
 import { PromoBanner } from '../../components/PromoBanner';
 import { PublicationCard } from '../../components/PublicationCard';
 import { fetchFeed } from '../../services/publications';
@@ -157,24 +156,22 @@ export default function HomeScreen() {
 
           {/* Catégories */}
           {dataLoading && !categories.length ? (
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
               {Array.from({ length: 5 }).map((_, i) => (
-                <SkeletonBlock key={i} width={78} height={74} radius={20} colors={colors} />
+                <View key={i} style={{ width: 74, alignItems: 'center', gap: 8 }}>
+                  <SkeletonBlock width={64} height={64} radius={22} colors={colors} />
+                  <SkeletonBlock width={50} height={10} radius={5} colors={colors} />
+                </View>
               ))}
             </View>
           ) : categories.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 22 }} contentContainerStyle={{ gap: 10 }}>
-              {categories.map(cat => (
-                <PressableScale key={cat.id} onPress={() => router.push(`/categorie/${cat.id}`)}>
-                  <View style={[styles.cat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {cat.iconImage ? (
-                      <ExpoImage source={{ uri: cat.iconImage }} style={styles.catImg} contentFit="cover" cachePolicy="memory-disk" />
-                    ) : (
-                      <cat.icon size={24} color={Brand.accentLight} strokeWidth={2} />
-                    )}
-                    <Text numberOfLines={1} style={[bodyFont(11, '700'), { color: colors.muted }]}>{cat.name}</Text>
-                  </View>
-                </PressableScale>
+            <ScrollView
+              horizontal showsHorizontalScrollIndicator={false}
+              style={{ marginTop: 24, marginHorizontal: -20 }}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 6 }}
+            >
+              {categories.map((cat, i) => (
+                <CategoryTile key={cat.id} cat={cat} index={i} onPress={() => router.push(`/categorie/${cat.id}`)} />
               ))}
             </ScrollView>
           )}
@@ -295,7 +292,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 11, borderRadius: Radius.pill, borderWidth: 1,
   },
-  catImg: { width: 30, height: 30, borderRadius: 9 },
-  cat: { width: 78, alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1 },
   edgeFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 32 },
 });

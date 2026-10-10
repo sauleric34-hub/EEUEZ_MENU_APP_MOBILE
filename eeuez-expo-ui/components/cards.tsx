@@ -14,7 +14,8 @@ import { Heart, Flame, Star, Plus, Minus, ChevronRight, MapPin } from 'lucide-re
 import { Brand, Radius, KenteColors, cardShadow } from '../constants/theme';
 import { useApp, cleLigne } from '../context/AppContext';
 import { useFlyToCart } from '../context/FlyToCartContext';
-import { formatPrice, formatKm, type Dish, type Resto } from '../data/menuData';
+import { formatPrice, formatKm, type Category, type Dish, type Resto } from '../data/menuData';
+import { Image as ExpoImage } from 'expo-image';
 import { PressableScale, DishTile, FadeSlideIn, KenteStripe, displayFont, bodyFont } from './ui';
 import { animateListChange } from '../lib/layoutAnimation';
 
@@ -348,6 +349,37 @@ export function AddButton({ dishId }: { dishId: number }) {
   );
 }
 
+// ─── Tuile catégorie (accueil) ───────────────────────────────
+// Pastille arrondie dans la couleur de la catégorie, reflet en haut,
+// icône blanche (ou image choisie par l'admin), nom en dessous.
+const CAT_TILE = 64;
+
+export function CategoryTile({ cat, index = 0, onPress }: { cat: Category; index?: number; onPress: () => void }) {
+  const { colors } = useApp();
+  return (
+    <FadeSlideIn index={index}>
+      <PressableScale onPress={onPress} scaleTo={0.9} style={s.catItem}>
+        <View style={[s.catShadow, { shadowColor: cat.grad[1] }]}>
+          <LinearGradient colors={cat.grad} start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }} style={s.catTile}>
+            {cat.iconImage ? (
+              <ExpoImage source={{ uri: cat.iconImage }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
+            ) : (
+              <cat.icon size={28} color="#fff" strokeWidth={2} />
+            )}
+            {/* Reflet : léger voile clair sur la moitié haute */}
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(255,255,255,0.32)', 'rgba(255,255,255,0)']}
+              style={s.catGloss}
+            />
+          </LinearGradient>
+        </View>
+        <Text numberOfLines={2} style={[bodyFont(11.5, '700'), s.catLabel, { color: colors.text }]}>{cat.name}</Text>
+      </PressableScale>
+    </FadeSlideIn>
+  );
+}
+
 // ─── Carte restaurant « logo flottant » (accueil) ─────────────
 // Couverture en fond, logo rond qui déborde du bord et lévite doucement.
 const RESTO_W = 156;
@@ -482,6 +514,16 @@ const s = StyleSheet.create({
     width: 24, height: 24,
     alignItems: 'center', justifyContent: 'center',
   },
+  catItem: { width: 74, alignItems: 'center' },
+  catShadow: {
+    borderRadius: 22, shadowOpacity: 0.45, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+  },
+  catTile: {
+    width: CAT_TILE, height: CAT_TILE, borderRadius: 22, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  catGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: CAT_TILE * 0.55 },
+  catLabel: { marginTop: 8, textAlign: 'center', lineHeight: 14 },
   restoFloat: { width: RESTO_W, borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
   logoWrap: {
     position: 'absolute', top: COVER_H - LOGO / 2, alignSelf: 'center',

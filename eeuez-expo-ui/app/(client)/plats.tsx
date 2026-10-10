@@ -3,19 +3,21 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, View, Text, StyleSheet, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
+import { Animated, View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Search, UtensilsCrossed, Store, Star, ChevronRight, Bike, SlidersHorizontal, Check } from 'lucide-react-native';
+import { Search, UtensilsCrossed, Store, SlidersHorizontal, Check } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { formatKm, formatPrice, distanceKm } from '../../data/menuData';
+import { distanceKm } from '../../data/menuData';
 import { ScreenBg } from '../../components/ScreenBg';
-import { PressableScale, DishTile, CascadeReveal, CenterMessage, displayFont, bodyFont } from '../../components/ui';
+import { PressableScale, CascadeReveal, CenterMessage, displayFont, bodyFont } from '../../components/ui';
 import { SkeletonDishGrid, SkeletonList } from '../../components/Skeleton';
 import { DishCardGrid } from '../../components/cards';
 import { animateListChange } from '../../lib/layoutAnimation';
+import Reanimated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { RestoStackList } from '../../components/RestoStackList';
 import {
   DishFilterModal, DEFAULT_FILTERS, countActiveFilters, type DishFilters,
 } from '../../components/DishFilterModal';
@@ -46,6 +48,10 @@ function FilterBadge({ count, borderColor }: { count: number; borderColor: strin
 }
 
 export default function PlatsScreen() {
+  // Défilement + hauteur visible : pilotent l'empilement des restaurants
+  const scrollY = useSharedValue(0);
+  const viewH = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler(e => { scrollY.value = e.contentOffset.y; });
   const { colors, plats, restaurants, categories, dataLoading, restoById, userLoc } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('plats');
@@ -147,7 +153,11 @@ export default function PlatsScreen() {
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Reanimated.ScrollView
+          showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+          onScroll={onScroll} scrollEventThrottle={16}
+          onLayout={e => { viewH.value = e.nativeEvent.layout.height; }}
+        >
           <Text style={[displayFont(26, '800'), { color: colors.text }]}>Rechercher</Text>
 
           {/* Bascule Plats / Restaurants — contrôle segmenté */}
@@ -257,41 +267,9 @@ export default function PlatsScreen() {
           ) : restoList.length === 0 ? (
             <CenterMessage Icon={Store} colors={colors} title="Aucun restaurant" subtitle="Essayez un autre nom." />
           ) : (
-            <View style={{ marginTop: 18, gap: 12 }}>
-              {restoList.map(r => (
-                <PressableScale key={r.id} onPress={() => router.push(`/resto/${r.id}`)}>
-                  <View style={[styles.restoRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {r.image ? (
-                      <Image source={{ uri: r.image }} style={styles.restoImg} />
-                    ) : (
-                      <DishTile Icon={r.icon} grad={r.grad} size={58} iconSize={26} radius={16} />
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={[displayFont(15.5, '700'), { color: colors.text }]}>{r.name}</Text>
-                      <Text numberOfLines={1} style={[bodyFont(12, '500'), { color: colors.muted, marginTop: 2 }]}>{r.cuisine}</Text>
-                      <View style={[styles.row, { gap: 10, marginTop: 5 }]}>
-                        <View style={[styles.row, { gap: 3 }]}>
-                          <Star size={11} color={Brand.yellow} fill={Brand.yellow} strokeWidth={0} />
-                          <Text style={[bodyFont(11.5, '700'), { color: colors.muted }]}>{r.rating}</Text>
-                        </View>
-                        <View style={[styles.row, { gap: 3 }]}>
-                          <Bike size={12} color={Brand.accentLight} strokeWidth={2.3} />
-                          <Text style={[bodyFont(11.5, '600'), { color: colors.muted }]}>
-                            {r.fraisLivraison > 0 ? formatPrice(r.fraisLivraison) : 'offerte'}
-                          </Text>
-                        </View>
-                        {r.distanceKm != null && (
-                          <Text style={[bodyFont(11.5, '600'), { color: colors.faint }]}>{formatKm(r.distanceKm)}</Text>
-                        )}
-                      </View>
-                    </View>
-                    <ChevronRight size={20} color={colors.faint} strokeWidth={2.3} />
-                  </View>
-                </PressableScale>
-              ))}
-            </View>
+            <RestoStackList restos={restoList} scrollY={scrollY} viewH={viewH} onPress={r => router.push(`/resto/${r.id}`)} />
           )}
-        </ScrollView>
+        </Reanimated.ScrollView>
       </SafeAreaView>
 
       <DishFilterModal
@@ -333,6 +311,4 @@ const styles = StyleSheet.create({
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 14 },
   cell: { width: '47%', flexGrow: 1 },
-  restoRow: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 12, borderRadius: 20, borderWidth: 1 },
-  restoImg: { width: 58, height: 58, borderRadius: 16 },
 });
