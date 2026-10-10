@@ -38,9 +38,9 @@ export function SkeletonBlock({ width = '100%', height, radius = 8, colors, styl
 /** Une carte de la grille de plats (mêmes proportions que DishCardGrid). */
 function SkeletonDishCard({ colors }: { colors: Palette }) {
   return (
-    <View style={[styles.dishCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <SkeletonBlock height={108} radius={0} colors={colors} />
-      <View style={{ padding: 12, gap: 8 }}>
+    <View style={[styles.dishCard, { backgroundColor: colors.surface, borderColor: colors.border, height: 232 }]}>
+      <View style={{ flex: 1 }} />
+      <View style={{ padding: 11, gap: 8 }}>
         <SkeletonBlock height={14} width="72%" colors={colors} />
         <SkeletonBlock height={11} width="45%" colors={colors} />
         <View style={styles.dishFoot}>

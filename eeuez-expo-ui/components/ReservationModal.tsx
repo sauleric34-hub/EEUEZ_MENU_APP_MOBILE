@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext';
 import { createReservation } from '../services/reservations';
 import { formatPrice } from '../data/menuData';
 import { PressableScale, displayFont, bodyFont } from './ui';
+import { friendlyMessage } from '../services/errors';
 
 interface Props {
   visible: boolean;
@@ -86,7 +87,7 @@ export function ReservationModal({ visible, restaurantId, restaurantNom, prix, o
       });
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Réservation impossible. Réessayez.');
+      setError(friendlyMessage(e, 'Réservation impossible. Réessayez.'));
     } finally {
       setBusy(false);
     }

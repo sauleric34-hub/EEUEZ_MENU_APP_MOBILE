@@ -19,6 +19,7 @@ import { useApp } from '../context/AppContext';
 import { absMedia } from '../data/menuData';
 import { ScreenBg } from '../components/ScreenBg';
 import { PressableScale, displayFont, bodyFont } from '../components/ui';
+import { friendlyMessage } from '../services/errors';
 
 const ALLERGY_CHOICES = ['Arachides', 'Gluten', 'Lactose', 'Fruits de mer', 'Œufs', 'Soja'];
 
@@ -76,7 +77,7 @@ export default function EditProfileScreen() {
       });
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'La mise à jour a échoué.');
+      setError(friendlyMessage(e, 'La mise à jour a échoué.'));
     } finally {
       setBusy(false);
     }

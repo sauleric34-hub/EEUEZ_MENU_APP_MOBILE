@@ -4,17 +4,19 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Easing, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, Animated, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ScanFace, TriangleAlert } from 'lucide-react-native';
+import { ScanFace } from 'lucide-react-native';
 import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { ScreenBg } from '../components/ScreenBg';
 import { LogoMark } from '../components/Logo';
 import { NgAfricaCredit } from '../components/NgAfricaCredit';
 import { AccentButton, PressableScale, bodyFont } from '../components/ui';
+import { ErrorNotice } from '../components/ErrorNotice';
+import { describeError, type ErrorInfo } from '../services/errors';
 
 import { DEMO } from '../constants/demo';
 
@@ -26,6 +28,12 @@ function homeFor(role?: string): '/(client)' | '/(livreur)' | '/(restaurant)' | 
   return null; // admin : pas d'app mobile dédiée
 }
 
+const UNSUPPORTED: ErrorInfo = {
+  kind: 'forbidden',
+  title: 'Compte non pris en charge',
+  message: 'Ce compte s\'utilise depuis l\'espace web, pas depuis l\'application mobile.',
+};
+
 export default function SplashScreen() {
   const { colors, user, authReady, signIn, signOut } = useApp();
   const router = useRouter();
@@ -35,7 +43,9 @@ export default function SplashScreen() {
   const [busy, setBusy] = useState(false);
   // Réservé aux échecs de connexion (serveur/réseau) — les problèmes de
   // saisie ont leur propre retour, en direct, champ par champ (cf. plus bas).
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorInfo | null>(null);
+  // Remonte la carte d'erreur à chaque tentative pour rejouer son animation
+  const [attempt, setAttempt] = useState(0);
 
   // ─── Validation en direct ──────────────────────────────────
   // Un champ n'affiche son erreur qu'une fois « touché » (quitté au moins
@@ -78,12 +88,13 @@ export default function SplashScreen() {
     if (!authReady || !user) return;
     const dest = homeFor(user.role);
     if (dest) router.replace(dest);
-    else { setError('Ce compte n\'est pas pris en charge par l\'application mobile.'); signOut(); }
+    else { setError(UNSUPPORTED); signOut(); }
   }, [authReady, user, router, signOut]);
 
   const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 
   const submit = async () => {
+    setAttempt(n => n + 1);
     setTouchedEmail(true);
     setTouchedPassword(true);
     if (!emailValid || !passwordValid) return; // déjà signalé champ par champ
@@ -93,9 +104,9 @@ export default function SplashScreen() {
       const u = await signIn(email.trim(), password);
       const dest = homeFor(u?.role);
       if (dest) router.replace(dest);
-      else setError('Ce compte n\'est pas pris en charge par l\'application mobile.');
+      else setError(UNSUPPORTED);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Échec de la connexion');
+      setError(describeError(e, 'La connexion a échoué. Réessayez.'));
       triggerShake();
     } finally {
       setBusy(false);
@@ -109,7 +120,7 @@ export default function SplashScreen() {
       await signIn(DEMO.email, DEMO.password);
       router.replace('/(client)');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Échec de la connexion');
+      setError(describeError(e, 'La connexion a échoué. Réessayez.'));
       triggerShake();
     } finally { setBusy(false); }
   };
@@ -155,7 +166,7 @@ export default function SplashScreen() {
               {passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
             </Animated.View>
 
-            {error && <ErrorBanner key={error} message={error} />}
+            {error && <ErrorNotice key={`${error.kind}:${error.message}:${attempt}`} error={error} onRetry={submit} />}
 
             {busy ? (
               <View style={[styles.busyBtn, glow(Brand.accent, 18)]}>
@@ -187,30 +198,6 @@ export default function SplashScreen() {
   );
 }
 
-/** Bannière d'échec de connexion : glisse depuis le haut + fondu, plutôt
- *  qu'apparaître d'un bloc. `key={message}` côté appelant garantit un
- *  remontage (donc une nouvelle animation) à chaque nouvelle tentative. */
-function ErrorBanner({ message }: { message: string }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <Animated.View
-      style={[
-        styles.errRow,
-        { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] },
-      ]}
-    >
-      <TriangleAlert size={15} color={Brand.danger} strokeWidth={2.3} />
-      <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', flex: 1 }]}>{message}</Text>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
   logoGlow: { borderRadius: 34 },
@@ -223,7 +210,6 @@ const styles = StyleSheet.create({
   },
   inputInvalid: { borderColor: Brand.danger, marginBottom: 6 },
   fieldError: { color: '#ff6b70', fontSize: 12, fontWeight: '600', marginTop: -3, marginBottom: 10, paddingHorizontal: 4 },
-  errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 4 },
   busyBtn: {
     marginTop: 4, paddingVertical: 16, borderRadius: Radius.pill,
     backgroundColor: Brand.accent, alignItems: 'center', justifyContent: 'center',

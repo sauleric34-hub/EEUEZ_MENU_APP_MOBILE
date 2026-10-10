@@ -23,6 +23,7 @@ import * as publications from '../services/publications';
 import type { PaymentMode } from '../services/menu';
 import type { UserDTO, CommandeDTO, CommandeGroupeDTO, AdresseDTO, BanniereDTO } from '../services/dto';
 import { estCompteDemo } from '../constants/demo';
+import { describeError, type ErrorInfo } from '../services/errors';
 
 /** Complément retenu sur une ligne de panier (libellé figé pour l'affichage). */
 export interface ComplementChoisi {
@@ -134,7 +135,7 @@ interface AppContextValue {
   plats: Dish[];
   popular: Dish[];
   dataLoading: boolean;
-  dataError: string | null;
+  dataError: ErrorInfo | null;
   reloadCatalogue: () => Promise<void>;
 
   // bannières promo (accueil) — mises en cache en mémoire, revérifiées
@@ -254,7 +255,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [restaurants, setRestaurants] = useState<Resto[]>([]);
   const [plats, setPlats] = useState<Dish[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [dataError, setDataError] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<ErrorInfo | null>(null);
 
   // bannières promo (accueil)
   const [bannieres, setBannieres] = useState<BanniereDTO[]>([]);
@@ -327,7 +328,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setRestaurants(restos.map(mapResto));
       setPlats(dishes.map(mapPlat));
     } catch (e) {
-      setDataError(e instanceof Error ? e.message : 'Erreur de chargement');
+      setDataError(describeError(e, 'Le menu n\'a pas pu être chargé.'));
     } finally {
       setDataLoading(false);
     }

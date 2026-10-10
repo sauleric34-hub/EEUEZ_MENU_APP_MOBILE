@@ -20,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { useGardeDemo } from '../hooks/useGardeDemo';
 import { deleteAccount } from '../services/auth';
 import { WEB_BASE_URL } from '../constants/api';
+import { friendlyMessage } from '../services/errors';
 
 const APP_VERSION = '1.0.0';
 const SUPPORT_EMAIL = 'menu@cambus.cm';
@@ -91,7 +92,7 @@ export default function SettingsScreen() {
       toast.success('Votre compte a été supprimé.');
       router.replace('/');
     } catch (e) {
-      setErreurSuppression(e instanceof Error ? e.message : 'La suppression a échoué.');
+      setErreurSuppression(friendlyMessage(e, 'La suppression a échoué.'));
     } finally {
       setSuppressionEnCours(false);
       setMotDePasse('');

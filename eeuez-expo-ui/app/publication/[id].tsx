@@ -19,6 +19,7 @@ import { fetchPublication, postCommentaire } from '../../services/publications';
 import { apiRequest } from '../../services/http';
 import { animateListChange } from '../../lib/layoutAnimation';
 import type { PublicationDTO, CommentaireDTO } from '../../services/dto';
+import { alertError } from '../../services/errors';
 
 function tempsEcoule(iso: string): string {
   const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
@@ -70,7 +71,7 @@ export default function PublicationScreen() {
       // Le nouveau commentaire arrive en bas de liste : on l'amène à l'écran.
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     } catch (e) {
-      Alert.alert('Erreur', e instanceof Error ? e.message : "Impossible d'envoyer le commentaire.");
+      alertError(e, "Impossible d'envoyer le commentaire.");
     } finally {
       setEnvoi(false);
     }
@@ -88,8 +89,8 @@ export default function PublicationScreen() {
             animateListChange();
             setCommentaires(prev => prev.filter(c => c.id !== commentaire.id));
             setPub(p => (p ? { ...p, nombre_commentaires: Math.max(0, p.nombre_commentaires - 1) } : p));
-          } catch {
-            Alert.alert('Erreur', 'Suppression impossible.');
+          } catch (e) {
+            alertError(e, 'Le commentaire n\'a pas pu être supprimé.');
           }
         },
       },

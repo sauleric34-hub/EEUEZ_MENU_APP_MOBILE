@@ -18,8 +18,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.error) {
       return (
         <View style={styles.root}>
-          <Text style={styles.title}>Une erreur est survenue</Text>
-          <Text style={styles.msg}>{this.state.error.message}</Text>
+          <Text style={styles.title}>Oups, un imprévu</Text>
+          <Text style={styles.msg}>
+            Cet écran a rencontré un problème inattendu. Touchez « Réessayer » pour le recharger.
+          </Text>
+          {/* Détail technique réservé au développement */}
+          {__DEV__ && <Text style={styles.dev}>{this.state.error.message}</Text>}
           <Pressable style={styles.btn} onPress={this.reset}>
             <Text style={styles.btnTxt}>Réessayer</Text>
           </Pressable>
@@ -34,6 +38,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#080c09', padding: 30 },
   title: { color: '#f4f1ec', fontSize: 20, fontWeight: '800', marginBottom: 10 },
   msg: { color: 'rgba(244,241,236,0.6)', fontSize: 14, textAlign: 'center', marginBottom: 24 },
+  dev: { color: 'rgba(244,241,236,0.35)', fontSize: 11, textAlign: 'center', marginTop: -12, marginBottom: 24 },
   btn: { backgroundColor: '#f26a1b', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 999 },
   btnTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

@@ -23,6 +23,7 @@ import { CamerPayWebView } from '../../components/CamerPayWebView';
 import { useGardeDemo } from '../../hooks/useGardeDemo';
 import { useToast } from '../../context/ToastContext';
 import { animateListChange } from '../../lib/layoutAnimation';
+import { friendlyMessage } from '../../services/errors';
 
 const PAYMENTS: { mode: PaymentMode; label: string; logo: ImageSourcePropType }[] = [
   { mode: 'mtn_money', label: 'MTN Money', logo: require('../../assets/mtn-money.png') },
@@ -342,7 +343,7 @@ export default function PanierScreen() {
       if (data.payment_url) setPaymentUrl(data.payment_url);
       else setError('Paiement indisponible pour le moment. Réessayez.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : "L'initiation du paiement a échoué.");
+      setError(friendlyMessage(e, "L'initiation du paiement a échoué."));
     } finally {
       setBusy(false);
     }
@@ -360,7 +361,7 @@ export default function PanierScreen() {
       // Refus du serveur (409) : le paiement Mobile Money est peut-être
       // encore en cours de validation sur le téléphone du client. La
       // commande est conservée et sera confirmée si le débit aboutit.
-      setError(e instanceof Error ? e.message : "Annulation impossible pour le moment.");
+      setError(friendlyMessage(e, "Annulation impossible pour le moment."));
     } finally {
       // Rafraîchit la liste (le groupe non payé disparaît) ; le panier est conservé.
       reloadOrders();
@@ -395,7 +396,7 @@ export default function PanierScreen() {
         router.push(routeApresPaiement(groupe));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'La commande a échoué.');
+      setError(friendlyMessage(e, 'La commande a échoué.'));
       setBusy(false);
     }
   };

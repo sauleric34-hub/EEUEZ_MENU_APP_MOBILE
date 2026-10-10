@@ -24,6 +24,7 @@ import {
   fetchMesCourses, departMission, recupererMission, livrerSansCode, abandonnerMission, pushPosition,
 } from '../../services/livreur';
 import type { CourseDTO, GeoPointDTO } from '../../services/dto';
+import { friendlyMessage } from '../../services/errors';
 
 export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -96,7 +97,7 @@ export default function MissionDetailScreen() {
   const runAction = async (fn: () => Promise<unknown>, okMsg: string) => {
     setBusy(true);
     try { await fn(); toast.success(okMsg); await load(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : 'Action impossible.'); }
+    catch (e) { toast.error(friendlyMessage(e, 'Action impossible.')); }
     finally { setBusy(false); }
   };
 

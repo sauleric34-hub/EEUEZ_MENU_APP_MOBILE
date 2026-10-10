@@ -14,6 +14,7 @@ import { PressableScale, CenterMessage, displayFont, bodyFont } from '../../comp
 import { useToast } from '../../context/ToastContext';
 import { fetchPool, acceptMission } from '../../services/livreur';
 import type { MissionPoolDTO } from '../../services/dto';
+import { friendlyMessage } from '../../services/errors';
 
 export default function MissionsScreen() {
   const { colors, user } = useApp();
@@ -53,7 +54,7 @@ export default function MissionsScreen() {
       toast.success('Mission acceptée. Bonne route !');
       router.push(`/mission/${m.id}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Impossible de prendre cette mission.');
+      toast.error(friendlyMessage(e, 'Impossible de prendre cette mission.'));
       load();
     } finally {
       setAccepting(null);

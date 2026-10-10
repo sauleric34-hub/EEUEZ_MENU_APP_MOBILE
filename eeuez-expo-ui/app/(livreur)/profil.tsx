@@ -13,6 +13,7 @@ import { ScreenBg } from '../../components/ScreenBg';
 import { PressableScale, displayFont, bodyFont } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { fetchLivreurProfile, updateLivreurProfile } from '../../services/livreur';
+import { friendlyMessage } from '../../services/errors';
 
 type Operateur = '' | 'mtn_money' | 'orange_money';
 
@@ -47,7 +48,7 @@ export default function LivreurProfilScreen() {
       });
       toast.success('Profil enregistré.');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible.');
+      toast.error(friendlyMessage(e, 'Enregistrement impossible.'));
     } finally {
       setSaving(false);
     }

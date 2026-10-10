@@ -13,6 +13,7 @@ import {
 import { Brand, Radius } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { PressableScale, bodyFont } from '../../components/ui';
+import { FlyToCartProvider, useFlyToCart } from '../../context/FlyToCartContext';
 
 interface NavDef { route: string; label: string; Icon: LucideIcon; }
 const NAV: NavDef[] = [
@@ -70,10 +71,23 @@ function NavItem({ route, label, Icon, active, onPress, cartCount }: NavItemProp
 
   const showBadge = route === 'panier' && cartCount > 0;
 
+  // Onglet Panier : cible de l'« envol » des plats ajoutés, et rebond à
+  // chaque atterrissage d'une miniature.
+  const flyToCart = useFlyToCart();
+  const isCart = route === 'panier';
+  const landings = flyToCart?.landings ?? 0;
+  useEffect(() => {
+    if (!isCart || landings === 0) return;
+    Animated.sequence([
+      Animated.spring(bounce, { toValue: 1.35, useNativeDriver: true, speed: 60, bounciness: 14 }),
+      Animated.spring(bounce, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start();
+  }, [isCart, landings, bounce]);
+
   return (
     <View style={styles.item}>
       <PressableScale onPress={onPress} scaleTo={0.88} style={{ alignItems: 'center', gap: 3 }}>
-        <View style={styles.pill}>
+        <View style={styles.pill} ref={isCart ? flyToCart?.setTarget : undefined} collapsable={false}>
           <Animated.View style={{ transform: [{ scale: bounce }] }}>
             <Icon size={21} color={active ? Brand.accentLight : colors.faint} strokeWidth={active ? 2.5 : 2} />
           </Animated.View>
@@ -162,6 +176,7 @@ export default function ClientLayout() {
   if (authReady && !user) return <Redirect href="/" />;
 
   return (
+    <FlyToCartProvider>
     <Tabs tabBar={props => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="plats" />
@@ -170,6 +185,7 @@ export default function ClientLayout() {
       <Tabs.Screen name="messages" />
       <Tabs.Screen name="profil" />
     </Tabs>
+    </FlyToCartProvider>
   );
 }
 

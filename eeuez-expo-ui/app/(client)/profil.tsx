@@ -22,6 +22,7 @@ import {
   IconButton, DishTile, PressableScale, StatusPill, SectionTitle, displayFont, bodyFont,
 } from '../../components/ui';
 import { animateListChange } from '../../lib/layoutAnimation';
+import { alertError } from '../../services/errors';
 
 const STATUT: Record<string, { label: string; color: string; bg: string; Icon: LucideIcon }> = {
   en_attente:     { label: 'En attente',     color: Brand.yellow,      bg: Brand.yellow + '18', Icon: Clock },
@@ -164,8 +165,8 @@ export default function ProfilScreen() {
               await supprimerPublication(pub.id);
               animateListChange();
               setMesPubs(prev => prev.filter(p => p.id !== pub.id));
-            } catch {
-              Alert.alert('Erreur', 'Suppression impossible.');
+            } catch (e) {
+              alertError(e, 'La publication n\'a pas pu être supprimée.');
             }
           },
         },

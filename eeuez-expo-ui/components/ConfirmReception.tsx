@@ -16,6 +16,7 @@ import { Brand, Radius, glow } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { confirmReception } from '../services/menu';
 import { PressableScale, displayFont, bodyFont } from './ui';
+import { friendlyMessage } from '../services/errors';
 
 interface Props {
   visible: boolean;
@@ -76,7 +77,7 @@ export function ConfirmReception({ visible, orderId, onClose, onConfirmed }: Pro
       ]).start();
       setTimeout(onConfirmed, 900);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Code invalide. Réessayez.');
+      setError(friendlyMessage(e, 'Code invalide. Réessayez.'));
       scannedRef.current = false; // autorise un nouveau scan après erreur
       setBusy(false);
     }

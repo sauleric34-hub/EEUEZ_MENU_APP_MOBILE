@@ -25,6 +25,8 @@ import { LogoMark } from '../components/Logo';
 import { PressableScale, displayFont, bodyFont } from '../components/ui';
 import { CountryField, CityField } from '../components/GeoFields';
 import { NgAfricaCredit } from '../components/NgAfricaCredit';
+import { ErrorNotice } from '../components/ErrorNotice';
+import { describeError, ERROR_TEXTS, type ErrorInfo } from '../services/errors';
 import { countryName, deviceCountry } from '../lib/geo';
 import '../lib/layoutAnimation'; // active LayoutAnimation sur Android
 
@@ -54,6 +56,9 @@ function Field({ Icon, colors, invalid, ...inputProps }: {
   );
 }
 
+/** Erreur de saisie détectée localement, présentée comme celles du serveur. */
+const saisie = (message: string): ErrorInfo => ({ kind: 'validation', title: ERROR_TEXTS.validation.title, message });
+
 export default function RegisterScreen() {
   const { colors, register, updateUser } = useApp();
   const router = useRouter();
@@ -76,7 +81,7 @@ export default function RegisterScreen() {
   const [allergies, setAllergies] = useState<string[]>([]);
   const [otherAllergy, setOtherAllergy] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorInfo | null>(null);
   const [fieldError, setFieldError] = useState<FieldKey | null>(null);
   const [succes, setSucces] = useState(false);
   const [panelHeights, setPanelHeights] = useState<{ step1: number | null; step2: number | null }>({
@@ -129,7 +134,7 @@ export default function RegisterScreen() {
 
   const next = () => {
     const invalid = validateStep1();
-    if (invalid) { setError(invalid.message); setFieldError(invalid.field); return; }
+    if (invalid) { setError(saisie(invalid.message)); setFieldError(invalid.field); return; }
     setFieldError(null);
     goToStep(2);
   };
@@ -148,7 +153,7 @@ export default function RegisterScreen() {
 
   const submit = async () => {
     const invalid = validateStep2();
-    if (invalid) { setError(invalid.message); setFieldError(invalid.field); return; }
+    if (invalid) { setError(saisie(invalid.message)); setFieldError(invalid.field); return; }
     setBusy(true);
     setError(null);
     setFieldError(null);
@@ -182,7 +187,7 @@ export default function RegisterScreen() {
       ]).start();
       setTimeout(() => router.replace('/(client)'), 900);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Échec de l\'inscription');
+      setError(describeError(e, 'L\'inscription a échoué. Réessayez.'));
       setBusy(false);
     }
   };
@@ -364,10 +369,12 @@ export default function RegisterScreen() {
             </View>
 
             {error && (
-              <View style={styles.errRow}>
-                <TriangleAlert size={15} color={Brand.danger} strokeWidth={2.3} />
-                <Text style={[bodyFont(12.5, '600'), { color: '#ff6b70', flex: 1 }]}>{error}</Text>
-              </View>
+              <ErrorNotice
+                key={`${error.kind}:${error.message}`}
+                error={error}
+                onRetry={step === 2 ? submit : undefined}
+                style={{ marginTop: 14, marginBottom: 0 }}
+              />
             )}
 
             {/* Bouton principal */}
@@ -440,7 +447,6 @@ const styles = StyleSheet.create({
     marginTop: 12, borderWidth: 1, borderRadius: Radius.md,
     paddingHorizontal: 14, paddingVertical: 11, fontSize: 13.5, fontWeight: '600',
   },
-  errRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingHorizontal: 4 },
   // Poussé en bas de l'écran (content a flexGrow: 1)
   credit: { marginTop: 'auto', paddingTop: 28 },
   mainBtn: {

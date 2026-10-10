@@ -16,6 +16,7 @@ import { CamerPayWebView } from '../components/CamerPayWebView';
 import { fetchReservations, payReservation, openTicket } from '../services/reservations';
 import { formatPrice } from '../data/menuData';
 import type { ReservationDTO } from '../services/dto';
+import { friendlyMessage } from '../services/errors';
 
 const STATUT_UI: Record<string, { label: string; color: string; Icon: typeof Check }> = {
   en_attente: { label: "En attente d'acceptation", color: Brand.yellow, Icon: Hourglass },
@@ -38,7 +39,7 @@ export default function ReservationsScreen() {
 
   const load = useCallback(async () => {
     try { setList(await fetchReservations()); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Chargement impossible.'); setList([]); }
+    catch (e) { setError(friendlyMessage(e, 'Chargement impossible.')); setList([]); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -59,7 +60,7 @@ export default function ReservationsScreen() {
         await load();                       // réservation gratuite → confirmée directement
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Paiement indisponible.');
+      setError(friendlyMessage(e, 'Paiement indisponible.'));
     } finally {
       setBusyId(null);
     }
@@ -68,7 +69,7 @@ export default function ReservationsScreen() {
   const ticket = async (r: ReservationDTO) => {
     setBusyId(r.id); setError(null);
     try { await openTicket(r.id); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Ticket indisponible.'); }
+    catch (e) { setError(friendlyMessage(e, 'Ticket indisponible.')); }
     finally { setBusyId(null); }
   };
 

@@ -4,6 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, API_TIMEOUT, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../constants/api';
+import { ERROR_TEXTS, kindFromStatus, translateServerMessage, type ErrorKind } from './errors';
 
 // Notifie l'app (AppContext) qu'une session est irrécupérable (token périmé /
 // SECRET_KEY changée) → forcer la déconnexion et rediriger vers l'écran de connexion.
@@ -43,11 +44,55 @@ async function tryRefreshToken(): Promise<string | null> {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Catégorie lisible (réseau, serveur, saisie…) — cf. services/errors.ts */
+  kind: ErrorKind;
+  title: string;
+  constructor(message: string, status: number, kind: ErrorKind = kindFromStatus(status), title?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.kind = kind;
+    this.title = title ?? ERROR_TEXTS[kind].title;
   }
+}
+
+/** Erreur « pas de réponse » : distingue absence d'internet et serveur injoignable. */
+async function networkError(timedOut: boolean): Promise<ApiError> {
+  if (timedOut) return new ApiError(ERROR_TEXTS.timeout.message, 0, 'timeout');
+  const online = await hasInternet();
+  const kind: ErrorKind = online ? 'unreachable' : 'offline';
+  return new ApiError(ERROR_TEXTS[kind].message, 0, kind);
+}
+
+/** Sonde légère (204 sans contenu) pour savoir si l'appareil a internet. */
+async function hasInternet(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch('https://clients3.google.com/generate_204', { method: 'HEAD', signal: controller.signal });
+    return res.status > 0;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Corps de réponse en JSON, ou null (page HTML d'erreur du proxy, corps vide…). */
+function parseBody(text: string): unknown {
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+/** Construit l'ApiError d'une réponse HTTP en échec. */
+function httpError(data: unknown, status: number, authenticated: boolean): ApiError {
+  const kind = kindFromStatus(status);
+  // Panne serveur : jamais de détail technique à l'écran
+  if (kind === 'server' || kind === 'rateLimit') return new ApiError(ERROR_TEXTS[kind].message, status, kind);
+  const message = translateServerMessage(extractError(data)) ?? ERROR_TEXTS[kind].message;
+  // 401 sur une requête anonyme (connexion) = identifiants refusés, pas une session expirée
+  const title = kind === 'auth' && !authenticated ? 'Connexion refusée' : undefined;
+  return new ApiError(message, status, kind, title);
 }
 
 interface RequestOptions {
@@ -68,7 +113,7 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url;
 }
 
-function extractError(data: unknown, status: number): string {
+function extractError(data: unknown): string | null {
   if (data && typeof data === 'object') {
     const d = data as Record<string, unknown>;
     if (typeof d.error === 'string') return d.error;
@@ -76,7 +121,7 @@ function extractError(data: unknown, status: number): string {
     const first = Object.values(d)[0];
     if (Array.isArray(first) && typeof first[0] === 'string') return first[0];
   }
-  return `Erreur serveur (${status})`;
+  return null;
 }
 
 async function doFetch(path: string, method: string, body: unknown, query: RequestOptions['query'], token: string | null) {
@@ -111,16 +156,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       else await forceSignedOut();  // refresh impossible → session périmée, on déconnecte
     }
 
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
-    if (!res.ok) throw new ApiError(extractError(data, res.status), res.status);
+    const data = parseBody(await res.text());
+    if (!res.ok) throw httpError(data, res.status, auth);
     return data as T;
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ApiError('Délai dépassé — le serveur ne répond pas.', 0);
-    }
-    throw new ApiError('Connexion au serveur impossible. Vérifiez l\'adresse API.', 0);
+    throw await networkError(err instanceof Error && err.name === 'AbortError');
   }
 }
 
@@ -148,13 +189,12 @@ export async function apiUpload<T>(path: string, form: FormData, method: 'POST' 
       if (refreshed) res = await send(refreshed);
       else await forceSignedOut();
     }
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
-    if (!res.ok) throw new ApiError(extractError(data, res.status), res.status);
+    const data = parseBody(await res.text());
+    if (!res.ok) throw httpError(data, res.status, true);
     return data as T;
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new ApiError('Envoi impossible. Vérifiez votre connexion.', 0);
+    throw await networkError(false);
   }
 }
 
@@ -179,15 +219,15 @@ export function apiUploadWithProgress<T>(
           if (e.lengthComputable) onProgress(e.loaded / e.total);
         };
         xhr.onload = () => {
-          let data: unknown = null;
-          try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { /* réponse non-JSON */ }
+          const data = parseBody(xhr.responseText);
           if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
-          else reject(new ApiError(extractError(data, xhr.status), xhr.status));
+          else reject(httpError(data, xhr.status, true));
         };
-        xhr.onerror = () => reject(new ApiError('Envoi impossible. Vérifiez votre connexion.', 0));
+        xhr.onerror = () => { networkError(false).then(reject); };
+        xhr.ontimeout = () => { networkError(true).then(reject); };
         xhr.send(form);
       } catch {
-        reject(new ApiError('Envoi impossible. Vérifiez votre connexion.', 0));
+        networkError(false).then(reject);
       }
     })();
   });

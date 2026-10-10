@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Search, SlidersHorizontal, Bell, Sun, Moon, Star, TriangleAlert } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Bell, Sun, Moon, Star } from 'lucide-react-native';
 import { Brand, Radius, hexToRgba } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import { formatKm } from '../../data/menuData';
@@ -18,14 +18,15 @@ import { ScreenBg } from '../../components/ScreenBg';
 import { LogoMark } from '../../components/Logo';
 import {
   PressableScale, IconButton, DishTile, SectionTitle, CenterMessage,
-  AccentButton, FadeSlideIn, displayFont, bodyFont,
+  AccentButton, displayFont, bodyFont,
 } from '../../components/ui';
 import { SkeletonBlock } from '../../components/Skeleton';
-import { DishCardWide } from '../../components/cards';
+import { DishCarousel } from '../../components/cards';
 import { PromoBanner } from '../../components/PromoBanner';
 import { PublicationCard } from '../../components/PublicationCard';
 import { fetchFeed } from '../../services/publications';
 import type { PublicationDTO } from '../../services/dto';
+import { errorIcon } from '../../components/ErrorNotice';
 
 /** Publications montrées juste après « Près de vous » ; le reste défile sous les restaurants. */
 const PUBS_EN_TETE = 5;
@@ -183,7 +184,7 @@ export default function HomeScreen() {
               <SkeletonBlock width={130} height={20} radius={6} colors={colors} style={{ marginTop: 26, marginBottom: 14 }} />
               <View style={{ flexDirection: 'row', gap: 14 }}>
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <SkeletonBlock key={i} width={210} height={205} radius={Radius.xl} colors={colors} />
+                  <SkeletonBlock key={i} width={210} height={252} radius={Radius.xl} colors={colors} />
                 ))}
               </View>
             </>
@@ -198,11 +199,7 @@ export default function HomeScreen() {
                   Les meilleurs plats au plus près, pour réduire vos frais de livraison
                 </Text>
               )}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4, paddingHorizontal: 2 }}>
-                {forYou.slice(0, 10).map((d, i) => (
-                  <FadeSlideIn key={d.id} index={i}><DishCardWide dish={d} /></FadeSlideIn>
-                ))}
-              </ScrollView>
+              <DishCarousel dishes={forYou.slice(0, 10)} />
             </>
           )}
 
@@ -262,8 +259,8 @@ export default function HomeScreen() {
     return (
       <ScreenBg><SafeAreaView style={{ flex: 1 }}>
         <CenterMessage
-          Icon={TriangleAlert} colors={colors}
-          title="Connexion impossible" subtitle={dataError}
+          Icon={errorIcon(dataError.kind)} colors={colors}
+          title={dataError.title} subtitle={dataError.message}
           action={<AccentButton label="Réessayer" onPress={reloadCatalogue} style={{ marginTop: 20, minWidth: 180 }} />}
         />
       </SafeAreaView></ScreenBg>

@@ -23,6 +23,7 @@ import { useToast } from '../../context/ToastContext';
 import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../../components/ui';
 import { StarRating } from '../../components/StarRating';
 import { SelecteurComplements } from '../../components/SelecteurComplements';
+import { friendlyMessage } from '../../services/errors';
 
 function StatCard({ Icon, color, value, label, bg, border }: {
   Icon: any; color: string; value: string; label: string; bg: string; border: string;
@@ -160,7 +161,7 @@ export default function DishDetail() {
       const res = await ratePlat(dish.id, note);
       setRating({ note: String(res.note), mine: res.ma_note });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Impossible d'enregistrer la note.");
+      toast.error(friendlyMessage(e, "Impossible d'enregistrer la note."));
     }
   };
 

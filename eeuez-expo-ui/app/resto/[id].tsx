@@ -16,6 +16,7 @@ import { KenteStripe, PressableScale, Loader, displayFont, bodyFont } from '../.
 import { DishCardGrid } from '../../components/cards';
 import { ReservationModal } from '../../components/ReservationModal';
 import { PublicationComposer } from '../../components/PublicationComposer';
+import { alertError } from '../../services/errors';
 
 function Stat({ value, label, color, colors }: { value: string; label: string; color: string; colors: any }) {
   return (
@@ -77,7 +78,7 @@ export default function RestoProfile() {
       const conv = await openConversation(first.id);
       router.push(`/chat/${conv.id}`);
     } catch (e) {
-      Alert.alert('Discussion impossible', e instanceof Error ? e.message : 'Reconnectez-vous et réessayez.');
+      alertError(e, 'La discussion n\'a pas pu être ouverte. Réessayez.');
     } finally {
       setOpeningChat(false);
     }

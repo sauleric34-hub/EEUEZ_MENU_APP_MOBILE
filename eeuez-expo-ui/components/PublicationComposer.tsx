@@ -22,6 +22,7 @@ import { contribuer, MAX_MEDIAS } from '../services/publications';
 import { estVideo } from '../services/upload';
 import { animateListChange } from '../lib/layoutAnimation';
 import { PressableScale, displayFont, bodyFont } from './ui';
+import { friendlyMessage } from '../services/errors';
 
 interface Props {
   visible: boolean;
@@ -90,7 +91,7 @@ export function PublicationComposer({
       reset();
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "L'envoi a échoué. Réessayez.");
+      setError(friendlyMessage(e, "L'envoi a échoué. Réessayez."));
       setProgress(0);
     } finally {
       setBusy(false);
