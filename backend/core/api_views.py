@@ -331,9 +331,24 @@ def supprimer_compte(request):
     personnelles effacées, historique financier conservé anonymisé — voir
     core/compte.py. Le mot de passe est redemandé : un téléphone laissé
     déverrouillé ne doit pas suffire.
+    Compte créé via Google/Apple (sans mot de passe) : on redemande à la
+    place une connexion au fournisseur — Body : { "fournisseur", "id_token" }.
     """
-    if not request.user.check_password(str(request.data.get('password') or '')):
-        return Response({'error': 'Mot de passe incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+    user = request.user
+    if user.has_usable_password():
+        if not user.check_password(str(request.data.get('password') or '')):
+            return Response({'error': 'Mot de passe incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        from .social_auth import verifier_jeton, JetonInvalide
+        try:
+            identite = verifier_jeton(request.data.get('fournisseur'), request.data.get('id_token'))
+        except JetonInvalide:
+            identite = None
+        if identite is None or identite.email != (user.email or '').strip().lower():
+            return Response(
+                {'error': 'Confirmez avec le compte Google ou Apple utilisé pour vous connecter.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     try:
         supprimer_compte_client(request.user)
     except SuppressionImpossible as e:
