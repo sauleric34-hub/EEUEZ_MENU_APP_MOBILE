@@ -70,6 +70,7 @@ export default function RootLayout() {
           <Stack.Screen name="(restaurant)" options={{ animation: 'fade' }} />
           <Stack.Screen name="mission/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="dish/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="categorie/[id]" options={{ animation: 'fade', animationDuration: 280 }} />
           <Stack.Screen name="resto/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="chat/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="tracking" options={{ animation: 'slide_from_bottom' }} />

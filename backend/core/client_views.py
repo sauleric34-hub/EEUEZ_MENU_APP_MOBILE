@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 
 from .models import (
@@ -70,7 +70,8 @@ def plats_list(request):
     if restaurant:
         qs = qs.filter(restaurant_id=restaurant)
     if categorie:
-        qs = qs.filter(categorie__nom__iexact=categorie)
+        # Identifiant (page catégorie de l'app) ou nom (anciens clients)
+        qs = qs.filter(categorie_id=categorie) if categorie.isdigit() else qs.filter(categorie__nom__iexact=categorie)
     if popular in ('1', 'true', 'True'):
         qs = qs.filter(is_popular=True)
     if q:
@@ -92,7 +93,11 @@ def plat_detail(request, id):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def categories_list(request):
-    return Response(CategorieSerializer(Categorie.objects.all().order_by('id'), many=True).data)
+    """Catégories actives, dans l'ordre choisi par l'admin."""
+    qs = Categorie.objects.filter(is_active=True).annotate(
+        nb_plats=Count('plat', filter=Q(plat__is_available=True, plat__is_visible=True), distinct=True),
+    ).order_by('ordre', 'id')
+    return Response(CategorieSerializer(qs, many=True, context={'request': request}).data)
 
 
 # ─── BANNIÈRES (carrousel promo accueil) ────────────────────

@@ -328,7 +328,10 @@ def plat_form(request, pk=None):
 
     return render(request, 'resto/plat_form.html', {
         'resto': resto, 'plat': plat,
-        'categories': Categorie.objects.order_by('nom'),
+        # Catégories visibles (+ celle du plat, même masquée, pour ne pas la perdre)
+        'categories': Categorie.objects.filter(
+            Q(is_active=True) | Q(pk=plat.categorie_id if plat else None)
+        ).order_by('ordre', 'id'),
         'types_plat': Plat.TYPE_PLAT_CHOICES,
         'groupes': (
             plat.groupes_complements.prefetch_related('options') if plat else []

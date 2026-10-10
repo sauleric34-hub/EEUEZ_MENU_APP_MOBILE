@@ -1,6 +1,6 @@
 from django.urls import path
 from core.views import auth, dashboard, restaurants, users, dishes, finances, deliveries, reviews, logs, map_view
-from core.views import publications_admin, bannieres
+from core.views import publications_admin, bannieres, categories_admin
 from core.views import resto_ws, livreur_ws
 from core.views import livreurs_admin
 from core.views import partenaires_admin
@@ -38,6 +38,13 @@ urlpatterns = [
     path('dishes/<int:pk>/toggle/', dishes.dish_toggle, name='dish_toggle'),
 
     # Bannières (accueil client)
+    path('categories/', categories_admin.categorie_list, name='categorie_list'),
+    path('categories/nouvelle/', categories_admin.categorie_form, name='categorie_create'),
+    path('categories/<int:pk>/', categories_admin.categorie_form, name='categorie_edit'),
+    path('categories/<int:pk>/supprimer/', categories_admin.categorie_delete, name='categorie_delete'),
+    path('categories/<int:pk>/toggle/', categories_admin.categorie_toggle, name='categorie_toggle'),
+    path('categories/<int:pk>/monter/', categories_admin.categorie_move, {'direction': 'up'}, name='categorie_up'),
+    path('categories/<int:pk>/descendre/', categories_admin.categorie_move, {'direction': 'down'}, name='categorie_down'),
     path('bannieres/', bannieres.banniere_list, name='banniere_list'),
     path('bannieres/nouvelle/', bannieres.banniere_form, name='banniere_create'),
     path('bannieres/<int:pk>/', bannieres.banniere_form, name='banniere_edit'),

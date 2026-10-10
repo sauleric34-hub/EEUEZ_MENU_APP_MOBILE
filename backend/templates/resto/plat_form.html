@@ -34,15 +34,42 @@
         {% endfor %}
       </select>
     </div>
-    <div class="form-group">
+    <div class="form-group" style="grid-column:1 / -1;">
       <label class="form-label">Catégorie</label>
-      <select name="categorie" class="input-field">
-        <option value="">— Choisir —</option>
+      <div class="cat-choix">
+        <label class="cat-opt">
+          <input type="radio" name="categorie" value="" {% if not plat.categorie_id %}checked{% endif %}>
+          <span class="cat-ic"><i data-lucide="circle-dashed"></i></span>
+          <span class="cat-nm">Aucune</span>
+        </label>
         {% for c in categories %}
-        <option value="{{ c.pk }}" {% if plat.categorie_id == c.pk %}selected{% endif %}>{{ c.nom }}</option>
+        <label class="cat-opt">
+          <input type="radio" name="categorie" value="{{ c.pk }}" {% if plat.categorie_id == c.pk %}checked{% endif %}>
+          <span class="cat-ic">
+            {% if c.icone_type == 'image' and c.icone_image %}<img src="{{ c.icone_image.url }}" alt="">{% else %}<i data-lucide="{{ c.icone|default:'utensils' }}"></i>{% endif %}
+          </span>
+          <span class="cat-nm">{{ c.nom }}</span>
+        </label>
         {% endfor %}
-      </select>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+        Votre plat apparaîtra dans cette catégorie sur l'accueil de l'application.
+      </div>
     </div>
+    <style>
+      .cat-choix { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px; }
+      .cat-opt { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border-radius:14px;
+                 border:1px solid var(--border); cursor:pointer; color:var(--text-muted); text-align:center; transition:all .15s; }
+      .cat-opt:hover { border-color:rgba(242,106,27,0.5); color:var(--text-primary); }
+      .cat-opt input { display:none; }
+      .cat-opt:has(input:checked) { background:rgba(242,106,27,0.14); border-color:#f26a1b; color:var(--text-primary); }
+      .cat-ic { width:34px; height:34px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; color:#f7a03b; }
+      .cat-ic img { width:100%; height:100%; object-fit:cover; }
+      .cat-ic svg { width:22px; height:22px; }
+      .cat-nm { font-size:0.72rem; font-weight:600; line-height:1.2; }
+    </style>
+    <script src="https://unpkg.com/lucide@1.17.0/dist/umd/lucide.min.js"></script>
+    <script>document.addEventListener('DOMContentLoaded', function () { lucide.createIcons(); });</script>
     <div class="form-group">
       <label class="form-label">Allergènes (séparés par des virgules)</label>
       <input type="text" name="allergies" class="input-field" value="{{ plat.allergies|default:'' }}" placeholder="Ex : Arachides, Gluten">

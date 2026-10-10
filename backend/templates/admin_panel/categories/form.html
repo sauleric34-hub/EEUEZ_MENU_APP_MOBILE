@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% block title %}{% if categorie %}Modifier{% else %}Nouvelle{% endif %} catégorie — Menu Admin{% endblock %}
+{% block topbar_title %}{% if categorie %}Modifier la catégorie{% else %}Nouvelle catégorie{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:999px; padding:3px; gap:3px; margin-bottom:14px; }
+  .seg label { padding:7px 16px; border-radius:999px; cursor:pointer; font-size:0.85rem; color:var(--text-muted); }
+  .seg input { display:none; }
+  .seg input:checked + span { color:#fff; }
+  .seg label:has(input:checked) { background:#f26a1b; color:#fff; }
+  .icon-search { margin-bottom:10px; }
+  .icon-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:8px; max-height:300px; overflow-y:auto; padding:2px; }
+  .icon-opt { display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 4px; border-radius:12px;
+              border:1px solid var(--border); cursor:pointer; color:var(--text-muted); font-size:0.66rem; text-align:center; transition:all .15s; }
+  .icon-opt:hover { border-color:rgba(242,106,27,0.5); color:var(--text-primary); }
+  .icon-opt input { display:none; }
+  .icon-opt svg { width:22px; height:22px; }
+  .icon-opt:has(input:checked) { background:rgba(242,106,27,0.16); border-color:#f26a1b; color:#f7a03b; }
+  .hint { color:var(--text-muted); font-size:0.78rem; margin:-4px 0 12px; }
+  .apercu-img { width:100%; max-height:170px; object-fit:cover; border-radius:12px; border:1px solid var(--border); display:block; margin-bottom:10px; }
+
+  /* Aperçu « téléphone » */
+  .phone { width:280px; margin:0 auto; border-radius:30px; border:1px solid var(--border); background:#0b100d; padding:18px 14px; }
+  .phone-label { color:var(--text-muted); font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; margin:4px 0 8px; }
+  .home-btn { width:78px; padding:12px 6px; border-radius:20px; border:1px solid rgba(255,255,255,0.12);
+              background:rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .home-btn .ic { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#f7a03b; border-radius:10px; overflow:hidden; }
+  .home-btn .ic img { width:100%; height:100%; object-fit:cover; }
+  .home-btn .ic svg { width:24px; height:24px; }
+  .home-btn .nm { color:rgba(244,241,236,0.6); font-size:0.66rem; font-weight:700; max-width:70px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hero { margin-top:6px; border-radius:18px; overflow:hidden; height:150px; position:relative;
+          background:linear-gradient(135deg,#f7891b,#7d2a0d); }
+  .hero img { width:100%; height:100%; object-fit:cover; display:block; }
+  .hero .titre { position:absolute; left:12px; bottom:12px; background:#e5484d; color:#fff; font-weight:800;
+                 padding:6px 14px; border-radius:999px; font-size:0.95rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb anim-fade-up">
+  <a href="{% url 'core:categorie_list' %}">Catégories</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">{% if categorie %}Modifier{% else %}Nouvelle{% endif %}</span>
+</div>
+<div class="page-header anim-fade-up">
+  <h1 class="page-title">{% if categorie %}Modifier « {{ categorie.nom }} »{% else %}Nouvelle catégorie{% endif %}</h1>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:22px;">
+
+      <div class="glass-card" style="padding:28px;">
+        <div class="section-title">1 · Informations</div>
+        <div class="form-group">
+          <label class="form-label">Nom *</label>
+          <input type="text" id="nom" name="nom" class="input-field" maxlength="100" required
+                 value="{{ categorie.nom|default:'' }}" placeholder="Ex : Grillades">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description (optionnel)</label>
+          <textarea name="description" class="input-field" rows="2" placeholder="Ex : Poisson braisé, soya, brochettes…">{{ categorie.description|default:'' }}</textarea>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="is_active" {% if not categorie or categorie.is_active %}checked{% endif %}>
+          <span>Visible dans l'app</span>
+        </label>
+      </div>
+
+      <div class="glass-card" style="padding:28px;">
+        <div class="section-title">2 · Icône (bouton de l'accueil)</div>
+        <div class="seg">
+          <label><input type="radio" name="icone_type" value="icone" {% if not categorie or categorie.icone_type == 'icone' %}checked{% endif %}><span>Icône</span></label>
+          <label><input type="radio" name="icone_type" value="image" {% if categorie.icone_type == 'image' %}checked{% endif %}><span>Image</span></label>
+        </div>
+
+        <div id="bloc-icone">
+          <input type="search" class="input-field icon-search" id="icon-search" placeholder="Rechercher une icône…">
+          <div class="icon-grid" id="icon-grid">
+            {% for cle, libelle in icones %}
+            <label class="icon-opt" data-libelle="{{ libelle|lower }} {{ cle }}">
+              <input type="radio" name="icone" value="{{ cle }}" {% if cle == icone_choisie %}checked{% endif %}>
+              <i data-lucide="{{ cle }}"></i>
+              <span>{{ libelle }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div id="bloc-image" style="display:none;">
+          <p class="hint">Image carrée de préférence (PNG transparent ou photo), affichée en petit sur l'accueil.</p>
+          {% if categorie.icone_image %}<img src="{{ categorie.icone_image.url }}" style="width:72px;height:72px;border-radius:16px;object-fit:cover;border:1px solid var(--border);margin-bottom:10px;">{% endif %}
+          <input type="file" id="icone_image" name="icone_image" accept="image/*" class="input-field" style="padding:8px;">
+        </div>
+      </div>
+
+      <div class="glass-card" style="padding:28px;">
+        <div class="section-title">3 · Image de présentation (page de la catégorie)</div>
+        <p class="hint">Grande image affichée en haut de la page de la catégorie (format paysage, ex. 1200 × 700).</p>
+        {% if categorie.image_presentation %}
+          <img src="{{ categorie.image_presentation.url }}" class="apercu-img">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;font-size:0.85rem;">
+            <input type="checkbox" name="retirer_presentation"> Retirer l'image actuelle
+          </label>
+        {% endif %}
+        <input type="file" id="image_presentation" name="image_presentation" accept="image/*" class="input-field" style="padding:8px;">
+      </div>
+    </div>
+
+    <div class="glass-card" style="padding:22px;position:sticky;top:20px;">
+      <div class="section-title">Aperçu dans l'app</div>
+      <div class="phone">
+        <div class="phone-label">Accueil</div>
+        <div class="home-btn">
+          <div class="ic" id="prev-icone">
+            {% if categorie.icone_type == 'image' and categorie.icone_image %}<img src="{{ categorie.icone_image.url }}">{% else %}<i data-lucide="{{ icone_choisie }}"></i>{% endif %}
+          </div>
+          <div class="nm" id="prev-nom-btn">{{ categorie.nom|default:'Catégorie' }}</div>
+        </div>
+        <div class="phone-label" style="margin-top:16px;">Page de la catégorie</div>
+        <div class="hero" id="prev-hero">
+          {% if categorie.image_presentation %}<img src="{{ categorie.image_presentation.url }}">{% endif %}
+          <div class="titre" id="prev-nom-hero">{{ categorie.nom|default:'Catégorie' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;">
+    <a href="{% url 'core:categorie_list' %}" class="btn btn-secondary">Annuler</a>
+    <button type="submit" class="btn btn-primary">Enregistrer la catégorie</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/lucide@1.17.0/dist/umd/lucide.min.js"></script>
+<script>
+(function () {
+  lucide.createIcons();
+  var $ = function (id) { return document.getElementById(id); };
+  var imageIconeUrl = {% if categorie.icone_image %}'{{ categorie.icone_image.url|escapejs }}'{% else %}null{% endif %};
+
+  function typeIcone() { return document.querySelector('input[name="icone_type"]:checked').value; }
+
+  function majApercuIcone() {
+    var cible = $('prev-icone');
+    if (typeIcone() === 'image') {
+      cible.innerHTML = imageIconeUrl ? '<img src="' + imageIconeUrl + '">' : '';
+    } else {
+      var choix = document.querySelector('input[name="icone"]:checked');
+      cible.innerHTML = '<i data-lucide="' + (choix ? choix.value : 'utensils') + '"></i>';
+      lucide.createIcons();
+    }
+  }
+
+  function majType() {
+    var image = typeIcone() === 'image';
+    $('bloc-icone').style.display = image ? 'none' : '';
+    $('bloc-image').style.display = image ? '' : 'none';
+    majApercuIcone();
+  }
+
+  document.querySelectorAll('input[name="icone_type"]').forEach(function (r) { r.addEventListener('change', majType); });
+  document.querySelectorAll('input[name="icone"]').forEach(function (r) { r.addEventListener('change', majApercuIcone); });
+
+  $('icon-search').addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.icon-opt').forEach(function (el) {
+      el.style.display = !q || el.dataset.libelle.indexOf(q) !== -1 ? '' : 'none';
+    });
+  });
+
+  $('nom').addEventListener('input', function () {
+    var v = this.value.trim() || 'Catégorie';
+    $('prev-nom-btn').textContent = v;
+    $('prev-nom-hero').textContent = v;
+  });
+
+  $('icone_image').addEventListener('change', function () {
+    if (this.files[0]) { imageIconeUrl = URL.createObjectURL(this.files[0]); majApercuIcone(); }
+  });
+
+  $('image_presentation').addEventListener('change', function () {
+    if (!this.files[0]) return;
+    var hero = $('prev-hero');
+    var img = hero.querySelector('img');
+    if (!img) { img = document.createElement('img'); hero.insertBefore(img, hero.firstChild); }
+    img.src = URL.createObjectURL(this.files[0]);
+  });
+
+  majType();
+})();
+</script>
+{% endblock %}

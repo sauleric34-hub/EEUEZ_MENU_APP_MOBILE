@@ -209,13 +209,31 @@ class RestaurantProfile(models.Model):
 
 
 class Categorie(models.Model):
+    """Catégorie de plats (Grillades, Pizzas…), gérée depuis l'espace admin.
+
+    Affichée dans l'app : l'icône sur l'accueil (bouton de catégorie), l'image
+    de présentation en tête de la page de la catégorie.
+    """
+    ICONE_TYPE_CHOICES = [
+        ('icone', 'Icône'),
+        ('image', 'Image'),
+    ]
+
     nom = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    icone_type = models.CharField(max_length=10, choices=ICONE_TYPE_CHOICES, default='icone')
+    # Clé d'icône Lucide (cf. core/categories_icones.py) quand icone_type = 'icone'
     icone = models.CharField(max_length=50, blank=True)
+    icone_image = models.ImageField(upload_to='categories/icones/', blank=True, null=True)
+    image_presentation = models.ImageField(upload_to='categories/presentation/', blank=True, null=True)
+    ordre = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = 'Catégorie'
         verbose_name_plural = 'Catégories'
+        ordering = ['ordre', 'id']
 
     def __str__(self):
         return self.nom

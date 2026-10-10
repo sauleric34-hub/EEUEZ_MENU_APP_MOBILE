@@ -10,14 +10,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Image, FlatList, useWindowDimensions, Share, Animated, Pressable,
-  LayoutAnimation, Platform, UIManager,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
 
-// Active LayoutAnimation sur Android (désactivé par défaut)
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -28,6 +23,8 @@ import { WEB_BASE_URL } from '../constants/api';
 import { useApp } from '../context/AppContext';
 import { basculerSon, useSonCoupe } from '../lib/videoFeed';
 import { animateListChange } from '../lib/layoutAnimation';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { formatPrice } from '../data/menuData';
 import { PressableScale, displayFont, bodyFont } from './ui';
 import { AuthorChip } from './AuthorChip';
@@ -95,41 +92,85 @@ function VideoCell({ url, largeur, actif }: { url: string; largeur: number; acti
   );
 }
 
+const LIGNES_REPLIEES = 2;
+const LINE_H = 19;
+const PAD_TOP = 10;
+const SUFFIXE_PLUS = '… voir plus';
+const SUFFIXE_MOINS = '  voir moins';
+
+/**
+ * Légende repliable : 2 lignes avec « … voir plus » en bout de 2ᵉ ligne,
+ * puis déroulé en douceur (hauteur animée) avec « voir moins » à la fin.
+ * Deux copies invisibles mesurent le texte : l'une pour savoir où couper,
+ * l'autre pour connaître la hauteur exacte une fois déroulé.
+ */
 function ExpandableText({ texte, auteurLabel, colors }: { texte: string, auteurLabel: string | null, colors: any }) {
+  const [lignes, setLignes] = useState<string[] | null>(null);
+  const [hauteurPleine, setHauteurPleine] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const [showMoreButton, setShowMoreButton] = useState(false);
+  const hauteurRepliee = PAD_TOP + LINE_H * LIGNES_REPLIEES;
+  const hauteur = useSharedValue(hauteurRepliee);
 
-  const toggleExpand = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(prev => !prev);
-  }, []);
+  const prefixe = auteurLabel ? `${auteurLabel}  ` : '';
+  const tronque = lignes != null && lignes.length > LIGNES_REPLIEES;
 
-  const onTextLayout = useCallback((e: any) => {
-    if (e.nativeEvent.lines.length > 3 && !showMoreButton) {
-      setShowMoreButton(true);
-    }
-  }, [showMoreButton]);
+  // Texte replié : les 2 premières lignes, raccourcies pour loger « … voir plus »
+  const texteReplie = useMemo(() => {
+    if (!lignes || !tronque) return texte;
+    const garde = lignes.slice(0, LIGNES_REPLIEES).join('');
+    const coupe = Math.max(0, garde.length - prefixe.length - SUFFIXE_PLUS.length - 2);
+    return texte.slice(0, coupe).trimEnd();
+  }, [lignes, tronque, texte, prefixe.length]);
+
+  const basculer = useCallback(() => {
+    const cible = expanded ? hauteurRepliee : hauteurPleine;
+    if (!expanded) setExpanded(true); // le texte complet apparaît, la hauteur le dévoile
+    hauteur.value = withTiming(cible, { duration: 340, easing: Easing.out(Easing.cubic) }, fini => {
+      // En repliant, on ne remet le texte court qu'une fois la hauteur réduite
+      if (fini && expanded) scheduleOnRN(setExpanded, false);
+    });
+  }, [expanded, hauteurPleine, hauteurRepliee, hauteur]);
+
+  const styleHauteur = useAnimatedStyle(() => ({ height: hauteur.value }));
+
+  const libelle = auteurLabel ? (
+    <Text style={[bodyFont(13.5, '800'), { color: Brand.accentLight }]}>{prefixe}</Text>
+  ) : null;
+  const styleTexte = [bodyFont(13.5, '500'), styles.texte, { color: colors.text }];
+  const lien = (label: string) => (
+    <Text onPress={basculer} style={[bodyFont(13.5, '700'), { color: colors.muted }]}>{label}</Text>
+  );
 
   return (
     <View style={styles.texteWrap}>
-      <Text
-        style={[bodyFont(13.5, '500'), styles.texte, { color: colors.text }]}
-        numberOfLines={expanded ? undefined : 3}
-        onTextLayout={onTextLayout}
-      >
-        {auteurLabel && (
-          <Text style={[bodyFont(13.5, '800'), { color: Brand.accentLight }]}>
-            {auteurLabel}{'  '}
+      {/* Mesures invisibles (même largeur, même style) */}
+      <View style={styles.mesure} pointerEvents="none">
+        <Text
+          style={styleTexte}
+          onTextLayout={e => setLignes(e.nativeEvent.lines.map(l => l.text))}
+        >
+          {libelle}{texte}
+        </Text>
+        <Text style={styleTexte} onLayout={e => setHauteurPleine(e.nativeEvent.layout.height)}>
+          {libelle}{texte}{SUFFIXE_MOINS}
+        </Text>
+      </View>
+
+      {!tronque ? (
+        <Text style={styleTexte} numberOfLines={lignes ? undefined : LIGNES_REPLIEES}>{libelle}{texte}</Text>
+      ) : (
+        <Reanimated.View style={[{ overflow: 'hidden' }, styleHauteur]}>
+          <Text style={styleTexte} onPress={expanded ? undefined : basculer}>
+            {libelle}
+            {expanded ? texte : texteReplie}
+            {expanded ? lien(SUFFIXE_MOINS) : (
+              <>
+                <Text style={{ color: colors.muted }}>… </Text>
+                {lien('voir plus')}
+              </>
+            )}
           </Text>
-        )}
-        {texte}
-      </Text>
-      {showMoreButton && (
-        <PressableScale onPress={toggleExpand} style={{ paddingHorizontal: 14, paddingTop: 4 }}>
-          <Text style={[bodyFont(13, '700'), { color: colors.muted }]}>
-            {expanded ? 'Voir moins' : 'Voir plus'}
-          </Text>
-        </PressableScale>
+        </Reanimated.View>
       )}
     </View>
   );
@@ -481,6 +522,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13, paddingVertical: 8, borderRadius: Radius.pill,
   },
   texteWrap: { paddingBottom: 6 },
+  mesure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
   texte: { paddingHorizontal: 14, paddingTop: 10, lineHeight: 19 },
   voirComs: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 14 },
 });

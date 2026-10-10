@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import type { PlatDTO, RestoDTO, CategorieDTO } from '../services/dto';
 import { MEDIA_BASE_URL } from '../constants/api';
+import { categoryIcon } from '../lib/categoryIcons';
 
 export type Gradient = [string, string];
 
@@ -93,6 +94,7 @@ export interface Dish {
   description: string;
   isPopular: boolean;
   category: string | null;
+  categoryId: number | null;
   fraisLivraison: number;
   /** Groupes d'options : le client choisit UNE possibilité par groupe. */
   groupesComplements: GroupeComplementDTO[];
@@ -110,7 +112,14 @@ export interface Dish {
 export interface Category {
   id: number;
   name: string;
+  description: string;
   icon: LucideIcon;
+  /** Image choisie par l'admin à la place de l'icône (bouton de l'accueil). */
+  iconImage?: string;
+  /** Grande image en tête de la page de la catégorie. */
+  cover?: string;
+  dishCount: number;
+  grad: Gradient;
 }
 
 // ─── Palette de dégradés (design) ────────────────────────────
@@ -253,6 +262,7 @@ export function mapPlat(d: PlatDTO): Dish {
     description: d.description || '',
     isPopular: d.is_popular,
     category: d.categorie_nom,
+    categoryId: d.categorie,
     fraisLivraison: Number(d.frais_livraison ?? 0),
     groupesComplements: d.groupes_complements ?? [],
     elementsInclus: d.elements_inclus ?? [],
@@ -264,7 +274,16 @@ export function mapPlat(d: PlatDTO): Dish {
 }
 
 export function mapCategory(d: CategorieDTO): Category {
-  return { id: d.id, name: d.nom, icon: iconForCategory(d.nom) };
+  return {
+    id: d.id,
+    name: d.nom,
+    description: d.description ?? '',
+    icon: categoryIcon(d.icone) ?? iconForCategory(d.nom),
+    iconImage: d.icone_type === 'image' ? absMedia(d.icone_image) : undefined,
+    cover: absMedia(d.image_presentation),
+    dishCount: d.nb_plats ?? 0,
+    grad: gradForId(d.id),
+  };
 }
 
 // ─── Constantes statiques (non issues de la base) ────────────

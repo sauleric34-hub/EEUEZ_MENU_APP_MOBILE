@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Catégories — Menu Admin{% endblock %}
+{% block topbar_title %}Catégories{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:18px; }
+  .cat-card { overflow:hidden; display:flex; flex-direction:column; }
+  .cat-cover { height:120px; position:relative; background:linear-gradient(135deg,rgba(242,106,27,0.25),rgba(31,138,76,0.18)); }
+  .cat-cover img { width:100%; height:100%; object-fit:cover; display:block; }
+  .cat-cover .vide { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem; }
+  .cat-icone { position:absolute; left:16px; bottom:-26px; width:56px; height:56px; border-radius:18px;
+               background:var(--bg-card, #111814); border:2px solid rgba(242,106,27,0.5);
+               display:flex; align-items:center; justify-content:center; overflow:hidden; color:#f7a03b; }
+  .cat-icone img { width:100%; height:100%; object-fit:cover; }
+  .cat-icone svg { width:26px; height:26px; }
+  .cat-body { padding:36px 16px 16px; flex:1; display:flex; flex-direction:column; gap:6px; }
+  .cat-nom { color:var(--text-primary); font-weight:600; font-size:1rem; }
+  .cat-desc { color:var(--text-muted); font-size:0.78rem; min-height:18px; }
+  .cat-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .cat-inactive { opacity:0.55; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header anim-fade-up">
+  <div>
+    <h1 class="page-title">Catégories</h1>
+    <p class="page-subtitle">Boutons de l'accueil client et pages de catégorie de l'app — {{ categories|length }} catégorie{{ categories|length|pluralize }}</p>
+  </div>
+  <div style="margin-left:auto;">
+    <a href="{% url 'core:categorie_create' %}" class="btn btn-primary">+ Nouvelle catégorie</a>
+  </div>
+</div>
+
+{% if categories %}
+<div class="cat-grid">
+  {% for c in categories %}
+  <div class="glass-card cat-card anim-fade-up {% if not c.is_active %}cat-inactive{% endif %}" style="animation-delay:{{ forloop.counter0 }}0ms;">
+    <div class="cat-cover">
+      {% if c.image_presentation %}<img src="{{ c.image_presentation.url }}" alt="">{% else %}<div class="vide">Pas d'image de présentation</div>{% endif %}
+      <div class="cat-icone">
+        {% if c.icone_type == 'image' and c.icone_image %}<img src="{{ c.icone_image.url }}" alt="">{% else %}<i data-lucide="{{ c.icone|default:'utensils' }}"></i>{% endif %}
+      </div>
+    </div>
+    <div class="cat-body">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="cat-nom">{{ c.nom }}</span>
+        {% if c.is_active %}<span class="badge badge-green">Visible</span>{% else %}<span class="badge badge-gray">Masquée</span>{% endif %}
+      </div>
+      <div class="cat-desc">{{ c.description|truncatechars:70 }}</div>
+      <span class="badge badge-blue" style="align-self:flex-start;">{{ c.nb_plats }} plat{{ c.nb_plats|pluralize }}</span>
+      <div class="cat-actions">
+        <a href="{% url 'core:categorie_edit' c.pk %}" class="btn btn-secondary btn-sm">Modifier</a>
+        <form method="post" action="{% url 'core:categorie_up' c.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Monter">↑</button></form>
+        <form method="post" action="{% url 'core:categorie_down' c.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" title="Descendre">↓</button></form>
+        <form method="post" action="{% url 'core:categorie_toggle' c.pk %}">{% csrf_token %}
+          <button class="btn {% if c.is_active %}btn-amber{% else %}btn-secondary{% endif %} btn-sm">{% if c.is_active %}Masquer{% else %}Afficher{% endif %}</button>
+        </form>
+        <form method="post" action="{% url 'core:categorie_delete' c.pk %}"
+              onsubmit="return confirm('Supprimer « {{ c.nom|escapejs }} » ?{% if c.nb_plats %} Ses {{ c.nb_plats }} plat(s) deviendront sans catégorie.{% endif %}');">{% csrf_token %}
+          <button class="btn btn-danger btn-sm">Supprimer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="table-wrapper"><div class="empty-state"><p>Aucune catégorie — créez-en une pour l'accueil client</p></div></div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/lucide@1.17.0/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+{% endblock %}

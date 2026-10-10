@@ -36,7 +36,13 @@ export interface AuthDTO {
 export interface CategorieDTO {
   id: number;
   nom: string;
+  description?: string;
+  /** « icone » (clé Lucide dans `icone`) ou « image » (`icone_image`) */
+  icone_type?: 'icone' | 'image';
   icone: string;
+  icone_image?: string | null;
+  image_presentation?: string | null;
+  nb_plats?: number;
 }
 
 export interface PlatDTO {

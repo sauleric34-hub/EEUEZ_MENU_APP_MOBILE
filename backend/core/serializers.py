@@ -58,9 +58,15 @@ class BanniereSerializer(serializers.ModelSerializer):
 
 
 class CategorieSerializer(serializers.ModelSerializer):
+    # Nombre de plats visibles (annoté par la vue ; 0 sinon)
+    nb_plats = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = Categorie
-        fields = ['id', 'nom', 'icone']
+        fields = [
+            'id', 'nom', 'description', 'icone_type', 'icone', 'icone_image',
+            'image_presentation', 'nb_plats',
+        ]
 
 
 class PalierLivraisonSerializer(serializers.Serializer):

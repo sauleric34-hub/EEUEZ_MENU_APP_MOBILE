@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, SlidersHorizontal, Bell, Sun, Moon } from 'lucide-react-native';
 import { Brand, Radius, hexToRgba } from '../../constants/theme';
@@ -167,9 +168,13 @@ export default function HomeScreen() {
           ) : categories.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 22 }} contentContainerStyle={{ gap: 10 }}>
               {categories.map(cat => (
-                <PressableScale key={cat.id} onPress={goPlats}>
+                <PressableScale key={cat.id} onPress={() => router.push(`/categorie/${cat.id}`)}>
                   <View style={[styles.cat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <cat.icon size={24} color={Brand.accentLight} strokeWidth={2} />
+                    {cat.iconImage ? (
+                      <ExpoImage source={{ uri: cat.iconImage }} style={styles.catImg} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <cat.icon size={24} color={Brand.accentLight} strokeWidth={2} />
+                    )}
                     <Text numberOfLines={1} style={[bodyFont(11, '700'), { color: colors.muted }]}>{cat.name}</Text>
                   </View>
                 </PressableScale>
@@ -206,7 +211,7 @@ export default function HomeScreen() {
               pour que la détection de visibilité (lecture vidéo) les couvre. */}
           {pubs.length > 0 && <SectionTitle title="À la une" colors={colors} />}
         </>
-  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres, dataLoading]);
+  ), [colors, mode, firstName, categories, forYou, positionUsed, pubs.length, bannieres, dataLoading, router]);
 
   /** Bloc « Restaurants » : intercalé dans le fil, après les 5 premières. */
   const SectionRestaurants = useCallback(() => (
@@ -294,6 +299,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 11, borderRadius: Radius.pill, borderWidth: 1,
   },
+  catImg: { width: 30, height: 30, borderRadius: 9 },
   cat: { width: 78, alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1 },
   edgeFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 32 },
 });
