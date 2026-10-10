@@ -453,6 +453,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const u = await authService.login(email, password);
     setUser(u);
+    reloadCatalogue(); // ordre des plats personnalisé (ville, goûts) — sans bloquer l'entrée
     registerForPush();
     if (u.role === 'client') {
       await loadUserState();
@@ -464,12 +465,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const register = async (p: authService.RegisterParams) => {
     const u = await authService.registerClient(p);
     setUser(u);
+    reloadCatalogue();
     await reloadOrders();
     await reloadAddresses();
   };
   const updateUser = async (p: authService.ProfileUpdate) => {
+    const villeAvant = user?.ville;
     const u = await authService.updateProfile(p);
     setUser(u);
+    // Nouvelle ville → les plats locaux changent
+    if ((u.ville ?? '') !== (villeAvant ?? '')) reloadCatalogue();
   };
 
   /** Recharge le profil depuis le serveur.

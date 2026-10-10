@@ -40,8 +40,10 @@ export interface PlatFilters {
   // Signature d'index : `query` attend un Record, sans elle l'appel ne typecheck pas.
   [cle: string]: string | number | boolean | undefined;
 }
+/** Plats dans l'ordre « découverte » du serveur (ville, popularité, aléa,
+ *  nouveautés) — authentifié quand c'est possible pour personnaliser l'ordre. */
 export const fetchPlats = (filters: PlatFilters = {}) =>
-  apiGet<PlatDTO[]>('/client/plats', { query: filters });
+  apiGet<PlatDTO[]>('/client/plats', { query: filters, auth: true });
 
 export const fetchPlat = (id: number) => apiGet<PlatDTO>(`/client/plats/${id}`);
 

@@ -15,6 +15,8 @@ from .models import (
     RestaurantProfile, Plat, Categorie, Commande, Favori, Abonnement, Avis,
     PlatNote, Conversation, Message, AdresseLivraison, Banniere,
 )
+from .classement_plats import annoter_popularite, classer_plats
+from .prechargement_plats import precharger_plats
 from .serializers import (
     RestaurantProfileSerializer, PlatSerializer, CategorieSerializer,
     FavoriSerializer, AbonnementSerializer, AvisSerializer,
@@ -53,7 +55,10 @@ def restaurant_detail(request, id):
     except RestaurantProfile.DoesNotExist:
         return Response({'error': 'Restaurant introuvable'}, status=status.HTTP_404_NOT_FOUND)
     data = RestaurantProfileSerializer(r, context={'request': request}).data
-    plats = Plat.objects.filter(restaurant=r, is_available=True, is_visible=True)
+    plats = precharger_plats(
+        Plat.objects.filter(restaurant=r, is_available=True, is_visible=True).select_related('restaurant', 'categorie'),
+        user=request.user,
+    )
     data['plats'] = PlatSerializer(plats, many=True, context={'request': request}).data
     return Response(data)
 
@@ -76,7 +81,17 @@ def plats_list(request):
         qs = qs.filter(is_popular=True)
     if q:
         qs = qs.filter(nom__icontains=q)
-    return Response(PlatSerializer(qs.order_by('-id'), many=True, context={'request': request}).data)
+
+    # Ordre « découverte » personnalisé (ville, popularité, aléa, nouveautés) ;
+    # ?ordre=recent garde l'ancien ordre chronologique.
+    user = request.user if request.user.is_authenticated else None
+    if request.GET.get('ordre') == 'recent':
+        plats = annoter_popularite(qs).order_by('-id')
+    else:
+        ville = (getattr(user, 'ville', '') or request.GET.get('ville', '')).strip()
+        plats = classer_plats(annoter_popularite(qs), user=user, ville=ville)
+    plats = precharger_plats(plats, user=user)  # ~10 requêtes au lieu de ~7 par plat
+    return Response(PlatSerializer(plats, many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -359,7 +374,10 @@ def recommandations(request):
         limit = 20
 
     plats_payload = []
-    for plat, score, dist, detail in recommendation.recommander_plats(lat, lon, limit=limit):
+    lignes = recommendation.recommander_plats(lat, lon, limit=limit)
+    # Préchargement groupé : l'ordre du moteur « Pour vous » est conservé tel quel
+    precharger_plats([row[0] for row in lignes], user=request.user)
+    for plat, score, dist, detail in lignes:
         data = PlatSerializer(plat, context={'request': request}).data
         data['score'] = score
         data['distance_km'] = dist
@@ -456,7 +474,7 @@ def tendances(request):
 
     return Response({
         'periode_jours': jours,
-        'top_commandes': PlatSerializer(top_commandes, many=True, context=ctx).data,
-        'top_likes': PlatSerializer(top_likes, many=True, context=ctx).data,
-        'recommandations': PlatSerializer(reco_plats, many=True, context=ctx).data,
+        'top_commandes': PlatSerializer(precharger_plats(top_commandes, request.user), many=True, context=ctx).data,
+        'top_likes': PlatSerializer(precharger_plats(top_likes, request.user), many=True, context=ctx).data,
+        'recommandations': PlatSerializer(precharger_plats(reco_plats, request.user), many=True, context=ctx).data,
     })

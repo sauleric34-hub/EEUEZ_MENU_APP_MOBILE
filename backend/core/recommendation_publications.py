@@ -5,21 +5,26 @@
 #  qui marchent remontent, les récentes ne sont jamais noyées, et chaque
 #  utilisateur voit un ordre différent — sans jamais casser la pagination.
 #
-#  Score = Σ (poids × composante normalisée 0..1)
-#    · engagement  35 %  — likes×1 + commentaires×2 (échelle log)
+#  Poids = plancher + Σ (poids × composante normalisée 0..1)
+#    · engagement  40 %  — likes×1 + commentaires×2 (échelle log)
 #    · fraîcheur   30 %  — décroissance par demi-vie (3 jours)
-#    · affinité    25 %  — restaurants suivis + catégories déjà commandées
-#    · aléa        10 %  — mélange déterministe propre à l'utilisateur
+#    · affinité    30 %  — restaurants suivis + catégories déjà commandées
 #
-#  L'échelle log de l'engagement est essentielle : sans elle, une publication
-#  virale resterait scotchée en tête indéfiniment.
+#  Ordre = tirage pondéré sans remise (Efraimidis–Spirakis) : clé u^(1/poids)
+#  avec u un aléa propre à (utilisateur, créneau de 6 h, publication).
+#  Les publications qui marchent passent plus souvent devant, mais deux
+#  utilisateurs n'ont jamais le même ordre, l'ordre se renouvelle toutes les
+#  6 h, et grâce au plancher TOUTE publication finit par être montrée en haut
+#  chez quelqu'un — le fil alterne au lieu de figer un classement.
+#
+#  L'échelle log de l'engagement reste essentielle : sans elle, une
+#  publication virale écraserait toutes les autres.
 # ═══════════════════════════════════════════════════════════
 
 import base64
 import hashlib
 import json
 import time
-from datetime import timedelta
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -30,19 +35,17 @@ from .models import Publication, Abonnement, LigneCommande
 from .recommendation import _log_norm
 
 # Poids des composantes
-W_ENGAGEMENT = 0.35
+W_ENGAGEMENT = 0.40
 W_FRAICHEUR = 0.30
-W_AFFINITE = 0.25
-W_ALEA = 0.10
+W_AFFINITE = 0.30
+PLANCHER = 0.2   # chance minimale de toute publication d'être mise en avant
 
 # Une publication perd la moitié de son bonus fraîcheur au bout de 3 jours.
 # (14 jours convient aux plats, c'est bien trop lent pour du contenu social.)
 PUB_RECENCY_HALF_DAYS = 3.0
 
 # Fenêtre de candidats : on ne score jamais toute la table.
-FENETRE_JOURS = 60
-MAX_CANDIDATS = 400
-MIN_CANDIDATS = 60           # en dessous, on élargit la fenêtre
+MAX_CANDIDATS = 1000         # toutes les publications visibles, dans la limite du raisonnable
 BUCKET_SECONDES = 6 * 3600   # le mélange évolue toutes les 6 h
 
 # Poids internes de l'affinité
@@ -62,7 +65,7 @@ def _jitter(seed, bucket, pub_id):
     C'est ce qui rend le fil personnel SANS casser la pagination."""
     brut = f'{seed}:{bucket}:{pub_id}'.encode('utf-8')
     digest = hashlib.md5(brut).digest()
-    return int.from_bytes(digest[:4], 'big') / 0xFFFFFFFF
+    return (int.from_bytes(digest[:4], 'big') + 1) / (0xFFFFFFFF + 2)  # dans ]0, 1[
 
 
 def bucket_courant():
@@ -143,14 +146,9 @@ def _candidats(avant):
             ),
         )
     )
-    recents = list(
-        base.filter(created_at__gte=timezone.now() - timedelta(days=FENETRE_JOURS))
-        .order_by('-created_at')[:MAX_CANDIDATS]
-    )
-    # Corpus trop mince (app jeune) → on retire le plancher de date.
-    if len(recents) < MIN_CANDIDATS:
-        return list(base.order_by('-created_at')[:MAX_CANDIDATS])
-    return recents
+    # Toutes les publications visibles (les plus récentes si le corpus
+    # dépasse la limite) : l'objectif est que chacune puisse être vue.
+    return list(base.order_by('-created_at')[:MAX_CANDIDATS])
 
 
 # ─── Point d'entrée ──────────────────────────────────────────
@@ -186,13 +184,14 @@ def classer_publications(user=None, curseur=None, page=1, taille=10):
         engagement = _log_norm(pub.n_likes + 2 * pub.n_commentaires, max_engagement)
         fraicheur = _fraicheur(pub.created_at)
         affinite = _affinite(pub, suivis, categories)
-        alea = _jitter(graine, bucket, pub.pk)
-        score = (
-            W_ENGAGEMENT * engagement
+        poids = (
+            PLANCHER
+            + W_ENGAGEMENT * engagement
             + W_FRAICHEUR * fraicheur
             + W_AFFINITE * affinite
-            + W_ALEA * alea
         )
+        # Tirage pondéré : clé u^(1/poids), triée par ordre décroissant
+        score = _jitter(graine, bucket, pub.pk) ** (1.0 / poids)
         scores.append((pub, score))
 
     # Tri déterministe : le pk départage les ex æquo pour garantir la stabilité.

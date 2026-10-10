@@ -149,6 +149,8 @@ class PlatSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user or request.user.is_anonymous:
             return False
+        if hasattr(obj, '_est_favori'):  # préchargé (core/prechargement_plats.py)
+            return obj._est_favori
         return obj.favoris.filter(client=request.user).exists()
 
     def get_categorie_nom(self, obj):
@@ -159,16 +161,22 @@ class PlatSerializer(serializers.ModelSerializer):
 
     def get_note(self, obj):
         # Note du plat = moyenne de ses notes (étoiles) clients. 0 si pas encore noté.
+        if hasattr(obj, '_note_moy'):
+            return obj._note_moy
         avg = obj.notes.aggregate(a=Avg('note'))['a']
         return round(avg, 1) if avg is not None else 0
 
     def get_nombre_notes(self, obj):
+        if hasattr(obj, '_nb_notes'):
+            return obj._nb_notes
         return obj.notes.count()
 
     def get_ma_note(self, obj):
         request = self.context.get('request')
         if not request or not request.user or request.user.is_anonymous:
             return None
+        if hasattr(obj, '_ma_note'):
+            return obj._ma_note
         mine = obj.notes.filter(client=request.user).first()
         return mine.note if mine else None
 
@@ -213,12 +221,16 @@ class PlatSerializer(serializers.ModelSerializer):
         return [e.nom for e in obj.elements_inclus.all()]
 
     def get_nombre_commandes(self, obj):
+        if hasattr(obj, '_nb_commandes'):  # annoté par classement_plats (évite N+1)
+            return obj._nb_commandes or 0
         total = obj.lignecommande_set.aggregate(t=Sum('quantite'))['t'] if hasattr(obj, 'lignecommande_set') else None
         if total is None:
             total = LigneCommande.objects.filter(plat=obj).aggregate(t=Sum('quantite'))['t']
         return total or 0
 
     def get_nombre_likes(self, obj):
+        if hasattr(obj, '_nb_likes'):
+            return obj._nb_likes or 0
         return obj.favoris.count()
 
     def get_composition(self, obj):

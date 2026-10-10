@@ -30,8 +30,9 @@ const HERO_H = 300;
 const PAGE_PAD = 18;
 const GAP = 14;
 
-type SortKey = 'populaires' | 'proches' | 'prix' | 'notes';
+type SortKey = 'pour_vous' | 'populaires' | 'proches' | 'prix' | 'notes';
 const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'pour_vous', label: 'Pour vous' },
   { key: 'populaires', label: 'Populaires' },
   { key: 'proches', label: 'Les plus proches' },
   { key: 'prix', label: 'Petits prix' },
@@ -44,7 +45,7 @@ export default function CategoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const [sort, setSort] = useState<SortKey>('populaires');
+  const [sort, setSort] = useState<SortKey>('pour_vous');
 
   const cat = categories.find(c => c.id === Number(id));
 
@@ -63,7 +64,9 @@ export default function CategoryScreen() {
         return items.sort((a, b) => (distFor(a.restoId) ?? Infinity) - (distFor(b.restoId) ?? Infinity));
       case 'prix': return items.sort((a, b) => a.price - b.price);
       case 'notes': return items.sort((a, b) => b.noteValue - a.noteValue);
-      default: return items.sort((a, b) => b.ordersCount - a.ordersCount);
+      case 'populaires': return items.sort((a, b) => b.ordersCount - a.ordersCount);
+      // « Pour vous » : ordre du serveur (ville, popularité, aléa, nouveautés)
+      default: return items;
     }
   }, [cat, plats, sort, distFor]);
 
